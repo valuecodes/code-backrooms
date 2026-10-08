@@ -102,8 +102,44 @@ const hubAttached = (
   return attached.sort((a, b) => a.span.start - b.span.start);
 };
 
+/**
+ * Doors per hub, links to other hubs included: what the layout places
+ * reliably (the random generator's MAX_DEGREE). A module with more roots
+ * chains further hubs (`demo.ts`, `demo.ts#2`, ...) instead of asking one
+ * for walls it cannot have.
+ */
+const MAX_HUB_DOORS = 5;
+
+/**
+ * Splits the roots over hubs so that no hub exceeds MAX_HUB_DOORS once its
+ * links to the previous and next hub (and `extraLinks` on the first) count.
+ * Always at least one group, possibly empty.
+ */
+const hubGroups = (
+  attached: readonly FunctionNode[],
+  extraLinks: number
+): readonly (readonly FunctionNode[])[] => {
+  const groups: (readonly FunctionNode[])[] = [];
+  let remaining = attached;
+  do {
+    const links =
+      (groups.length > 0 ? 1 : 0) + (groups.length === 0 ? extraLinks : 0);
+    let take = Math.max(1, MAX_HUB_DOORS - links);
+    if (remaining.length > take) {
+      take = Math.max(1, take - 1);
+    }
+    groups.push(remaining.slice(0, take));
+    remaining = remaining.slice(take);
+  } while (remaining.length > 0);
+  return groups;
+};
+
+/** The module a hub id belongs to: `demo.ts#2` → `demo.ts`. */
+const hubModuleId = (roomId: string): string => roomId.replace(/#\d+$/, "");
+
 type ModuleWorld = {
-  readonly hub: GraphRoom;
+  /** The module's hubs, chained in order; the first is its entrance. */
+  readonly hubs: readonly GraphRoom[];
   readonly rooms: readonly GraphRoom[];
   readonly connections: readonly Connection[];
 };
@@ -127,28 +163,46 @@ const moduleWorld = (
   for (const fn of attached) {
     bump(fn.id);
   }
-  const hub: GraphRoom = {
-    id: module.id,
-    label: module.path,
-    ...hubDimensions(attached.length + extraHubDegree),
-  };
+  const groups = hubGroups(attached, extraHubDegree);
+  const hubs = groups.map((group, index): GraphRoom => {
+    const chain = (index > 0 ? 1 : 0) + (index < groups.length - 1 ? 1 : 0);
+    return {
+      id: index === 0 ? module.id : `${module.id}#${index + 1}`,
+      label: module.path,
+      ...hubDimensions(
+        group.length + chain + (index === 0 ? extraHubDegree : 0)
+      ),
+    };
+  });
   const rooms = functions.map((fn): GraphRoom => ({
     id: fn.id,
     label: fn.name,
     ...roomDimensions(lineCount(fn), degree.get(fn.id) ?? 0),
   }));
-  const connections: Connection[] = [
-    ...attached.map((fn) => ({ from: hub.id, to: fn.id })),
-    ...local.map(([from, to]) => ({ from, to })),
-  ];
-  return { hub, rooms, connections };
+  const connections: Connection[] = [];
+  groups.forEach((group, index) => {
+    const hub = hubs[index];
+    const next = hubs[index + 1];
+    if (hub === undefined) {
+      return;
+    }
+    if (next !== undefined) {
+      connections.push({ from: hub.id, to: next.id });
+    }
+    for (const fn of group) {
+      connections.push({ from: hub.id, to: fn.id });
+    }
+  });
+  connections.push(...local.map(([from, to]) => ({ from, to })));
+  return { hubs, rooms, connections };
 };
 
 /**
  * The spatial grammar for this milestone: one room per function, one door per
- * resolved call, one hub per module that opens onto the module's roots. Hubs
- * of successive modules are chained so the world is one connected component,
- * and the first hub is the start room.
+ * resolved call, one hub per module that opens onto the module's roots (more
+ * hubs chained when there are many). The entrances of successive modules are
+ * chained too, so the world is one connected component, and the first module's
+ * entrance is the start room.
  */
 const toWorldGraph = (graph: CodeGraph): WorldGraph => {
   const pairs = callPairs(graph);
@@ -159,12 +213,13 @@ const toWorldGraph = (graph: CodeGraph): WorldGraph => {
     const chained =
       (index > 0 ? 1 : 0) + (index < graph.modules.length - 1 ? 1 : 0);
     const world = moduleWorld(graph, module, pairs, chained);
-    rooms.push(world.hub, ...world.rooms);
-    if (previousHub !== null) {
-      connections.push({ from: previousHub, to: world.hub.id });
+    rooms.push(...world.hubs, ...world.rooms);
+    const entrance = world.hubs[0];
+    if (previousHub !== null && entrance !== undefined) {
+      connections.push({ from: previousHub, to: entrance.id });
     }
     connections.push(...world.connections);
-    previousHub = world.hub.id;
+    previousHub = entrance?.id ?? previousHub;
   });
   const start = graph.modules[0]?.id;
   return start === undefined
@@ -192,7 +247,8 @@ const roomSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
       ? null
       : { kind: "function", fn, module };
   }
-  const module = graph.modules.find((candidate) => candidate.id === roomId);
+  const moduleId = hubModuleId(roomId);
+  const module = graph.modules.find((candidate) => candidate.id === moduleId);
   return module === undefined ? null : { kind: "module", module };
 };
 

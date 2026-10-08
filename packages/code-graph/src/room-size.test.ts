@@ -18,7 +18,8 @@ describe("roomDimensions", () => {
         [500, "large"],
       ];
     for (const [lines, size] of cases) {
-      const { width, depth } = roomDimensions(lines, 0);
+      const { width, depth, size: actual } = roomDimensions(lines, 0);
+      expect(actual, `${lines} lines`).toBe(size);
       const { min, max } = ROOM_SIZE_CLASSES[size];
       expect(width, `${lines} lines`).toBeGreaterThanOrEqual(min);
       expect(width, `${lines} lines`).toBeLessThanOrEqual(max);
@@ -54,7 +55,7 @@ describe("roomDimensions", () => {
 describe("hubDimensions", () => {
   it("starts medium and grows with its doors", () => {
     expect(hubDimensions(2)).toEqual({ width: 8, depth: 8, size: "medium" });
-    const busy = hubDimensions(9);
-    expect(busy.width + busy.depth).toBeGreaterThanOrEqual(36);
+    const busy = hubDimensions(5);
+    expect(busy.width + busy.depth).toBeGreaterThanOrEqual(25);
   });
 });

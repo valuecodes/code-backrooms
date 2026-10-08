@@ -50,12 +50,10 @@ const useGeneratedWorld = (seed: number): Generated =>
     }
     try {
       const world = generate(seed);
+      // Shown in the HUD, so the console stays quiet.
       const warnings = world.layout.unresolved.map(
         ({ from, to }) => `${from} -> ${to} could not be laid out`
       );
-      for (const warning of warnings) {
-        console.warn(warning);
-      }
       return { world, codeGraph, warnings, error: null };
     } catch (error) {
       return { world: null, codeGraph, warnings: [], error: String(error) };

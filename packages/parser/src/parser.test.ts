@@ -46,6 +46,46 @@ describe("function discovery", () => {
     expect(names("export default () => {}")).toEqual(["default"]);
   });
 
+  it("marks functions exported by list or default identifier", () => {
+    const { functions } = parse(
+      [
+        "function a() {}",
+        "const b = () => {};",
+        "function c() {}",
+        "class D { m() {} }",
+        "function e() { function inner() {} }",
+        "export { a, b as bee, D };",
+        "export default c;",
+        'export { e } from "./other";',
+      ].join("\n")
+    );
+    expect(functions.map((fn) => [fn.qualifiedName, fn.exported])).toEqual([
+      ["a", true],
+      ["b", true],
+      ["c", true],
+      ["D.m", true],
+      ["e", false],
+      ["e.inner", false],
+    ]);
+  });
+
+  it("makes rooms for private arrow fields and skips odd string keys", () => {
+    expect(
+      names("class S {\n  #h = () => {};\n  'ok'() {}\n  'not::ok'() {}\n}")
+    ).toEqual(["S.#h", "S.ok"]);
+  });
+
+  it("resolves new on a plain function to that function", () => {
+    expect(
+      sites("function Foo() {}\nfunction make() { return new Foo(); }")
+    ).toEqual([["t.ts::make", "Foo", "resolved", "t.ts::Foo"]]);
+  });
+
+  it("refuses pathologically deep input with the path in front", () => {
+    const deep = `function f() { return a${".b".repeat(3000)}(); }`;
+    expect(() => parse(deep, "deep.ts")).toThrow(/^deep\.ts: .*nested/);
+  });
+
   it("finds arrows and function expressions bound by declarators", () => {
     const { functions } = parse(
       "const f = () => {};\nexport const g = async function () {};\nlet h = 1;"
@@ -203,6 +243,67 @@ describe("call resolution", () => {
       ["t.ts::run", "console.log", "unresolved", null],
       ["t.ts::run", "fetch", "unresolved", null],
       ["t.ts::block", "target", "unresolved", null],
+    ]);
+  });
+
+  it("keeps callback and object-method parameters in their own scope", () => {
+    const source = [
+      "function target() {}",
+      "function run(xs: string[]) {",
+      "  xs.map((target) => target());",
+      "  const obj = { method(target: () => void) { target(); } };",
+      "  target();",
+      "  return obj;",
+      "}",
+    ].join("\n");
+    expect(sites(source)).toEqual([
+      ["t.ts::run", "xs.map", "unresolved", null],
+      ["t.ts::run", "target", "unresolved", null],
+      ["t.ts::run", "target", "unresolved", null],
+      ["t.ts::run", "target", "resolved", "t.ts::target"],
+    ]);
+  });
+
+  it("binds a function expression's own name to itself", () => {
+    const source =
+      "function recur() {}\nconst f = function recur() { recur(); };\nconst g = [function again() { again(); }];";
+    expect(sites(source)).toEqual([
+      ["t.ts::f", "recur", "resolved", "t.ts::f"],
+      ["t.ts", "again", "unresolved", null],
+    ]);
+  });
+
+  it("scopes classes lexically and this per function kind", () => {
+    const source = [
+      "class S {",
+      "  x() {}",
+      "  run() {",
+      "    this.x();",
+      "    function inner() { this.x(); }",
+      "    const arrow = () => this.x();",
+      "    inner(); arrow();",
+      "  }",
+      "}",
+      "function f() { class S { x() {} } new S(); S.x(); }",
+      "const E = class { y() {} z() { this.y(); } };",
+    ].join("\n");
+    expect(names(source)).toEqual([
+      "S.x",
+      "S.run",
+      "S.run.inner",
+      "S.run.arrow",
+      "f",
+      "f.S.x",
+    ]);
+    expect(sites(source)).toEqual([
+      ["t.ts::S.run", "this.x", "resolved", "t.ts::S.x"],
+      ["t.ts::S.run.inner", "this.x", "unresolved", null],
+      ["t.ts::S.run.arrow", "this.x", "resolved", "t.ts::S.x"],
+      ["t.ts::S.run", "inner", "resolved", "t.ts::S.run.inner"],
+      ["t.ts::S.run", "arrow", "resolved", "t.ts::S.run.arrow"],
+      ["t.ts::f", "S", "unresolved", null],
+      ["t.ts::f", "S.x", "unresolved", null],
+      ["t.ts", "this.y", "unresolved", null],
     ]);
   });
 

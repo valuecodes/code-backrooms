@@ -24,4 +24,17 @@ const childrenOf = (node: Node): readonly Node[] => {
   return children;
 };
 
-export { childrenOf };
+/**
+ * Deeper than any real program nests, shallower than the call stack: the
+ * walkers refuse pathological input with a clear error instead of a
+ * RangeError from somewhere inside.
+ */
+const MAX_DEPTH = 1500;
+
+const guardDepth = (depth: number): void => {
+  if (depth > MAX_DEPTH) {
+    throw new Error(`source is nested more than ${MAX_DEPTH} levels deep`);
+  }
+};
+
+export { childrenOf, guardDepth };

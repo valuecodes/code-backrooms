@@ -1,5 +1,5 @@
 // Call pass: every call, `new` and optional call inside each function (and at
-// module level), resolved by name against the discovered scopes.
+// module level), resolved by name against the discovered lexical scopes.
 
 import {
   isAwaitExpression,
@@ -23,10 +23,11 @@ import type {
 } from "@repo/code-graph";
 import { callSiteId } from "@repo/code-graph/ids";
 
-import type { Discovered, Scope } from "./functions";
+import type { Discovered } from "./functions";
 import { KNOWN_GLOBALS } from "./globals";
+import type { ClassTable, Scope } from "./scope";
 import { spanOf } from "./span";
-import { childrenOf } from "./walk";
+import { childrenOf, guardDepth } from "./walk";
 
 type Resolved = {
   readonly calleeName: string;
@@ -44,6 +45,12 @@ const external = (calleeName: string): Resolved => ({
   calleeName,
   target: null,
   resolution: "external",
+});
+
+const resolved = (calleeName: string, target: FunctionNode): Resolved => ({
+  calleeName,
+  target,
+  resolution: "resolved",
 });
 
 /** Source-like text for a callee the analysis cannot follow. */
@@ -92,7 +99,7 @@ const resolveIdentifier = (name: string, scope: Scope): Resolved => {
   ) {
     const local = current.locals.get(name);
     if (local !== undefined) {
-      return { calleeName: name, target: local, resolution: "resolved" };
+      return resolved(name, local);
     }
     if (current.bindings.has(name)) {
       return unresolved(name);
@@ -101,14 +108,19 @@ const resolveIdentifier = (name: string, scope: Scope): Resolved => {
   return KNOWN_GLOBALS.has(name) ? external(name) : unresolved(name);
 };
 
-const nearestClass = (scope: Scope): Scope | null => {
+/** The class a name refers to here, or null if it is not one (or shadowed). */
+const resolveClass = (name: string, scope: Scope): ClassTable | null => {
   for (
     let current: Scope | null = scope;
     current !== null;
     current = current.parent
   ) {
-    if (current.className !== null) {
-      return current;
+    const table = current.classes.get(name);
+    if (table !== undefined) {
+      return table;
+    }
+    if (current.locals.has(name) || current.bindings.has(name)) {
+      return null;
     }
   }
   return null;
@@ -121,21 +133,13 @@ const shadowed = (name: string, scope: Scope): boolean => {
     current !== null;
     current = current.parent
   ) {
-    if (current.locals.has(name) || current.bindings.has(name)) {
+    if (
+      current.locals.has(name) ||
+      current.classes.has(name) ||
+      current.bindings.has(name)
+    ) {
       return true;
     }
-  }
-  return false;
-};
-
-/** A binding of the name nearer than the module scope, where classes live. */
-const shadowedByOther = (name: string, scope: Scope): boolean => {
-  let current = scope;
-  while (current.parent !== null) {
-    if (current.locals.has(name) || current.bindings.has(name)) {
-      return true;
-    }
-    current = current.parent;
   }
   return false;
 };
@@ -148,31 +152,7 @@ const propertyName = (property: Node): string | null => {
   return isIdentifier(property) ? property.name : null;
 };
 
-/** `this.x()` against the enclosing class's instance or static methods. */
-const resolveThisMember = (
-  name: string,
-  property: string,
-  scope: Scope,
-  discovered: Discovered
-): Resolved => {
-  const owner = nearestClass(scope);
-  if (owner === null || owner.className === null) {
-    return unresolved(name);
-  }
-  const table = discovered.classes.get(owner.className);
-  const target = (owner.isStatic ? table?.static : table?.instance)?.get(
-    property
-  );
-  return target === undefined
-    ? unresolved(name)
-    : { calleeName: name, target, resolution: "resolved" };
-};
-
-const resolveMember = (
-  callee: Node,
-  scope: Scope,
-  discovered: Discovered
-): Resolved => {
+const resolveMember = (callee: Node, scope: Scope): Resolved => {
   if (
     !(isMemberExpression(callee) || isOptionalMemberExpression(callee)) ||
     callee.computed
@@ -186,14 +166,17 @@ const resolveMember = (
   }
   const { object } = callee;
   if (isThisExpression(object)) {
-    return resolveThisMember(name, property, scope, discovered);
+    const table = scope.classTable;
+    const target = (scope.isStatic ? table?.static : table?.instance)?.get(
+      property
+    );
+    return target === undefined ? unresolved(name) : resolved(name, target);
   }
   if (isIdentifier(object)) {
-    if (!shadowedByOther(object.name, scope)) {
-      const target = discovered.classes.get(object.name)?.static.get(property);
-      if (target !== undefined) {
-        return { calleeName: name, target, resolution: "resolved" };
-      }
+    const table = resolveClass(object.name, scope);
+    if (table !== null) {
+      const target = table.static.get(property);
+      return target === undefined ? unresolved(name) : resolved(name, target);
     }
     return KNOWN_GLOBALS.has(object.name) && !shadowed(object.name, scope)
       ? external(name)
@@ -205,39 +188,31 @@ const resolveMember = (
     : unresolved(name);
 };
 
-const resolveNew = (
-  callee: Node,
-  scope: Scope,
-  discovered: Discovered
-): Resolved => {
+const resolveNew = (callee: Node, scope: Scope): Resolved => {
   if (!isIdentifier(callee)) {
     return unresolved(calleeText(callee));
   }
   const { name } = callee;
-  const table = discovered.classes.get(name);
-  if (table !== undefined && !shadowedByOther(name, scope)) {
-    return table.ctor === null
-      ? unresolved(name)
-      : { calleeName: name, target: table.ctor, resolution: "resolved" };
+  const table = resolveClass(name, scope);
+  if (table !== null) {
+    return table.ctor === null ? unresolved(name) : resolved(name, table.ctor);
   }
-  return KNOWN_GLOBALS.has(name) && !shadowed(name, scope)
-    ? external(name)
-    : unresolved(name);
+  // `new Foo()` on a plain function: the function is the constructor.
+  return resolveIdentifier(name, scope);
 };
 
 const resolveCallee = (
   kind: CallKind,
   callee: Node,
-  scope: Scope,
-  discovered: Discovered
+  scope: Scope
 ): Resolved => {
   if (kind === "new") {
-    return resolveNew(callee, scope, discovered);
+    return resolveNew(callee, scope);
   }
   if (isIdentifier(callee)) {
     return resolveIdentifier(callee.name, scope);
   }
-  return resolveMember(callee, scope, discovered);
+  return resolveMember(callee, scope);
 };
 
 type CallCollector = {
@@ -257,21 +232,33 @@ const callOf = (node: Node): { kind: CallKind; callee: Node } | null => {
 
 /**
  * Visits one function's subtree, stopping at nodes owned by other named
- * functions. `awaited` is true only for the direct operand of an `await`.
+ * functions and switching scope at anonymous ones. `awaited` is true only
+ * for the direct operand of an `await`.
  */
 const visitCalls = (
   collector: CallCollector,
   callerId: string,
-  scope: Scope,
+  outer: Scope,
   root: Node,
   node: Node,
-  awaited: boolean
+  awaited: boolean,
+  depth = 0
 ): void => {
   if (node !== root && collector.discovered.byNode.has(node)) {
     return;
   }
+  guardDepth(depth);
+  const scope = collector.discovered.scopeAt.get(node) ?? outer;
   if (isAwaitExpression(node)) {
-    visitCalls(collector, callerId, scope, root, node.argument, true);
+    visitCalls(
+      collector,
+      callerId,
+      scope,
+      root,
+      node.argument,
+      true,
+      depth + 1
+    );
     return;
   }
   const call = callOf(node);
@@ -279,8 +266,7 @@ const visitCalls = (
     const { calleeName, target, resolution } = resolveCallee(
       call.kind,
       call.callee,
-      scope,
-      collector.discovered
+      scope
     );
     const span = spanOf(node);
     collector.sites.push({
@@ -295,7 +281,7 @@ const visitCalls = (
     });
   }
   for (const child of childrenOf(node)) {
-    visitCalls(collector, callerId, scope, root, child, false);
+    visitCalls(collector, callerId, scope, root, child, false, depth + 1);
   }
 };
 
