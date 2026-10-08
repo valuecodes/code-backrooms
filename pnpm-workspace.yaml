@@ -15,6 +15,13 @@ catalog:
   typescript: 7.0.2
   vitest: 5.0.1
 
+  # React Three Fiber stack, shared by apps/web and packages/renderer.
+  "@react-three/fiber": 9.8.0
+  "@types/react": 19.3.0
+  "@types/three": 0.186.0
+  react: 19.3.0
+  three: 0.186.0
+
   # Loaded by the root manifest and tooling/prettier.
   "@ianvs/prettier-plugin-sort-imports": 4.7.1
   prettier-plugin-tailwindcss: 0.8.1

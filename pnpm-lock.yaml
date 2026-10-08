@@ -167,15 +167,30 @@ catalogs:
     '@ianvs/prettier-plugin-sort-imports':
       specifier: 4.7.1
       version: 4.7.1
+    '@react-three/fiber':
+      specifier: 9.8.0
+      version: 9.8.0
     '@types/node':
       specifier: 26.5.1
       version: 26.5.1
+    '@types/react':
+      specifier: 19.3.0
+      version: 19.3.0
+    '@types/three':
+      specifier: 0.186.0
+      version: 0.186.0
     prettier:
       specifier: 3.9.6
       version: 3.9.6
     prettier-plugin-tailwindcss:
       specifier: 0.8.1
       version: 0.8.1
+    react:
+      specifier: 19.3.0
+      version: 19.3.0
+    three:
+      specifier: 0.186.0
+      version: 0.186.0
     typescript:
       specifier: 7.0.2
       version: 7.0.2
@@ -223,20 +238,26 @@ importers:
 
   apps/web:
     dependencies:
-      '@react-three/drei':
-        specifier: 10.7.8
-        version: 10.7.8(@react-three/fiber@9.8.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(three@0.186.0))(@types/react@19.3.0)(@types/three@0.186.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(three@0.186.0)
       '@react-three/fiber':
-        specifier: 9.8.0
+        specifier: 'catalog:'
         version: 9.8.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(three@0.186.0)
+      '@repo/renderer':
+        specifier: workspace:*
+        version: link:../../packages/renderer
+      '@repo/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@repo/world-generator':
+        specifier: workspace:*
+        version: link:../../packages/world-generator
       react:
-        specifier: 19.3.0
+        specifier: 'catalog:'
         version: 19.3.0
       react-dom:
         specifier: 19.3.0
         version: 19.3.0(react@19.3.0)
       three:
-        specifier: 0.186.0
+        specifier: 'catalog:'
         version: 0.186.0
     devDependencies:
       '@repo/prettier':
@@ -249,13 +270,13 @@ importers:
         specifier: 4.3.3
         version: 4.3.3
       '@types/react':
-        specifier: 19.3.0
+        specifier: 'catalog:'
         version: 19.3.0
       '@types/react-dom':
         specifier: 19.3.0
         version: 19.3.0(@types/react@19.3.0)
       '@types/three':
-        specifier: 0.186.0
+        specifier: 'catalog:'
         version: 0.186.0
       '@vitejs/plugin-react':
         specifier: 6.1.1
@@ -291,6 +312,74 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.5.1
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.1(@types/node@26.5.1)(vite@8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
+  packages/renderer:
+    dependencies:
+      '@react-three/drei':
+        specifier: 10.7.8
+        version: 10.7.8(@react-three/fiber@9.8.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(three@0.186.0))(@types/react@19.3.0)(@types/three@0.186.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(three@0.186.0)
+      '@react-three/fiber':
+        specifier: 'catalog:'
+        version: 9.8.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(three@0.186.0)
+      '@repo/types':
+        specifier: workspace:*
+        version: link:../types
+      '@repo/world-generator':
+        specifier: workspace:*
+        version: link:../world-generator
+      react:
+        specifier: 'catalog:'
+        version: 19.3.0
+      three:
+        specifier: 'catalog:'
+        version: 0.186.0
+    devDependencies:
+      '@repo/prettier':
+        specifier: workspace:*
+        version: link:../../tooling/prettier
+      '@repo/typescript':
+        specifier: workspace:*
+        version: link:../../tooling/typescript
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.3.0
+      '@types/three':
+        specifier: 'catalog:'
+        version: 0.186.0
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
+  packages/types:
+    devDependencies:
+      '@repo/prettier':
+        specifier: workspace:*
+        version: link:../../tooling/prettier
+      '@repo/typescript':
+        specifier: workspace:*
+        version: link:../../tooling/typescript
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
+  packages/world-generator:
+    dependencies:
+      '@repo/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@repo/prettier':
+        specifier: workspace:*
+        version: link:../../tooling/prettier
+      '@repo/typescript':
+        specifier: workspace:*
+        version: link:../../tooling/typescript
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

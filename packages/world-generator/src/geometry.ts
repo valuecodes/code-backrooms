@@ -1,15 +1,18 @@
-import { DOOR_HEIGHT, DOOR_WIDTH, WALL_HEIGHT, WALL_THICKNESS } from "./config";
 import type {
   BuiltRoom,
   BuiltWorld,
   DoorData,
   DoorOpening,
+  Doorway,
+  Point,
   Rect,
   RoomData,
   WallSegment,
   WallSide,
   WorldData,
-} from "./types";
+} from "@repo/types";
+
+import { DOOR_HEIGHT, DOOR_WIDTH, WALL_HEIGHT, WALL_THICKNESS } from "./config";
 
 const EPSILON = 1e-6;
 const WALL_SIDES: readonly WallSide[] = ["north", "south", "east", "west"];
@@ -141,6 +144,11 @@ const wallSegments = (
       .sort((p, q) => p.start - q.start);
     let cursor = span.start;
     for (const gap of gaps) {
+      if (gap.start < cursor - EPSILON) {
+        throw new Error(
+          `Room "${room.id}" has overlapping door openings on its ${wall} wall`
+        );
+      }
       if (gap.start > cursor + EPSILON) {
         segments.push(
           segmentBox(span, cursor, gap.start, 0, WALL_HEIGHT, "wall")
@@ -162,6 +170,26 @@ const segmentFootprint = (segment: WallSegment): Rect => {
   const [x, , z] = segment.center;
   const [w, , d] = segment.size;
   return { minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 };
+};
+
+/** Floor-level centre of an opening, on the room edge. */
+const openingCentre = (room: RoomData, opening: DoorOpening): Point => {
+  const edge = wallEdge(roomBounds(room), opening.wall);
+  return wallAxis(opening.wall) === "x"
+    ? { x: opening.along, z: edge }
+    : { x: edge, z: opening.along };
+};
+
+/** The frame for an opening, centred on the room edge so it spans both walls. */
+const doorway = (room: RoomData, opening: DoorOpening): Doorway => {
+  const edge = wallEdge(roomBounds(room), opening.wall);
+  const axis = wallAxis(opening.wall);
+  return {
+    center: axis === "x" ? [opening.along, 0, edge] : [edge, 0, opening.along],
+    axis,
+    width: opening.width,
+    depth: 2 * WALL_THICKNESS,
+  };
 };
 
 const buildRoom = (
@@ -201,11 +229,30 @@ const buildWorld = (data: WorldData): BuiltWorld => {
       .filter((segment) => segment.kind === "wall")
       .map(segmentFootprint)
   );
-  return {
-    rooms,
-    colliders,
-    start: { x: startRoom.position[0], z: startRoom.position[2] },
-  };
+  // Each shared edge is described by both rooms; keep one frame per pair.
+  const doorways = rooms.flatMap((built) =>
+    built.openings.flatMap((opening, index) => {
+      const door = built.room.doors[index];
+      return door !== undefined && built.room.id < door.targetRoomId
+        ? [doorway(built.room, opening)]
+        : [];
+    })
+  );
+  const start = { x: startRoom.position[0], z: startRoom.position[2] };
+  const firstDoor = rooms.find((built) => built.room.id === startRoom.id)
+    ?.openings[0];
+  const facing =
+    firstDoor === undefined
+      ? { x: start.x + 1, z: start.z }
+      : openingCentre(startRoom, firstDoor);
+  return { rooms, doorways, colliders, start, facing };
 };
 
-export { buildWorld, doorOpening, wallSegments };
+export {
+  buildWorld,
+  doorOpening,
+  OPPOSITE,
+  roomBounds,
+  wallAxis,
+  wallSegments,
+};

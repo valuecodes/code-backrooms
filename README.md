@@ -7,6 +7,8 @@ and clear package boundaries — so agents move fast without turning the codebas
 
 - Code Backrooms web app in `apps/web` (Vite 8, React 19, React Three Fiber, Tailwind CSS 4)
 - Shared tooling: oxlint, Knip, Prettier, TypeScript 7, Turbo
+- `@repo/types`, `@repo/world-generator`, `@repo/renderer` — the procedural
+  Backrooms pipeline (graph → layout → rendering)
 - `@repo/logger` — structured JSON logging for Cloud Run / Cloud Logging
 - pnpm catalog for versions, with supply-chain guards: a 14-day release-age wait,
   a trust-downgrade check, and no git/tarball subdependencies
@@ -14,6 +16,9 @@ and clear package boundaries — so agents move fast without turning the codebas
 
 ```text
 apps/web               Code Backrooms: Vite 8 + React 19 + React Three Fiber
+packages/types         world data shapes: graph, layout, built geometry
+packages/world-generator  graph -> layout -> walls, doors, corridors, colliders (seeded)
+packages/renderer      React Three Fiber components, player, light pool
 packages/logger        pino logger, Cloud Logging shaped JSON
 tooling/prettier       shared Prettier config
 tooling/typescript     shared tsconfig presets (base, node, react)
