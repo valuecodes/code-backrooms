@@ -1,39 +1,23 @@
 // Discovery pass: which named functions a module declares, where, and what
-// names are bound in each scope. Class members go into a per-class table so a
-// bare `load()` never resolves to a method.
+// names each lexical scope binds. Class members go into a per-class table so
+// a bare `load()` never resolves to a method; anonymous functions get a scope
+// of their own (their calls are still attributed to the enclosing room).
 
 import {
-  isArrayPattern,
   isArrowFunctionExpression,
-  isAssignmentPattern,
   isCatchClause,
   isClassDeclaration,
   isClassMethod,
   isClassPrivateMethod,
-  isClassProperty,
   isExportDefaultDeclaration,
   isExportNamedDeclaration,
   isFunctionDeclaration,
   isFunctionExpression,
   isIdentifier,
   isImportDeclaration,
-  isObjectPattern,
-  isObjectProperty,
-  isRestElement,
-  isStringLiteral,
-  isTSParameterProperty,
   isVariableDeclaration,
 } from "@babel/types";
-import type {
-  ArrowFunctionExpression,
-  ClassBody,
-  ClassMethod,
-  ClassPrivateMethod,
-  FunctionDeclaration,
-  FunctionExpression,
-  Node,
-  Program,
-} from "@babel/types";
+import type { ClassBody, Node, Program } from "@babel/types";
 import type {
   ContainmentEdge,
   FunctionKind,
@@ -41,26 +25,19 @@ import type {
 } from "@repo/code-graph";
 import { functionId, uniqueNames } from "@repo/code-graph/ids";
 
+import {
+  bindingNames,
+  exportedNamesOf,
+  fieldFunction,
+  functionScope,
+  isFunctionLike,
+  memberName,
+  methodKind,
+  newScope,
+} from "./scope";
+import type { ClassTable, FunctionLike, Scope } from "./scope";
 import { spanOf } from "./span";
-import { childrenOf } from "./walk";
-
-/** A function body (or the module): the names it declares and what it is. */
-type Scope = {
-  readonly fn: FunctionNode | null;
-  readonly className: string | null;
-  readonly isStatic: boolean;
-  /** Named functions declared directly in this scope, resolvable by name. */
-  readonly locals: Map<string, FunctionNode>;
-  /** Every other binding (params, variables, imports, classes): shadows outer names. */
-  readonly bindings: Set<string>;
-  readonly parent: Scope | null;
-};
-
-type ClassTable = {
-  readonly instance: Map<string, FunctionNode>;
-  readonly static: Map<string, FunctionNode>;
-  ctor: FunctionNode | null;
-};
+import { childrenOf, guardDepth } from "./walk";
 
 type Discovered = {
   readonly functions: FunctionNode[];
@@ -68,67 +45,19 @@ type Discovered = {
   /** The AST node each function was built from, for the call pass. */
   readonly nodeOf: Map<FunctionNode, Node>;
   readonly byNode: Map<Node, FunctionNode>;
-  /** The scope inside each function. */
+  /** The scope inside each named function. */
   readonly scopeOf: Map<FunctionNode, Scope>;
+  /** The scope inside each anonymous function, keyed by its node. */
+  readonly scopeAt: Map<Node, Scope>;
   readonly moduleScope: Scope;
-  readonly classes: Map<string, ClassTable>;
 };
-
-type FunctionLike =
-  | FunctionDeclaration
-  | FunctionExpression
-  | ArrowFunctionExpression
-  | ClassMethod
-  | ClassPrivateMethod;
 
 type Context = {
   readonly moduleId: string;
   readonly nextName: (qualifiedName: string) => string;
+  /** Names exported by `export { a, b }` or `export default a`. */
+  readonly exportedNames: ReadonlySet<string>;
   readonly out: Discovered;
-};
-
-const childScope = (
-  parent: Scope,
-  fn: FunctionNode,
-  className: string | null,
-  isStatic: boolean
-): Scope => ({
-  fn,
-  className,
-  isStatic,
-  locals: new Map(),
-  bindings: new Set(),
-  parent,
-});
-
-/** Every identifier a binding pattern introduces. */
-const bindingNames = (pattern: Node, into: Set<string>): void => {
-  if (isIdentifier(pattern)) {
-    into.add(pattern.name);
-  } else if (isObjectPattern(pattern)) {
-    for (const property of pattern.properties) {
-      bindingNames(
-        isObjectProperty(property) ? property.value : property,
-        into
-      );
-    }
-  } else if (isArrayPattern(pattern)) {
-    for (const element of pattern.elements) {
-      if (element !== null) {
-        bindingNames(element, into);
-      }
-    }
-  } else if (isRestElement(pattern)) {
-    bindingNames(pattern.argument, into);
-  } else if (isAssignmentPattern(pattern)) {
-    bindingNames(pattern.left, into);
-  }
-};
-
-const paramNames = (node: FunctionLike, into: Set<string>): void => {
-  for (const param of node.params) {
-    bindingNames(isTSParameterProperty(param) ? param.parameter : param, into);
-  }
 };
 
 type Registration = {
@@ -136,7 +65,7 @@ type Registration = {
   readonly name: string;
   readonly kind: FunctionKind;
   readonly exported: boolean;
-  readonly className: string | null;
+  readonly table: ClassTable | null;
   readonly isStatic: boolean;
 };
 
@@ -144,12 +73,15 @@ type Registration = {
 const register = (
   context: Context,
   scope: Scope,
-  registration: Registration
+  registration: Registration,
+  depth = 0
 ): FunctionNode => {
-  const { node, name, kind, exported, className, isStatic } = registration;
-  const owner = scope.fn?.qualifiedName ?? className;
+  const { node, name, kind, exported, table, isStatic } = registration;
+  const className = table?.name ?? null;
   const qualifiedName = context.nextName(
-    owner === null ? name : `${owner}.${name}`
+    [scope.fn?.qualifiedName, className, name]
+      .filter((part) => part !== null && part !== undefined)
+      .join(".")
   );
   const fn: FunctionNode = {
     id: functionId(context.moduleId, qualifiedName),
@@ -172,121 +104,109 @@ const register = (
   });
   context.out.nodeOf.set(fn, node);
   context.out.byNode.set(node, fn);
-  if (className === null) {
+  if (table === null) {
     scope.locals.set(name, fn);
   }
-  // A nested function keeps its class context; a member sets it.
-  const inner = childScope(
-    scope,
-    fn,
-    className ?? scope.className,
-    className === null ? scope.isStatic : isStatic
-  );
-  paramNames(node, inner.bindings);
+  const inner = functionScope(scope, node, fn, table, isStatic);
   context.out.scopeOf.set(fn, inner);
   for (const child of childrenOf(node)) {
-    visit(context, inner, child, false);
+    visit(context, inner, child, false, depth + 1);
   }
   return fn;
-};
-
-const memberName = (
-  member: ClassMethod | ClassPrivateMethod
-): string | null => {
-  if (isClassPrivateMethod(member)) {
-    return `#${member.key.id.name}`;
-  }
-  if (member.computed) {
-    return null;
-  }
-  if (isIdentifier(member.key)) {
-    return member.key.name;
-  }
-  return isStringLiteral(member.key) ? member.key.value : null;
-};
-
-const methodKind = (member: ClassMethod | ClassPrivateMethod): FunctionKind => {
-  if (member.kind === "constructor") {
-    return "constructor";
-  }
-  if (member.kind === "get") {
-    return "getter";
-  }
-  return member.kind === "set" ? "setter" : "method";
 };
 
 const visitClassBody = (
   context: Context,
   scope: Scope,
-  className: string,
+  name: string,
   body: ClassBody,
-  exported: boolean
+  exported: boolean,
+  depth: number
 ): void => {
   const table: ClassTable = {
+    name,
     instance: new Map(),
     static: new Map(),
     ctor: null,
   };
-  context.out.classes.set(className, table);
+  scope.classes.set(name, table);
   for (const member of body.body) {
+    const field = fieldFunction(member);
     if (isClassMethod(member) || isClassPrivateMethod(member)) {
-      const name = memberName(member);
-      if (name === null) {
+      const method = memberName(member);
+      if (method === null) {
         continue;
       }
-      const fn = register(context, scope, {
-        node: member,
-        name,
-        kind: methodKind(member),
-        exported,
-        className,
-        isStatic: member.static,
-      });
+      const fn = register(
+        context,
+        scope,
+        {
+          node: member,
+          name: method,
+          kind: methodKind(member),
+          exported,
+          table,
+          isStatic: member.static,
+        },
+        depth
+      );
       if (fn.kind === "constructor") {
         table.ctor = fn;
       } else {
-        (member.static ? table.static : table.instance).set(name, fn);
+        (member.static ? table.static : table.instance).set(method, fn);
       }
-    } else if (
-      isClassProperty(member) &&
-      !member.computed &&
-      isIdentifier(member.key) &&
-      (isArrowFunctionExpression(member.value) ||
-        isFunctionExpression(member.value))
-    ) {
-      const fn = register(context, scope, {
-        node: member.value,
-        name: member.key.name,
-        kind: isArrowFunctionExpression(member.value) ? "arrow" : "expression",
-        exported,
-        className,
-        isStatic: member.static,
-      });
-      (member.static ? table.static : table.instance).set(member.key.name, fn);
+    } else if (field !== null) {
+      const fn = register(
+        context,
+        scope,
+        {
+          node: field.value,
+          name: field.name,
+          kind: isArrowFunctionExpression(field.value) ? "arrow" : "expression",
+          exported,
+          table,
+          isStatic: field.isStatic,
+        },
+        depth
+      );
+      (field.isStatic ? table.static : table.instance).set(field.name, fn);
     } else {
       for (const child of childrenOf(member)) {
-        visit(context, scope, child, false);
+        visit(context, scope, child, false, depth + 1);
       }
     }
   }
 };
 
+/** Whether a module-level name is exported, by declaration or by list. */
+const isExported = (
+  context: Context,
+  scope: Scope,
+  name: string,
+  exported: boolean
+): boolean =>
+  exported || (scope.parent === null && context.exportedNames.has(name));
+
 const visit = (
   context: Context,
   scope: Scope,
   node: Node,
-  exported: boolean
+  exported: boolean,
+  depth = 0
 ): void => {
+  guardDepth(depth);
+  const next = (child: Node, inner: Scope, flag = false) =>
+    visit(context, inner, child, flag, depth + 1);
   if (isExportNamedDeclaration(node)) {
     if (node.declaration !== null && node.declaration !== undefined) {
-      visit(context, scope, node.declaration, true);
+      next(node.declaration, scope, true);
     }
     return;
   }
   if (isExportDefaultDeclaration(node)) {
     const { declaration } = node;
     if (isFunctionDeclaration(declaration) || isClassDeclaration(declaration)) {
-      visit(context, scope, declaration, true);
+      next(declaration, scope, true);
     } else if (
       isArrowFunctionExpression(declaration) ||
       isFunctionExpression(declaration)
@@ -296,22 +216,23 @@ const visit = (
         name: "default",
         kind: isArrowFunctionExpression(declaration) ? "arrow" : "expression",
         exported: true,
-        className: null,
+        table: null,
         isStatic: false,
       });
     } else {
-      visit(context, scope, declaration, false);
+      next(declaration, scope);
     }
     return;
   }
   if (isFunctionDeclaration(node)) {
     // Only `export default function () {}` has no id.
+    const name = node.id?.name ?? "default";
     register(context, scope, {
       node,
-      name: node.id?.name ?? "default",
+      name,
       kind: "declaration",
-      exported,
-      className: null,
+      exported: isExported(context, scope, name, exported),
+      table: null,
       isStatic: false,
     });
     return;
@@ -327,26 +248,31 @@ const visit = (
           node: init,
           name: id.name,
           kind: isArrowFunctionExpression(init) ? "arrow" : "expression",
-          exported,
-          className: null,
+          exported: isExported(context, scope, id.name, exported),
+          table: null,
           isStatic: false,
         });
         continue;
       }
       bindingNames(id, scope.bindings);
       if (init !== null && init !== undefined) {
-        visit(context, scope, init, false);
+        next(init, scope);
       }
     }
     return;
   }
   if (isClassDeclaration(node)) {
-    if (node.id === null || node.id === undefined) {
-      visitClassBody(context, scope, "default", node.body, exported);
-      return;
-    }
-    scope.bindings.add(node.id.name);
-    visitClassBody(context, scope, node.id.name, node.body, exported);
+    // Only `export default class {}` has no id.
+    const name = node.id?.name ?? "default";
+    scope.bindings.add(name);
+    visitClassBody(
+      context,
+      scope,
+      name,
+      node.body,
+      isExported(context, scope, name, exported),
+      depth + 1
+    );
     return;
   }
   if (isImportDeclaration(node)) {
@@ -358,40 +284,39 @@ const visit = (
   if (isCatchClause(node) && node.param !== null && node.param !== undefined) {
     bindingNames(node.param, scope.bindings);
   }
-  // Anonymous functions, callbacks, IIFEs, object methods and class
-  // expressions are not rooms: their calls belong to the enclosing function.
-  if (
-    isArrowFunctionExpression(node) ||
-    isFunctionExpression(node) ||
-    isClassMethod(node) ||
-    isClassPrivateMethod(node)
-  ) {
-    paramNames(node, scope.bindings);
+  // Anonymous functions, callbacks, IIFEs, object methods and the members of
+  // class expressions are not rooms: their calls belong to the enclosing
+  // function, but their parameters are their own.
+  if (isFunctionLike(node)) {
+    const inner = functionScope(scope, node, null, null, false);
+    context.out.scopeAt.set(node, inner);
+    for (const child of childrenOf(node)) {
+      next(child, inner);
+    }
+    return;
   }
   for (const child of childrenOf(node)) {
-    visit(context, scope, child, false);
+    next(child, scope);
   }
 };
 
 const discover = (moduleId: string, program: Program): Discovered => {
-  const moduleScope: Scope = {
-    fn: null,
-    className: null,
-    isStatic: false,
-    locals: new Map(),
-    bindings: new Set(),
-    parent: null,
-  };
+  const moduleScope = newScope(null, null, null, false);
   const out: Discovered = {
     functions: [],
     edges: [],
     nodeOf: new Map(),
     byNode: new Map(),
     scopeOf: new Map(),
+    scopeAt: new Map(),
     moduleScope,
-    classes: new Map(),
   };
-  const context: Context = { moduleId, nextName: uniqueNames(), out };
+  const context: Context = {
+    moduleId,
+    nextName: uniqueNames(),
+    exportedNames: exportedNamesOf(program),
+    out,
+  };
   for (const statement of program.body) {
     visit(context, moduleScope, statement, false);
   }
@@ -399,4 +324,4 @@ const discover = (moduleId: string, program: Program): Discovered => {
 };
 
 export { discover };
-export type { Discovered, Scope };
+export type { Discovered };

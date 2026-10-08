@@ -48,11 +48,12 @@ const sizeOf = (width: number): RoomSize => {
 const growForDoors = (
   width: number,
   depth: number,
-  degree: number
+  degree: number,
+  perimeterPerDoor = PERIMETER_PER_DOOR
 ): readonly [number, number] => {
   let w = width;
   let d = depth;
-  const fits = () => Math.floor((2 * (w + d)) / PERIMETER_PER_DOOR) >= degree;
+  const fits = () => Math.floor((2 * (w + d)) / perimeterPerDoor) >= degree;
   while (!fits() && (w < MAX_EXTENT || d < MAX_EXTENT)) {
     if (w <= d && w < MAX_EXTENT) {
       w += GRID;
@@ -75,14 +76,26 @@ const roomDimensions = (lineCount: number, degree: number): RoomDimensions => {
   const width = snap(min + t * (max - min));
   const depth = snap(Math.max(min, 0.75 * width));
   const [w, d] = growForDoors(width, depth, degree);
-  return { width: w, depth: d, size: sizeOf(w) };
+  // The class follows the band, unless doors grew the room past it.
+  return { width: w, depth: d, size: w > max ? sizeOf(w) : band };
 };
 
 /** A module hub starts at a fixed medium footprint and grows with its doors. */
 const HUB_EXTENT = 8;
 
+/**
+ * Hubs get more wall per door than function rooms: their neighbours are
+ * whole rooms that have to fit side by side along the hub's walls.
+ */
+const HUB_PERIMETER_PER_DOOR = 10;
+
 const hubDimensions = (degree: number): RoomDimensions => {
-  const [w, d] = growForDoors(HUB_EXTENT, HUB_EXTENT, degree);
+  const [w, d] = growForDoors(
+    HUB_EXTENT,
+    HUB_EXTENT,
+    degree,
+    HUB_PERIMETER_PER_DOOR
+  );
   return { width: w, depth: d, size: sizeOf(w) };
 };
 

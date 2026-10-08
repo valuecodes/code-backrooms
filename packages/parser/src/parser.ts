@@ -24,6 +24,16 @@ type ParsedModule = {
   readonly edges: readonly GraphEdge[];
 };
 
+/** Any analysis failure names the file, like a syntax error does. */
+const withPath = <T>(path: string, run: () => T): T => {
+  try {
+    return run();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${path}: ${message}`, { cause: error });
+  }
+};
+
 /**
  * One file to its part of the graph. Deterministic: functions and call sites
  * come out in source order, ids depend only on the path and the names.
@@ -31,8 +41,10 @@ type ParsedModule = {
 const parseModule = (file: SourceFile): ParsedModule => {
   const id = moduleId(file.path);
   const ast = parseSource(file.path, file.source);
-  const discovered = discover(id, ast.program);
-  const calls = collectCalls(id, ast.program, discovered);
+  const { discovered, calls } = withPath(file.path, () => {
+    const found = discover(id, ast.program);
+    return { discovered: found, calls: collectCalls(id, ast.program, found) };
+  });
   const module: ModuleNode = {
     id,
     path: id,

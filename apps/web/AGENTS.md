@@ -77,7 +77,7 @@ Code → graph → layout → rendering, each in its own package:
   `WorldLayout` (rooms and corridor-rooms with positions and doors) and then a
   `BuiltWorld` (wall boxes, lintels, door frames, colliders). It is three-free
   and fully seeded. Connections it cannot realise are listed in
-  `layout.unresolved`; the app shows them in the HUD and logs them.
+  `layout.unresolved`; the app shows them in the HUD.
 - `@repo/renderer` draws a `BuiltWorld` and runs the player, which reports the
   room it is in through `onRoomChange`.
 

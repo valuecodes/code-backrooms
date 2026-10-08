@@ -129,6 +129,43 @@ describe("toWorldGraph", () => {
     expect(() => validateGraph(world)).not.toThrow();
   });
 
+  it("chains extra hubs when a module has many roots", () => {
+    const functions = Array.from({ length: 40 }, (_, index) => ({
+      name: `f${index}`,
+      lines: 1,
+    }));
+    const graph = fixtureGraph({ path: "m.ts", functions });
+    const world = toWorldGraph(graph);
+    const hubs = world.rooms.filter((room) => room.label === "m.ts");
+    expect(hubs.map((hub) => hub.id)).toEqual(
+      Array.from({ length: 13 }, (_, index) =>
+        index === 0 ? "m.ts" : `m.ts#${index + 1}`
+      )
+    );
+    expect(world.connections).toEqual(
+      expect.arrayContaining([
+        { from: "m.ts", to: "m.ts#2" },
+        { from: "m.ts#12", to: "m.ts#13" },
+        { from: "m.ts", to: "m.ts::f0" },
+        { from: "m.ts#13", to: "m.ts::f39" },
+      ])
+    );
+    for (const hub of hubs) {
+      const doors = world.connections.filter(
+        ({ from, to }) => from === hub.id || to === hub.id
+      );
+      expect(doors.length).toBeLessThanOrEqual(5);
+    }
+    expect(() => validateGraph(world)).not.toThrow();
+    for (let seed = 1; seed <= 8; seed += 1) {
+      expect(() => generateWorld({ seed, graph: world })).not.toThrow();
+    }
+    expect(roomSubject(graph, "m.ts#3")).toMatchObject({
+      kind: "module",
+      module: { path: "m.ts" },
+    });
+  });
+
   it("gives an empty module a hub only", () => {
     const world = toWorldGraph(fixtureGraph({ path: "e.ts", functions: [] }));
     expect(world.rooms.map((room) => room.id)).toEqual(["e.ts"]);
