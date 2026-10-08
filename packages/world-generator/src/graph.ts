@@ -4,9 +4,9 @@ import { GRID, MAX_DEGREE, MIN_SHARED, ROOM_SIZE_CLASSES } from "./config";
 import { createRng, nextInt, pick, pickWeighted, shuffle } from "./random";
 import type { Rng } from "./random";
 
-/** Order-independent key for an undirected connection. */
+/** Order-independent key for an undirected connection; ids may hold any characters. */
 const connectionKey = (a: string, b: string): string =>
-  a < b ? `${a}|${b}` : `${b}|${a}`;
+  JSON.stringify(a < b ? [a, b] : [b, a]);
 
 /** Neighbour lists in connection order, both directions. */
 const adjacencyOf = (

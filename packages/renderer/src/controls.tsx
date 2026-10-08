@@ -80,17 +80,12 @@ const useMovementKeys = (): RefObject<MovementKeys> => {
   return keys;
 };
 
-type PointerLookProps = {
-  readonly onLock: () => void;
-  readonly onUnlock: () => void;
-};
-
 /**
  * Mouse look through the Pointer Lock API. A click anywhere locks the pointer;
- * the browser releases it on Esc.
+ * the browser releases it on Esc. Listen to `pointerlockchange` on the
+ * document for the state rather than to this component: it also fires when
+ * the Canvas unmounts while locked.
  */
-const PointerLook = ({ onLock, onUnlock }: PointerLookProps) => (
-  <PointerLockControls makeDefault onLock={onLock} onUnlock={onUnlock} />
-);
+const PointerLook = () => <PointerLockControls makeDefault />;
 
 export { PointerLook, useMovementKeys };

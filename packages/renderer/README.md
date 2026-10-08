@@ -10,7 +10,7 @@ import { World } from "@repo/renderer/world";
 <Canvas shadows="percentage">
   <World world={built} />
   <Player world={built} enabled={locked} />
-  <PointerLook onLock={...} onUnlock={...} />
+  <PointerLook />
 </Canvas>;
 ```
 
