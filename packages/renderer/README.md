@@ -9,10 +9,14 @@ import { World } from "@repo/renderer/world";
 
 <Canvas shadows="percentage">
   <World world={built} />
-  <Player world={built} enabled={locked} />
+  <Player world={built} enabled={locked} onRoomChange={setRoomId} />
   <PointerLook />
 </Canvas>;
 ```
+
+`onRoomChange` fires from the render loop only when the player crosses into
+another room or corridor (and once for the start room), so a state setter is a
+fine handler.
 
 Each room is five draw calls (merged walls and lintels, floor, ceiling, merged
 fixtures); every door frame in the world is one more. Lighting is a fixed

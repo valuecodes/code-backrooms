@@ -1,11 +1,16 @@
 import { isPresetName } from "@repo/world-generator/presets";
 import type { PresetName } from "@repo/world-generator/presets";
 
+import { isExampleName } from "~/examples";
+import type { ExampleName } from "~/examples";
+
 /** What the URL asks the generator for. */
 type WorldParams = {
   readonly seed: number;
   readonly rooms: number;
   readonly preset: PresetName | null;
+  /** A bundled program to generate rooms from; wins over `preset`. */
+  readonly code: ExampleName | null;
 };
 
 const DEFAULT_SEED = 1;
@@ -29,10 +34,14 @@ const parseInteger = (
   return Math.min(max, Math.max(min, Number.parseInt(value, 10)));
 };
 
-/** `?seed=12345&rooms=15` or `?graph=branching`; anything odd falls back. */
+/**
+ * `?seed=12345&rooms=15`, `?graph=branching` or `?code=demo`; anything odd
+ * falls back.
+ */
 const parseWorldParams = (search: string): WorldParams => {
   const params = new URLSearchParams(search);
   const graph = params.get("graph");
+  const code = params.get("code");
   return {
     seed: parseInteger(params.get("seed"), DEFAULT_SEED, 0, 2 ** 31 - 1),
     rooms: parseInteger(
@@ -42,6 +51,7 @@ const parseWorldParams = (search: string): WorldParams => {
       MAX_ROOMS
     ),
     preset: graph !== null && isPresetName(graph) ? graph : null,
+    code: code !== null && isExampleName(code) ? code : null,
   };
 };
 

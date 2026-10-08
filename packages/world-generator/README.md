@@ -9,9 +9,10 @@ const { built } = generateWorld({ seed: 12345, roomCount: 15 });
 ```
 
 Subpaths: `./graph` (`generateGraph`, `validateGraph`), `./layout`
-(`generateLayout`), `./geometry` (`buildWorld`), `./collision`, `./random`,
-`./config`, `./presets` (hand-written graphs: `lobby`, `linear`, `branching`,
-`hub`, `cycle`).
+(`generateLayout`), `./geometry` (`buildWorld`), `./collision`, `./locate`
+(`roomRects`, `roomAt`: which room a point is in), `./random`, `./config`,
+`./presets` (hand-written graphs: `lobby`, `linear`, `branching`, `hub`,
+`cycle`).
 
 Supported graphs: unique ids, dimensions on the 0.5 m grid and at least 2 m,
 undirected connections without duplicates, one connected component. Rooms

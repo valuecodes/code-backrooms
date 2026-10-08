@@ -1,17 +1,11 @@
 {
-  "name": "@repo/world-generator",
+  "name": "@repo/code-graph",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/world-generator.ts",
-    "./collision": "./src/collision.ts",
-    "./config": "./src/config.ts",
-    "./geometry": "./src/geometry.ts",
-    "./graph": "./src/graph.ts",
-    "./layout": "./src/layout.ts",
-    "./locate": "./src/locate.ts",
-    "./presets": "./src/presets.ts",
-    "./random": "./src/random.ts"
+    ".": "./src/code-graph.ts",
+    "./ids": "./src/ids.ts",
+    "./world-graph": "./src/world-graph.ts"
   },
   "scripts": {
     "typecheck": "tsc",
@@ -19,7 +13,8 @@
     "clean": "rm -rf .turbo node_modules .cache"
   },
   "dependencies": {
-    "@repo/types": "workspace:*"
+    "@repo/types": "workspace:*",
+    "@repo/world-generator": "workspace:*"
   },
   "devDependencies": {
     "@repo/prettier": "workspace:*",

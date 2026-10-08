@@ -1,7 +1,8 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import type { BuiltWorld, Point } from "@repo/types";
 import { moveWithCollisions } from "@repo/world-generator/collision";
-import { useLayoutEffect, useRef } from "react";
+import { roomAt, roomRects } from "@repo/world-generator/locate";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { Vector3 } from "three";
 
 import { useMovementKeys } from "./controls";
@@ -18,6 +19,12 @@ type PlayerProps = {
   readonly world: BuiltWorld;
   /** False while the pointer is not locked: input is ignored and motion stops. */
   readonly enabled: boolean;
+  /**
+   * Called from the render loop whenever the player crosses into another
+   * room (or corridor), with its id, or null outside every room. Fires once
+   * for the start room after the world changes.
+   */
+  readonly onRoomChange?: (roomId: string | null) => void;
 };
 
 const UP = new Vector3(0, 1, 0);
@@ -31,11 +38,16 @@ const SMOOTHING = 10;
 const PRIORITY = -1;
 
 /** First-person movement, driven from the render loop without React state. */
-const Player = ({ world, enabled }: PlayerProps) => {
+const Player = ({ world, enabled, onRoomChange }: PlayerProps) => {
   const camera = useThree((state) => state.camera);
   const keys = useMovementKeys();
   const position = useRef<Point>(world.start);
   const velocity = useRef(new Vector3());
+  const rects = useMemo(
+    () => roomRects(world.rooms.map((built) => built.room)),
+    [world]
+  );
+  const roomId = useRef<string | null>(null);
   const scratch = useRef({
     forward: new Vector3(),
     right: new Vector3(),
@@ -46,6 +58,8 @@ const Player = ({ world, enabled }: PlayerProps) => {
     position.current = world.start;
     // A new world is a fresh start: no momentum from the previous one.
     velocity.current.set(0, 0, 0);
+    // Forget the room too, so the first frame reports the new start room.
+    roomId.current = null;
     camera.position.set(world.start.x, EYE_HEIGHT, world.start.z);
     camera.lookAt(world.facing.x, EYE_HEIGHT, world.facing.z);
   }, [camera, world]);
@@ -86,6 +100,11 @@ const Player = ({ world, enabled }: PlayerProps) => {
     );
     position.current = next;
     camera.position.set(next.x, EYE_HEIGHT, next.z);
+    const current = roomAt(rects, next, roomId.current)?.id ?? null;
+    if (current !== roomId.current) {
+      roomId.current = current;
+      onRoomChange?.(current);
+    }
   }, PRIORITY);
 
   return null;
