@@ -119,7 +119,9 @@ const isFunctionLike = (node: Node): node is FunctionLike =>
  * The scope inside a function: its parameters, and for a function
  * expression its own name (which refers to itself). Arrows keep the `this`
  * of their surroundings; every other function has a dynamic `this`, unless
- * it is a class member, which `table` says.
+ * it is a class member, which `table` says. An anonymous function (`fn`
+ * null) stays owned by the nearest named one, so anything declared inside
+ * it still nests under that room.
  */
 const functionScope = (
   parent: Scope,
@@ -131,7 +133,7 @@ const functionScope = (
   const arrow = isArrowFunctionExpression(node);
   const scope = newScope(
     parent,
-    fn,
+    fn ?? parent.fn,
     table ?? (arrow ? parent.classTable : null),
     table === null ? arrow && parent.isStatic : isStatic
   );
