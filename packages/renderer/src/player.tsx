@@ -44,6 +44,8 @@ const Player = ({ world, enabled }: PlayerProps) => {
 
   useLayoutEffect(() => {
     position.current = world.start;
+    // A new world is a fresh start: no momentum from the previous one.
+    velocity.current.set(0, 0, 0);
     camera.position.set(world.start.x, EYE_HEIGHT, world.start.z);
     camera.lookAt(world.facing.x, EYE_HEIGHT, world.facing.z);
   }, [camera, world]);

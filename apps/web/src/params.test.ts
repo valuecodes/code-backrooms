@@ -22,6 +22,11 @@ describe("parseWorldParams", () => {
       preset: null,
     });
     expect(parseWorldParams("?rooms=-5")).toMatchObject({ rooms: 1 });
+    expect(parseWorldParams("?rooms=20junk&seed=1.5")).toMatchObject({
+      rooms: 15,
+      seed: 1,
+    });
+    expect(parseWorldParams("?seed=9e3")).toMatchObject({ seed: 1 });
   });
 
   it("does not treat prototype keys as presets", () => {

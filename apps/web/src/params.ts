@@ -14,17 +14,19 @@ const MIN_ROOMS = 1;
 /** Generation runs on the main thread; beyond this it would stall the tab. */
 const MAX_ROOMS = 40;
 
+/** Whole decimal integers only: `parseInt` alone would accept `20junk` or `1.5`. */
+const INTEGER = /^-?\d+$/;
+
 const parseInteger = (
   value: string | null,
   fallback: number,
   min: number,
   max: number
 ): number => {
-  const parsed = value === null ? Number.NaN : Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
+  if (value === null || !INTEGER.test(value)) {
     return fallback;
   }
-  return Math.min(max, Math.max(min, parsed));
+  return Math.min(max, Math.max(min, Number.parseInt(value, 10)));
 };
 
 /** `?seed=12345&rooms=15` or `?graph=branching`; anything odd falls back. */
