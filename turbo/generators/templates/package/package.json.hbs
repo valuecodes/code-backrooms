@@ -1,0 +1,21 @@
+{
+  "name": "@repo/{{ name }}",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/{{ name }}.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "clean": "rm -rf .turbo node_modules .cache"
+  },
+  "devDependencies": {
+    "@repo/prettier": "workspace:*",
+    "@repo/typescript": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "prettier": "@repo/prettier"
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      // Loaded by `pnpm gen:package` (`@turbo/gen`), which Knip does not model.
+      "entry": ["turbo/generators/config.ts"],
+      // Prettier loads the plugins named in `@repo/prettier` by package name,
+      // resolved from the directory it runs in -- the root, for `pnpm format`.
+      // Knip cannot see that indirection, but removing these breaks formatting
+      // on a clean checkout.
+      "ignoreDependencies": [
+        "@ianvs/prettier-plugin-sort-imports",
+        "prettier-plugin-tailwindcss",
+      ],
+    },
+  },
+}

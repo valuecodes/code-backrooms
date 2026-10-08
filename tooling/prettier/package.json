@@ -1,0 +1,21 @@
+{
+  "name": "@repo/prettier",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./prettier.config.ts"
+  },
+  "scripts": {
+    "clean": "rm -rf .turbo node_modules .cache",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@ianvs/prettier-plugin-sort-imports": "catalog:",
+    "@repo/typescript": "workspace:*",
+    "@types/node": "catalog:",
+    "prettier": "catalog:",
+    "prettier-plugin-tailwindcss": "catalog:",
+    "typescript": "catalog:"
+  },
+  "prettier": "@repo/prettier"
+}
