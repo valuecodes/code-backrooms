@@ -1,23 +1,11 @@
+import { createRng } from "@repo/world-generator/random";
+import type { Rng } from "@repo/world-generator/random";
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace } from "three";
 
 /** Metres covered by one repeat of each texture. */
 const TILE = { wallpaper: 1, carpet: 1, ceiling: 0.6 } as const;
 
 const SIZE = 512;
-
-type Rng = () => number;
-
-/** mulberry32: deterministic, so the patterns are identical on every load. */
-const createRng = (seed: number): Rng => {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 1_831_565_813) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32;
-  };
-};
 
 const createCanvas = () => {
   const canvas = document.createElement("canvas");

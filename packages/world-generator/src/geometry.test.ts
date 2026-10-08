@@ -1,12 +1,12 @@
+import type { RoomData, WallSegment, WorldData } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
 import { DOOR_HEIGHT, DOOR_WIDTH, WALL_HEIGHT, WALL_THICKNESS } from "./config";
 import { buildWorld, doorOpening, wallSegments } from "./geometry";
-import type { RoomData, WallSegment, WorldData } from "./types";
-import { worldData } from "./world-data";
 
 const lobby: RoomData = {
   id: "lobby",
+  kind: "room",
   position: [0, 0, 0],
   width: 10,
   depth: 8,
@@ -15,11 +15,15 @@ const lobby: RoomData = {
 
 const annex: RoomData = {
   id: "annex",
+  kind: "room",
   position: [9, 0, 1],
   width: 8,
   depth: 6,
   doors: [{ wall: "west", targetRoomId: "lobby" }],
 };
+
+/** Two rooms sharing the edge x = 5, overlapping on z in [-2, 4]. */
+const worldData: WorldData = { startRoomId: "lobby", rooms: [lobby, annex] };
 
 const eastWallSegments = (segments: readonly WallSegment[], edgeX: number) =>
   segments.filter(
@@ -108,6 +112,28 @@ describe("wallSegments", () => {
     expect(other).toHaveLength(3);
     expect(other.every((segment) => segment.kind === "wall")).toBe(true);
   });
+
+  it("keeps two doors on one wall as two separate gaps", () => {
+    const wide: RoomData = { ...lobby, depth: 12 };
+    const twoDoors = wallSegments(wide, [
+      { wall: "east", along: -3, width: DOOR_WIDTH },
+      { wall: "east", along: 3, width: DOOR_WIDTH },
+    ]);
+    const east2 = eastWallSegments(twoDoors, 5);
+    expect(east2.filter((segment) => segment.kind === "wall")).toHaveLength(3);
+    expect(east2.filter((segment) => segment.kind === "lintel")).toHaveLength(
+      2
+    );
+  });
+
+  it("rejects overlapping openings on one wall", () => {
+    expect(() =>
+      wallSegments(lobby, [
+        { wall: "east", along: 1, width: DOOR_WIDTH },
+        { wall: "east", along: 1.5, width: DOOR_WIDTH },
+      ])
+    ).toThrow(/overlapping door openings/);
+  });
 });
 
 describe("buildWorld", () => {
@@ -133,8 +159,28 @@ describe("buildWorld", () => {
     expect(world.colliders).toHaveLength(floorLevel.length);
   });
 
-  it("starts the player in the middle of the start room", () => {
+  it("emits one doorway per connected pair, centred on the shared edge", () => {
+    expect(world.doorways).toEqual([
+      {
+        center: [5, 0, 1],
+        axis: "z",
+        width: DOOR_WIDTH,
+        depth: 2 * WALL_THICKNESS,
+      },
+    ]);
+  });
+
+  it("starts the player in the middle of the start room, facing its door", () => {
     expect(world.start).toEqual({ x: 0, z: 0 });
+    expect(world.facing).toEqual({ x: 5, z: 1 });
+  });
+
+  it("faces +X when the start room has no door", () => {
+    const alone: WorldData = {
+      startRoomId: "lobby",
+      rooms: [{ ...lobby, doors: [] }],
+    };
+    expect(buildWorld(alone).facing).toEqual({ x: 1, z: 0 });
   });
 
   it("rejects a door with no door back", () => {

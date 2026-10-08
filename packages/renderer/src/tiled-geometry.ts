@@ -1,7 +1,6 @@
+import type { Vec3 } from "@repo/types";
 import { BoxGeometry, PlaneGeometry } from "three";
 import type { BufferGeometry } from "three";
-
-import type { Vec3 } from "./types";
 
 /**
  * Scales the UVs of vertices [from, to) so a texture repeats in world metres

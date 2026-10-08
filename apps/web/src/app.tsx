@@ -1,33 +1,97 @@
 import { Canvas } from "@react-three/fiber";
-import { useState } from "react";
+import { PointerLook } from "@repo/renderer/controls";
+import { Player } from "@repo/renderer/player";
+import { World } from "@repo/renderer/world";
+import type { GeneratedWorld } from "@repo/types";
+import { generateWorld } from "@repo/world-generator";
+import { presets } from "@repo/world-generator/presets";
+import { useEffect, useMemo, useState } from "react";
 
-import { PointerLook } from "~/game/controls";
-import { buildWorld } from "~/game/geometry";
-import { Player } from "~/game/player";
-import { World } from "~/game/world";
-import { worldData } from "~/game/world-data";
 import { Hud } from "~/hud";
+import { parseWorldParams, withSeed } from "~/params";
 
-const world = buildWorld(worldData);
+type Generated =
+  | { readonly world: GeneratedWorld; readonly error: null }
+  | { readonly world: null; readonly error: string };
+
+const initial = parseWorldParams(globalThis.location.search);
+
+/**
+ * Builds the world once per seed: it never regenerates while the player moves.
+ * Generation errors (an unplaceable supplied graph) are shown, not thrown
+ * through the renderer.
+ */
+const useGeneratedWorld = (seed: number): Generated =>
+  useMemo(() => {
+    try {
+      const world = generateWorld({
+        seed,
+        roomCount: initial.rooms,
+        graph: initial.preset === null ? undefined : presets[initial.preset],
+      });
+      for (const { from, to } of world.layout.unresolved) {
+        console.warn(`Connection ${from} -> ${to} could not be laid out`);
+      }
+      return { world, error: null };
+    } catch (error) {
+      return { world: null, error: String(error) };
+    }
+  }, [seed]);
 
 const App = () => {
   const [locked, setLocked] = useState(false);
+  const [seed, setSeed] = useState(initial.seed);
+  const generated = useGeneratedWorld(seed);
+
+  // N: next seed. Only this regenerates the world.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code === "KeyN" && !event.repeat) {
+        setSeed((current) => {
+          const next = current + 1;
+          globalThis.history.replaceState(
+            null,
+            "",
+            withSeed(globalThis.location.search, next)
+          );
+          return next;
+        });
+      }
+    };
+    globalThis.addEventListener("keydown", onKeyDown);
+    return () => globalThis.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   return (
     <div className="relative h-dvh w-screen overflow-hidden bg-black">
-      <Canvas
-        shadows="soft"
-        dpr={[1, 1.5]}
-        camera={{ fov: 75, near: 0.05, far: 60 }}
-        gl={{ antialias: true }}
-      >
-        <World world={world} />
-        <Player world={world} enabled={locked} />
-        <PointerLook
-          onLock={() => setLocked(true)}
-          onUnlock={() => setLocked(false)}
-        />
-      </Canvas>
-      <Hud locked={locked} />
+      {generated.world !== null && (
+        <Canvas
+          shadows="percentage"
+          dpr={[1, 1.25]}
+          camera={{ fov: 75, near: 0.05, far: 32 }}
+          gl={{ antialias: true }}
+          // The scene is static and the player casts nothing: the light pool
+          // requests a shadow render only when its shadow light moves.
+          onCreated={({ gl }) => {
+            gl.shadowMap.autoUpdate = false;
+            gl.shadowMap.needsUpdate = true;
+          }}
+        >
+          <World world={generated.world.built} />
+          <Player world={generated.world.built} enabled={locked} />
+          <PointerLook
+            onLock={() => setLocked(true)}
+            onUnlock={() => setLocked(false)}
+          />
+        </Canvas>
+      )}
+      <Hud
+        locked={locked}
+        seed={seed}
+        rooms={generated.world?.graph.rooms.length ?? 0}
+        preset={initial.preset}
+        error={generated.error}
+      />
     </div>
   );
 };

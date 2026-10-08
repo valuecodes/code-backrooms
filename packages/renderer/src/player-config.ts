@@ -1,11 +1,4 @@
-// World dimensions are metres. Y is up.
-
-/** Floor-to-ceiling height of every room. */
-const WALL_HEIGHT = 2.7;
-/** Walls are boxes inset inside the room footprint, this thick. */
-const WALL_THICKNESS = 0.15;
-const DOOR_WIDTH = 1.2;
-const DOOR_HEIGHT = 2.1;
+// Player dimensions in metres, speeds in metres per second.
 
 const EYE_HEIGHT = 1.7;
 /** Half-extent of the player's square footprint on the XZ plane. */
@@ -23,19 +16,11 @@ const MAX_FRAME_SECONDS = 0.25;
  */
 const MAX_STEP_DISTANCE = 0.1;
 
-/** Distance between fluorescent panels in the ceiling grid. */
-const LIGHT_SPACING = 4;
-
 export {
-  DOOR_HEIGHT,
-  DOOR_WIDTH,
   EYE_HEIGHT,
-  LIGHT_SPACING,
   MAX_FRAME_SECONDS,
   MAX_STEP_DISTANCE,
   PLAYER_RADIUS,
   SPRINT_SPEED,
   WALK_SPEED,
-  WALL_HEIGHT,
-  WALL_THICKNESS,
 };

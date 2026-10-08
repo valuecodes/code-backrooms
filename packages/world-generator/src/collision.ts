@@ -1,6 +1,4 @@
-import type { Rect } from "./types";
-
-type Point = { readonly x: number; readonly z: number };
+import type { Point, Rect } from "@repo/types";
 
 /** Strict, so a footprint flush against a wall is touching, not colliding. */
 const overlaps = (
@@ -64,4 +62,3 @@ const moveWithCollisions = (
 };
 
 export { moveWithCollisions, resolveMovement };
-export type { Point };

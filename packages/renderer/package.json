@@ -1,0 +1,30 @@
+{
+  "name": "@repo/renderer",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./controls": "./src/controls.tsx",
+    "./player": "./src/player.tsx",
+    "./world": "./src/world.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "clean": "rm -rf .turbo node_modules .cache"
+  },
+  "dependencies": {
+    "@react-three/drei": "10.7.8",
+    "@react-three/fiber": "catalog:",
+    "@repo/types": "workspace:*",
+    "@repo/world-generator": "workspace:*",
+    "react": "catalog:",
+    "three": "catalog:"
+  },
+  "devDependencies": {
+    "@repo/prettier": "workspace:*",
+    "@repo/typescript": "workspace:*",
+    "@types/react": "catalog:",
+    "@types/three": "catalog:",
+    "typescript": "catalog:"
+  },
+  "prettier": "@repo/prettier"
+}

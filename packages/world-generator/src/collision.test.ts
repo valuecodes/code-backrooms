@@ -1,7 +1,7 @@
+import type { Rect } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
 import { moveWithCollisions, resolveMovement } from "./collision";
-import type { Rect } from "./types";
 
 // Values here are exact in binary so "touching" is exactly touching.
 const RADIUS = 0.25;

@@ -16,9 +16,12 @@ Guidelines for AI agents and contributors working in this Turborepo monorepo.
 
 ### Packages (`packages/`)
 
-| Name   | Filter         | Description                                    |
-| ------ | -------------- | ---------------------------------------------- |
-| logger | `@repo/logger` | pino logger emitting Cloud Logging shaped JSON |
+| Name            | Filter                  | Description                                                                   |
+| --------------- | ----------------------- | ----------------------------------------------------------------------------- |
+| logger          | `@repo/logger`          | pino logger emitting Cloud Logging shaped JSON                                |
+| types           | `@repo/types`           | Shared world types: graph, layout and built geometry, no three.js             |
+| world-generator | `@repo/world-generator` | Graph → layout → walls, doors, corridors and colliders, seeded and three-free |
+| renderer        | `@repo/renderer`        | React Three Fiber components, player and lights for a built world             |
 
 ### Tooling (`tooling/`)
 

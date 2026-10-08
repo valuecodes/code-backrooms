@@ -1,9 +1,10 @@
 import { useFrame, useThree } from "@react-three/fiber";
+import type { BuiltWorld, Point } from "@repo/types";
+import { moveWithCollisions } from "@repo/world-generator/collision";
 import { useLayoutEffect, useRef } from "react";
 import { Vector3 } from "three";
 
-import { moveWithCollisions } from "~/game/collision";
-import type { Point } from "~/game/collision";
+import { useMovementKeys } from "./controls";
 import {
   EYE_HEIGHT,
   MAX_FRAME_SECONDS,
@@ -11,9 +12,7 @@ import {
   PLAYER_RADIUS,
   SPRINT_SPEED,
   WALK_SPEED,
-} from "~/game/config";
-import { useMovementKeys } from "~/game/controls";
-import type { BuiltWorld } from "~/game/types";
+} from "./player-config";
 
 type PlayerProps = {
   readonly world: BuiltWorld;
@@ -24,6 +23,12 @@ type PlayerProps = {
 const UP = new Vector3(0, 1, 0);
 /** Higher is snappier; the velocity closes 1 - e^-SMOOTHING of the gap per second. */
 const SMOOTHING = 10;
+/**
+ * Runs before the default-priority subscribers (the light pool), which then
+ * see this frame's camera position. Stays negative: a positive priority would
+ * take over rendering from React Three Fiber.
+ */
+const PRIORITY = -1;
 
 /** First-person movement, driven from the render loop without React state. */
 const Player = ({ world, enabled }: PlayerProps) => {
@@ -40,7 +45,7 @@ const Player = ({ world, enabled }: PlayerProps) => {
   useLayoutEffect(() => {
     position.current = world.start;
     camera.position.set(world.start.x, EYE_HEIGHT, world.start.z);
-    camera.lookAt(world.start.x + 1, EYE_HEIGHT, world.start.z);
+    camera.lookAt(world.facing.x, EYE_HEIGHT, world.facing.z);
   }, [camera, world]);
 
   useFrame((_, delta) => {
@@ -79,7 +84,7 @@ const Player = ({ world, enabled }: PlayerProps) => {
     );
     position.current = next;
     camera.position.set(next.x, EYE_HEIGHT, next.z);
-  });
+  }, PRIORITY);
 
   return null;
 };

@@ -456,10 +456,10 @@
 
   // React Three Fiber renders three.js objects as JSX, so its props
   // (position, args, intensity, attach, ...) are not DOM attributes. Scoped to
-  // the game scene files only.
+  // the renderer package and the app's Canvas only.
   "overrides": [
     {
-      "files": ["apps/web/src/game/**/*.tsx"],
+      "files": ["packages/renderer/src/**/*.tsx", "apps/web/src/app.tsx"],
       "rules": { "react/no-unknown-property": "off" }
     }
   ]

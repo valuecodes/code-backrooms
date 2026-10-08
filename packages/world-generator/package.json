@@ -1,0 +1,30 @@
+{
+  "name": "@repo/world-generator",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/world-generator.ts",
+    "./collision": "./src/collision.ts",
+    "./config": "./src/config.ts",
+    "./geometry": "./src/geometry.ts",
+    "./graph": "./src/graph.ts",
+    "./layout": "./src/layout.ts",
+    "./presets": "./src/presets.ts",
+    "./random": "./src/random.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "clean": "rm -rf .turbo node_modules .cache"
+  },
+  "dependencies": {
+    "@repo/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/prettier": "workspace:*",
+    "@repo/typescript": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "prettier": "@repo/prettier"
+}

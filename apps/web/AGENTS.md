@@ -10,8 +10,10 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   be generated from source code (functions as rooms, branches as doors, and so on).
 - Vite 8 + React 19, three.js through React Three Fiber and drei, Tailwind CSS 4
   for the HUD.
-- Milestone 1 (current): two hand-written rooms, a real doorway between them,
-  WASD + mouse-look movement with wall collisions. No code parsing or generation yet.
+- Milestone 2 (current): a seeded, procedurally generated world of 10-20 rooms
+  joined by doorways and straight corridors, WASD + mouse-look movement with wall
+  collisions. The app itself is thin: generation lives in `@repo/world-generator`
+  and rendering in `@repo/renderer` (both in `packages/`).
 
 ---
 
@@ -39,54 +41,48 @@ There are no per-workspace `lint` or `format` scripts: root `pnpm lint` (oxlint)
 ```text
 src/
   main.tsx            mounts <App/>
-  app.tsx             full-screen <Canvas>, pointer-lock state, HUD
-  hud.tsx             "Click to start walking" overlay / crosshair
-  game/
-    types.ts          RoomData, DoorData, WorldData and the derived BuiltWorld types
-    config.ts         dimensions, speeds and timing constants (metres, seconds)
-    world-data.ts     the rooms, as data only
-    geometry.ts       PURE: door openings and wall segments derived from room data
-    collision.ts      PURE: square-vs-AABB movement resolution with substepping
-    textures.ts       procedural canvas textures (wallpaper, carpet, ceiling tiles)
-    surfaces.ts       shared materials + React context
-    tiled-geometry.ts planes/boxes whose UVs repeat in world metres
-    world.tsx         background, fog, ambient light, rooms
-    controls.tsx      useMovementKeys (keyboard) and PointerLook (drei pointer lock)
-    player.tsx        first-person movement in useFrame
-    components/       room, wall, floor, ceiling, door
+  app.tsx             full-screen <Canvas>, seed state, pointer-lock state, HUD
+  hud.tsx             "Click to start walking" overlay / crosshair, seed readout
+  params.ts           URL query -> { seed, rooms, preset }, with clamping
 ```
 
-### The room model
+### Query parameters
 
-- A room is `{ id, position, width, depth, doors }`; a door is only
-  `{ wall, targetRoomId }`. Rooms that connect must share an edge (`north` is
-  -Z, `south` +Z, `east` +X, `west` -X), and both must declare the door.
-- `buildWorld()` derives everything else: the opening is centred on the overlap
-  of the shared edge, so both sides line up with no extra data; walls become
-  inset box segments with real gaps plus a lintel; the floor-level segments are
-  the colliders. Invalid data (edges that do not touch, overlap narrower than
-  the door, a door with no door back) throws at startup.
+- `?seed=12345` picks the world; `N` while playing bumps it (and rewrites the URL).
+- `?rooms=15` sets the random graph size (clamped to 1-40).
+- `?graph=<preset>` lays out a hand-written graph from
+  `@repo/world-generator/presets` instead: `lobby`, `linear`, `branching`,
+  `hub`, `cycle`.
+
+### The pipeline
+
+Graph → layout → rendering, each in its own package:
+
+- `@repo/types` holds the data shapes for all three layers.
+- `@repo/world-generator` turns a `WorldGraph` (rooms + connections) into a
+  `WorldLayout` (rooms and corridor-rooms with positions and doors) and then a
+  `BuiltWorld` (wall boxes, lintels, door frames, colliders). It is three-free
+  and fully seeded. Connections it cannot realise are listed in
+  `layout.unresolved`; the app logs them with `console.warn`.
+- `@repo/renderer` draws a `BuiltWorld` and runs the player.
+
+The world is built in a `useMemo` keyed on the seed, so it never regenerates
+while the player moves.
 
 ---
 
 ## Local Conventions (Deltas from Root)
 
-### Pure modules stay three-free
+### Nothing three.js-specific lives here
 
-- `geometry.ts` and `collision.ts` must not import `three`; their Vitest tests
-  run in the `node` environment with no DOM or WebGL.
-
-### Shared materials
-
-- Materials and textures are created once in `world.tsx` and shared through
-  `useSurfaces()`. Any mesh using them must set `dispose={null}`: React Three
-  Fiber otherwise disposes props-assigned materials when the mesh unmounts.
+- Generation stays in `@repo/world-generator` (three-free, tested in the `node`
+  environment) and scene code in `@repo/renderer`. This app only composes them.
 
 ### Lint
 
 - The root `.oxlintrc.json` turns `react/no-unknown-property` off for
-  `src/game/**/*.tsx` only, because React Three Fiber props are not DOM
-  attributes. Keep JSX for three.js objects inside `src/game/`.
+  `packages/renderer/src/**/*.tsx` and `src/app.tsx` only, because React Three
+  Fiber props are not DOM attributes. Keep JSX for three.js objects there.
 
 ### Styling
 
