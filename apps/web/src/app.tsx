@@ -47,20 +47,36 @@ const App = () => {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.code === "KeyN" && !event.repeat) {
-        setSeed((current) => {
-          const next = current + 1;
-          globalThis.history.replaceState(
-            null,
-            "",
-            withSeed(globalThis.location.search, next)
-          );
-          return next;
-        });
+        setSeed((current) => current + 1);
       }
     };
     globalThis.addEventListener("keydown", onKeyDown);
     return () => globalThis.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  // Keep the URL shareable: it always names the seed on screen.
+  useEffect(() => {
+    if (seed !== initial.seed) {
+      globalThis.history.replaceState(
+        null,
+        "",
+        withSeed(globalThis.location.search, seed)
+      );
+    }
+  }, [seed]);
+
+  // The browser owns the lock state: one listener covers locks, Esc, and a
+  // failed generation unmounting the Canvas mid-lock.
+  useEffect(() => {
+    const sync = () => setLocked(document.pointerLockElement !== null);
+    document.addEventListener("pointerlockchange", sync);
+    return () => document.removeEventListener("pointerlockchange", sync);
+  }, []);
+  useEffect(() => {
+    if (generated.error !== null && document.pointerLockElement !== null) {
+      document.exitPointerLock();
+    }
+  }, [generated.error]);
 
   return (
     <div className="relative h-dvh w-screen overflow-hidden bg-black">
@@ -79,10 +95,7 @@ const App = () => {
         >
           <World world={generated.world.built} />
           <Player world={generated.world.built} enabled={locked} />
-          <PointerLook
-            onLock={() => setLocked(true)}
-            onUnlock={() => setLocked(false)}
-          />
+          <PointerLook />
         </Canvas>
       )}
       <Hud

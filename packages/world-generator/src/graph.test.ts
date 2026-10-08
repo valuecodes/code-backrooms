@@ -125,6 +125,23 @@ describe("validateGraph", () => {
     ).toThrow(/duplicated/);
   });
 
+  it("does not confuse connections whose ids contain the separator", () => {
+    const graph: WorldGraph = {
+      rooms: [
+        { id: "a", width: 6, depth: 6 },
+        { id: "b|c", width: 6, depth: 6 },
+        { id: "a|b", width: 6, depth: 6 },
+        { id: "c", width: 6, depth: 6 },
+      ],
+      connections: [
+        { from: "a", to: "b|c" },
+        { from: "a|b", to: "c" },
+        { from: "a", to: "a|b" },
+      ],
+    };
+    expect(() => validateGraph(graph)).not.toThrow();
+  });
+
   it("rejects an unknown start and an unreachable room", () => {
     expect(() => validateGraph({ ...base, start: "zz" })).toThrow(/start room/);
     expect(() => validateGraph({ ...base, connections: [] })).toThrow(

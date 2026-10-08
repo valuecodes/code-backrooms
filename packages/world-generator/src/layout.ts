@@ -122,6 +122,18 @@ class Placement {
   readonly resolved = new Set<string>();
   private corridors = 0;
 
+  /** Every id the graph uses, so generated ids never shadow one. */
+  constructor(private readonly reserved: ReadonlySet<string>) {}
+
+  /** `prefix`, suffixed until it is neither a graph id nor placed. */
+  freeId(prefix: string): string {
+    let id = prefix;
+    while (this.reserved.has(id) || this.rects.has(id)) {
+      id = `${id}-`;
+    }
+    return id;
+  }
+
   add(id: string, kind: RoomKind, rect: Rect, connection?: Connection): void {
     this.rects.set(id, rect);
     this.rooms.set(id, { id, kind, rect, doors: [], connection });
@@ -148,7 +160,7 @@ class Placement {
 
   corridor(fromId: string, wall: WallSide, rect: Rect, toId: string): void {
     this.corridors += 1;
-    const id = `corridor-${this.corridors}`;
+    const id = this.freeId(`corridor-${this.corridors}`);
     this.add(id, "corridor", rect, { from: fromId, to: toId });
     this.connect(fromId, wall, id);
     this.connect(id, wall, toId);
@@ -183,7 +195,7 @@ const closable = (
   const preview = new Map(state.rects);
   preview.set(roomId, option.room);
   if (option.corridor !== null) {
-    preview.set(`${roomId}-corridor`, option.corridor);
+    preview.set(state.freeId("preview-corridor"), option.corridor);
   }
   let count = 0;
   for (const id of neighbours) {
@@ -251,7 +263,7 @@ const attempt = (graph: WorldGraph, start: string, rng: Rng): Attempt => {
   const adjacency = new Map(
     [...adjacencyOf(graph)].map(([id, ids]) => [id, shuffle(rng, ids)])
   );
-  const state = new Placement();
+  const state = new Placement(new Set(byId.keys()));
   const first = byId.get(start);
   if (first === undefined) {
     throw new Error(`Unknown start room "${start}"`);

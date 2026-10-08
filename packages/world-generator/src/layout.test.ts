@@ -107,6 +107,28 @@ describe("generateLayout", () => {
     expect(entry?.position).toEqual([0, 0, 0]);
   });
 
+  it("keeps supplied ids that look like generated ones distinct", () => {
+    const graph: WorldGraph = {
+      rooms: [
+        { id: "corridor-1", width: 6, depth: 6 },
+        { id: "a|b", width: 6, depth: 6 },
+        { id: "c", width: 6, depth: 6 },
+      ],
+      connections: [
+        { from: "corridor-1", to: "a|b" },
+        { from: "a|b", to: "c" },
+        { from: "c", to: "corridor-1" },
+      ],
+    };
+    for (let seed = 1; seed <= 10; seed += 1) {
+      const layout = generateLayout(graph, seed);
+      expect(checkLayout(graph, layout)).toEqual([]);
+      const ids = layout.rooms.map((room) => room.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids).toEqual(expect.arrayContaining(["corridor-1", "a|b", "c"]));
+    }
+  });
+
   it("rejects an invalid graph before placing anything", () => {
     expect(() =>
       generateLayout(
