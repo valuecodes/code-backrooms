@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { Home } from "./home";
+import { App } from "./app";
 
 import "./globals.css";
 
@@ -10,7 +10,7 @@ if (rootElement) {
   const root = createRoot(rootElement);
   root.render(
     <StrictMode>
-      <Home />
+      <App />
     </StrictMode>
   );
 } else {

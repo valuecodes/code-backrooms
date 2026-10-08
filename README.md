@@ -5,7 +5,7 @@ and clear package boundaries — so agents move fast without turning the codebas
 
 ## What's inside
 
-- Vite playground in `apps/playground` (Vite 8, React 19, Tailwind CSS 4)
+- Code Backrooms web app in `apps/web` (Vite 8, React 19, React Three Fiber, Tailwind CSS 4)
 - Shared tooling: oxlint, Knip, Prettier, TypeScript 7, Turbo
 - `@repo/logger` — structured JSON logging for Cloud Run / Cloud Logging
 - pnpm catalog for versions, with supply-chain guards: a 14-day release-age wait,
@@ -13,7 +13,7 @@ and clear package boundaries — so agents move fast without turning the codebas
 - Claude Code settings in `.claude/`
 
 ```text
-apps/playground        Vite 8 + React 19 sandbox
+apps/web               Code Backrooms: Vite 8 + React 19 + React Three Fiber
 packages/logger        pino logger, Cloud Logging shaped JSON
 tooling/prettier       shared Prettier config
 tooling/typescript     shared tsconfig presets (base, node, react)
@@ -27,7 +27,7 @@ Requires Node.js 24.21.0 (`.nvmrc`) and pnpm 12.4.2 (`packageManager` in `packag
 
 ```bash
 pnpm install
-pnpm dev          # playground at http://localhost:3000
+pnpm dev          # web app at http://localhost:3000
 ```
 
 ## Commands

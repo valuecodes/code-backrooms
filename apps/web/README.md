@@ -1,12 +1,21 @@
-# Playground
+# Code Backrooms (web)
 
-Vite + React playground for experimenting with UI and agent workflows in this monorepo.
+A first-person, Backrooms-style 3D space that will eventually be generated from
+source code. This milestone renders two hand-written rooms joined by a doorway,
+with WASD + mouse-look movement and wall collisions. See `AGENTS.md` for the
+room model and the layout of `src/game/`.
 
 ## Stack
 
 - Vite 8 + React 19
-- Tailwind CSS 4
+- three.js via React Three Fiber and drei
+- Tailwind CSS 4 (HUD only)
 - Vitest for unit tests
+
+## Controls
+
+Click the scene to lock the mouse. WASD or arrow keys move, the mouse looks,
+Shift sprints, Esc releases the mouse.
 
 ## Getting started
 
@@ -14,29 +23,30 @@ From the repo root:
 
 ```bash
 pnpm install
-pnpm --filter playground dev
+pnpm --filter web dev
 ```
 
 Open http://localhost:3000 to view the app.
 
 ## Common commands
 
-| Task      | Command                              |
-| --------- | ------------------------------------ |
-| Dev       | `pnpm --filter playground dev`       |
-| Build     | `pnpm --filter playground build`     |
-| Preview   | `pnpm --filter playground preview`   |
-| Typecheck | `pnpm --filter playground typecheck` |
-| Test      | `pnpm --filter playground test`      |
-| Clean     | `pnpm --filter playground clean`     |
-| Deploy    | `pnpm --filter playground deploy`    |
+| Task      | Command                       |
+| --------- | ----------------------------- |
+| Dev       | `pnpm --filter web dev`       |
+| Build     | `pnpm --filter web build`     |
+| Preview   | `pnpm --filter web preview`   |
+| Typecheck | `pnpm --filter web typecheck` |
+| Test      | `pnpm --filter web test`      |
+| Clean     | `pnpm --filter web clean`     |
+| Deploy    | `pnpm --filter web deploy`    |
 
 Linting and formatting are repo-wide: run `pnpm lint` / `pnpm format` from the root.
 
 ## Styling
 
 `src/globals.css` imports Tailwind and sets `@source` scanning. There is no shared
-theme package, so use plain Tailwind utilities.
+theme package, so use plain Tailwind utilities. Scene textures are drawn on a canvas
+at startup (`src/game/textures.ts`), so there are no image assets.
 
 ## Deploy (Cloudflare)
 
@@ -50,7 +60,7 @@ There is no CI deploy job. To connect the repo in the Cloudflare dashboard
 
 | Setting        | Value                       |
 | -------------- | --------------------------- |
-| Root directory | `apps/playground`           |
+| Root directory | `apps/web`                  |
 | Build command  | `pnpm build`                |
 | Deploy command | `pnpm exec wrangler deploy` |
 
@@ -65,8 +75,8 @@ so pinning versions there would be too late:
 
 Keep them in step with `.nvmrc` and the root `packageManager` field.
 
-To deploy from your machine instead, run `pnpm --filter playground exec wrangler login` once, then
-`pnpm --filter playground deploy`.
+To deploy from your machine instead, run `pnpm --filter web exec wrangler login` once, then
+`pnpm --filter web deploy`.
 
 The Content-Security-Policy in `public/_headers` allows only this origin plus
 Cloudflare Web Analytics. Loading scripts, fonts, images or APIs from any other

@@ -452,5 +452,15 @@
     "jsx-a11y/role-supports-aria-props": "error",
     "jsx-a11y/scope": "error",
     "jsx-a11y/tabindex-no-positive": "error"
-  }
+  },
+
+  // React Three Fiber renders three.js objects as JSX, so its props
+  // (position, args, intensity, attach, ...) are not DOM attributes. Scoped to
+  // the game scene files only.
+  "overrides": [
+    {
+      "files": ["apps/web/src/game/**/*.tsx"],
+      "rules": { "react/no-unknown-property": "off" }
+    }
+  ]
 }

@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@source "./**/*.{js,jsx,ts,tsx}";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+  background: #000;
+}
