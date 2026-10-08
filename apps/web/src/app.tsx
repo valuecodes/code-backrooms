@@ -1,4 +1,5 @@
 import { Canvas } from "@react-three/fiber";
+import type { CodeGraph } from "@repo/code-graph";
 import { PointerLook } from "@repo/renderer/controls";
 import { Player } from "@repo/renderer/player";
 import { World } from "@repo/renderer/world";
@@ -9,38 +10,62 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Hud } from "~/hud";
 import { parseWorldParams, withSeed } from "~/params";
+import { codeGraphOf, describeRoom, worldFromCode } from "~/world-from-code";
 
-type Generated =
-  | { readonly world: GeneratedWorld; readonly error: null }
-  | { readonly world: null; readonly error: string };
+type Generated = {
+  readonly world: GeneratedWorld | null;
+  readonly codeGraph: CodeGraph | null;
+  /** Graph connections the layout could not realise, one line each. */
+  readonly warnings: readonly string[];
+  readonly error: string | null;
+};
 
 const initial = parseWorldParams(globalThis.location.search);
 
+// Parsed once: a syntax error in a bundled example does not depend on the
+// seed, and it is shown in the HUD rather than thrown through the renderer.
+const code = initial.code === null ? null : codeGraphOf(initial.code);
+
+const generate = (seed: number): GeneratedWorld => {
+  const codeGraph = code?.codeGraph ?? null;
+  if (codeGraph !== null) {
+    return worldFromCode(codeGraph, seed);
+  }
+  return generateWorld({
+    seed,
+    roomCount: initial.rooms,
+    graph: initial.preset === null ? undefined : presets[initial.preset],
+  });
+};
+
 /**
  * Builds the world once per seed: it never regenerates while the player moves.
- * Generation errors (an unplaceable supplied graph) are shown, not thrown
- * through the renderer.
+ * Generation errors (an unplaceable graph) are shown, not thrown.
  */
 const useGeneratedWorld = (seed: number): Generated =>
   useMemo(() => {
+    const codeGraph = code?.codeGraph ?? null;
+    if (code !== null && code.error !== null) {
+      return { world: null, codeGraph, warnings: [], error: code.error };
+    }
     try {
-      const world = generateWorld({
-        seed,
-        roomCount: initial.rooms,
-        graph: initial.preset === null ? undefined : presets[initial.preset],
-      });
-      for (const { from, to } of world.layout.unresolved) {
-        console.warn(`Connection ${from} -> ${to} could not be laid out`);
+      const world = generate(seed);
+      const warnings = world.layout.unresolved.map(
+        ({ from, to }) => `${from} -> ${to} could not be laid out`
+      );
+      for (const warning of warnings) {
+        console.warn(warning);
       }
-      return { world, error: null };
+      return { world, codeGraph, warnings, error: null };
     } catch (error) {
-      return { world: null, error: String(error) };
+      return { world: null, codeGraph, warnings: [], error: String(error) };
     }
   }, [seed]);
 
 const App = () => {
   const [locked, setLocked] = useState(false);
   const [seed, setSeed] = useState(initial.seed);
+  const [roomId, setRoomId] = useState<string | null>(null);
   const generated = useGeneratedWorld(seed);
 
   // N: next seed. Only this regenerates the world.
@@ -78,6 +103,9 @@ const App = () => {
     }
   }, [generated.error]);
 
+  const place =
+    roomId === null ? null : describeRoom(generated.codeGraph, roomId);
+
   return (
     <div className="relative h-dvh w-screen overflow-hidden bg-black">
       {generated.world !== null && (
@@ -94,7 +122,11 @@ const App = () => {
           }}
         >
           <World world={generated.world.built} />
-          <Player world={generated.world.built} enabled={locked} />
+          <Player
+            world={generated.world.built}
+            enabled={locked}
+            onRoomChange={setRoomId}
+          />
           <PointerLook />
         </Canvas>
       )}
@@ -103,6 +135,9 @@ const App = () => {
         seed={seed}
         rooms={generated.world?.graph.rooms.length ?? 0}
         preset={initial.preset}
+        code={initial.code}
+        place={place}
+        warnings={generated.warnings}
         error={generated.error}
       />
     </div>

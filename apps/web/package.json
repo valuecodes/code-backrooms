@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "@react-three/fiber": "catalog:",
+    "@repo/code-graph": "workspace:*",
+    "@repo/parser": "workspace:*",
     "@repo/renderer": "workspace:*",
     "@repo/types": "workspace:*",
     "@repo/world-generator": "workspace:*",

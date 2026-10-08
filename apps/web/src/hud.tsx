@@ -3,6 +3,10 @@ type HudProps = {
   readonly seed: number;
   readonly rooms: number;
   readonly preset: string | null;
+  readonly code: string | null;
+  /** Where the player is: `file · fn()` for code worlds, else the room id. */
+  readonly place: string | null;
+  readonly warnings: readonly string[];
   readonly error: string | null;
 };
 
@@ -14,9 +18,21 @@ const hints: readonly (readonly [string, string])[] = [
   ["Esc", "release the mouse"],
 ];
 
+const whereOf = ({
+  seed,
+  rooms,
+  preset,
+  code,
+}: Pick<HudProps, "seed" | "rooms" | "preset" | "code">): string => {
+  if (code !== null) {
+    return `seed ${seed} · code ${code}`;
+  }
+  return `seed ${seed} · ${preset ?? `${rooms} rooms`}`;
+};
+
 /** Start prompt while the pointer is free; a crosshair dot once it is locked. */
-const Hud = ({ locked, seed, rooms, preset, error }: HudProps) => {
-  const where = `seed ${seed} · ${preset ?? `${rooms} rooms`}`;
+const Hud = ({ locked, place, warnings, error, ...rest }: HudProps) => {
+  const where = whereOf(rest);
   if (locked) {
     return (
       <>
@@ -24,9 +40,14 @@ const Hud = ({ locked, seed, rooms, preset, error }: HudProps) => {
           aria-hidden
           className="pointer-events-none absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-50/70"
         />
-        <p className="pointer-events-none absolute bottom-3 left-4 font-mono text-xs text-amber-100/50">
-          {where}
-        </p>
+        <div className="pointer-events-none absolute bottom-3 left-4 flex flex-col gap-0.5 font-mono text-xs text-amber-100/50">
+          {warnings.length > 0 && (
+            <p className="text-amber-300/60">
+              {warnings.length} connections not laid out
+            </p>
+          )}
+          <p>{place === null ? where : `${where} · ${place}`}</p>
+        </div>
       </>
     );
   }
@@ -44,6 +65,13 @@ const Hud = ({ locked, seed, rooms, preset, error }: HudProps) => {
         <p className="animate-pulse text-lg">Click to start walking</p>
       ) : (
         <p className="max-w-prose font-mono text-sm text-red-300">{error}</p>
+      )}
+      {warnings.length > 0 && (
+        <ul className="max-w-prose font-mono text-xs text-amber-300/70">
+          {warnings.map((warning) => (
+            <li key={warning}>{warning}</li>
+          ))}
+        </ul>
       )}
       <dl className="grid grid-cols-[auto_auto] gap-x-6 gap-y-1 text-left text-sm text-amber-100/80">
         {hints.map(([key, action]) => (

@@ -10,10 +10,14 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   be generated from source code (functions as rooms, branches as doors, and so on).
 - Vite 8 + React 19, three.js through React Three Fiber and drei, Tailwind CSS 4
   for the HUD.
-- Milestone 2 (current): a seeded, procedurally generated world of 10-20 rooms
-  joined by doorways and straight corridors, WASD + mouse-look movement with wall
-  collisions. The app itself is thin: generation lives in `@repo/world-generator`
-  and rendering in `@repo/renderer` (both in `packages/`).
+- Milestone 2: a seeded, procedurally generated world of 10-20 rooms joined by
+  doorways and straight corridors, WASD + mouse-look movement with wall
+  collisions.
+- Milestone 3 (current): rooms generated from source code. Bundled example
+  programs are parsed into a `CodeGraph` (`@repo/parser`), turned into a room
+  graph (`@repo/code-graph`) and laid out by the same generator; the HUD names
+  the file and function the player is standing in. The app itself is thin:
+  parsing, generation and rendering all live in `packages/`.
 
 ---
 
@@ -41,9 +45,11 @@ There are no per-workspace `lint` or `format` scripts: root `pnpm lint` (oxlint)
 ```text
 src/
   main.tsx            mounts <App/>
-  app.tsx             full-screen <Canvas>, seed state, pointer-lock state, HUD
-  hud.tsx             "Click to start walking" overlay / crosshair, seed readout
-  params.ts           URL query -> { seed, rooms, preset }, with clamping
+  app.tsx             full-screen <Canvas>, seed and current-room state, pointer lock, HUD
+  hud.tsx             "Click to start walking" overlay / crosshair, seed + place readout
+  params.ts           URL query -> { seed, rooms, preset, code }, with clamping
+  examples.ts         bundled example programs for ?code=<name>
+  world-from-code.ts  source -> CodeGraph -> WorldGraph -> world, plus the HUD room label
 ```
 
 ### Query parameters
@@ -53,21 +59,31 @@ src/
 - `?graph=<preset>` lays out a hand-written graph from
   `@repo/world-generator/presets` instead: `lobby`, `linear`, `branching`,
   `hub`, `cycle`.
+- `?code=<example>` generates the rooms from a bundled program in
+  `src/examples.ts` (`demo`, `chain`, `pair`, `service`, `external`) and wins
+  over `graph`. Edit a source string there to change the world.
 
 ### The pipeline
 
-Graph → layout → rendering, each in its own package:
+Code → graph → layout → rendering, each in its own package:
 
-- `@repo/types` holds the data shapes for all three layers.
+- `@repo/parser` parses one file with `@babel/parser` into functions and call
+  sites (resolved, external or unresolved).
+- `@repo/code-graph` holds the language-independent `CodeGraph` types and the
+  spatial grammar: one room per function, one door per resolved call, one hub
+  room per file.
+- `@repo/types` holds the world data shapes for the three layers below.
 - `@repo/world-generator` turns a `WorldGraph` (rooms + connections) into a
   `WorldLayout` (rooms and corridor-rooms with positions and doors) and then a
   `BuiltWorld` (wall boxes, lintels, door frames, colliders). It is three-free
   and fully seeded. Connections it cannot realise are listed in
-  `layout.unresolved`; the app logs them with `console.warn`.
-- `@repo/renderer` draws a `BuiltWorld` and runs the player.
+  `layout.unresolved`; the app shows them in the HUD and logs them.
+- `@repo/renderer` draws a `BuiltWorld` and runs the player, which reports the
+  room it is in through `onRoomChange`.
 
-The world is built in a `useMemo` keyed on the seed, so it never regenerates
-while the player moves.
+The example is parsed once at startup (a syntax error is shown in the HUD),
+and the world is built in a `useMemo` keyed on the seed, so it never
+regenerates while the player moves.
 
 ---
 
