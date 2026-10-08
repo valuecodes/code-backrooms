@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "agentic-monorepo-playground",
+  "name": "code-backrooms-web",
   // The pinned wrangler's workerd version (1.YYYYMMDD.x) caps this date; newer dates
   // fail in `wrangler dev`. Bump it together with wrangler.
   "compatibility_date": "2026-09-11",

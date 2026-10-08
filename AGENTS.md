@@ -10,9 +10,9 @@ Guidelines for AI agents and contributors working in this Turborepo monorepo.
 
 ### Apps (`apps/`)
 
-| Name       | Filter       | Description                                                     |
-| ---------- | ------------ | --------------------------------------------------------------- |
-| playground | `playground` | Vite 8 + React 19 app for experiments, deployable to Cloudflare |
+| Name | Filter | Description                                                                                      |
+| ---- | ------ | ------------------------------------------------------------------------------------------------ |
+| web  | `web`  | Code Backrooms: Vite 8 + React 19 + React Three Fiber first-person app, deployable to Cloudflare |
 
 ### Packages (`packages/`)
 
@@ -40,7 +40,7 @@ and inside an app use the `~/` alias (`src/*`) to go up the tree.
 
 ```bash
 pnpm install                     # Install all dependencies
-pnpm --filter playground dev     # Vite dev server (port 3000)
+pnpm --filter web dev     # Vite dev server (port 3000)
 
 pnpm lint                        # oxlint, one process over the whole repo
 pnpm knip                        # unused files, exports and dependencies
