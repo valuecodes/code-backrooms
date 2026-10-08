@@ -11,6 +11,11 @@ type DoorProps = {
 const TRIM = 0.05;
 /** How far the frame stands proud of the wall on each side. */
 const PROUD = 0.02;
+/**
+ * How far the frame reaches into the opening. Without it the frame's inner
+ * faces are coplanar with the wall ends and lintel underside, and z-fight.
+ */
+const REVEAL = 0.01;
 
 /** A door opening: the wallpapered lintel above it plus a dark wooden frame. */
 const Door = ({ segment }: DoorProps) => {
@@ -26,7 +31,7 @@ const Door = ({ segment }: DoorProps) => {
   const jambSize: readonly [number, number, number] = alongX
     ? [TRIM, DOOR_HEIGHT, depth]
     : [depth, DOOR_HEIGHT, TRIM];
-  const offset = width / 2 + TRIM / 2;
+  const offset = width / 2 + TRIM / 2 - REVEAL;
   const jambs: readonly (readonly [number, number, number])[] = alongX
     ? [
         [x - offset, DOOR_HEIGHT / 2, z],
@@ -40,7 +45,7 @@ const Door = ({ segment }: DoorProps) => {
     <group>
       <Wall segment={segment} />
       <mesh
-        position={[x, DOOR_HEIGHT + TRIM / 2, z]}
+        position={[x, DOOR_HEIGHT + TRIM / 2 - REVEAL, z]}
         material={surfaces.frame}
         castShadow
         dispose={null}
