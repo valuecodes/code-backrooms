@@ -19,19 +19,19 @@ import {
 
 import type { CallSite, FunctionNode } from "./code-graph";
 import { foldToBudget } from "./flow-budget";
-import { measureBody } from "./flow-measure";
-import type { FlowRoomSpec } from "./flow-measure";
+import { measureBody, PORT_PITCH } from "./flow-measure";
+import type { FlowCallee, FlowRoomSpec } from "./flow-measure";
 import { callPortalId, returnPortalId } from "./ids";
-
-/**
- * How far apart two ports on one wall must end: a callee is a cluster
- * FLOW_TOP_MIN_WIDTH wide along the wall and keeps MIN_GAP from the
- * previous one, which may reach MIN_GAP past its own port.
- */
-const PORT_PITCH = FLOW_TOP_MIN_WIDTH + MIN_GAP;
 
 /** Past the last portal on a wall: its half frame plus clearance from the corner. */
 const PORTAL_TAIL = 1.5;
+
+/**
+ * Where the parent unit "ends" on both side walls: it sits above z = 0 and
+ * a callee must keep the usual gap from it, so it counts as a port that
+ * ended that far before the column starts.
+ */
+const PARENT_END = -MIN_GAP;
 
 type Side = "east" | "west";
 
@@ -63,17 +63,31 @@ const placeRooms = (specs: readonly FlowRoomSpec[], width: number): Column => {
   const doors: ClusterDoor[] = [];
   const ports: Port[] = [];
   const portals: ClusterPortal[] = [];
-  const lastHi: Record<Side, number> = { east: -MIN_GAP, west: -MIN_GAP };
+  const lastHi: Record<Side, number> = { east: PARENT_END, west: PARENT_END };
   let z = 0;
   for (const spec of specs) {
     const primary: Side = lastHi.west < lastHi.east ? "west" : "east";
+    // A lone callee is offered both walls, so a chain of functions can turn
+    // either way instead of spiralling; the layout uses one of the two.
+    const hangs: readonly {
+      readonly callee: FlowCallee;
+      readonly wall: Side;
+    }[] =
+      spec.callees.length === 1 && spec.callees[0] !== undefined
+        ? [
+            { callee: spec.callees[0], wall: primary },
+            { callee: spec.callees[0], wall: otherSide(primary) },
+          ]
+        : spec.callees.slice(0, 2).map((callee, position) => ({
+            callee,
+            wall: sideOf(primary, position),
+          }));
     const extras = spec.callees.slice(2);
     const extrasOn = (wall: Side): number =>
       extras.filter((_, position) => sideOf(primary, position) === wall).length;
     const spans = new Map<Side, { readonly lo: number; readonly hi: number }>();
     let depth = spec.depth;
-    for (const [position] of spec.callees.slice(0, 2).entries()) {
-      const wall = sideOf(primary, position);
+    for (const { wall } of hangs) {
       const below = extrasOn(wall);
       // With portals below it the port is FLOW_CALL_DEPTH long and starts
       // where the pitch allows; otherwise it starts at the room and ends
@@ -103,8 +117,7 @@ const placeRooms = (specs: readonly FlowRoomSpec[], width: number): Column => {
       role: spec.role,
       label: spec.label,
     });
-    for (const [position, callee] of spec.callees.slice(0, 2).entries()) {
-      const wall = sideOf(primary, position);
+    for (const { callee, wall } of hangs) {
       const span = spans.get(wall);
       if (span === undefined) {
         continue;

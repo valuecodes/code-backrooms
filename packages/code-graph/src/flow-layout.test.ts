@@ -186,7 +186,7 @@ describe("layoutFlow", () => {
     ]);
   });
 
-  it("hangs callees on the wall used least recently and keeps ports 6 m apart per wall", () => {
+  it("offers a lone callee both walls and keeps ports 6 m apart per wall", () => {
     const one = calling(5, 1);
     const two = calling(20, 2);
     const three = calling(40, 1);
@@ -194,59 +194,41 @@ describe("layoutFlow", () => {
       fnWith([step(1, 1), one.node, two.node, three.node]),
       [...one.sites, ...two.sites, ...three.sites]
     );
-    // The second room's second callee lands on the east wall, where a port
-    // just ended at z = 7: the room grows so its port can end at 13.
+    // Both walls end a port at z = 7, so the next ports must end at 13; the
+    // third room's lone callee then needs both its walls free until 19.
     expect(
       cluster.rooms.map((room) => [room.rect.minZ, room.rect.maxZ])
     ).toEqual([
       [0, 4],
       [4, 7],
       [7, 13],
-      [13, 16],
+      [13, 19],
     ]);
-    expect(cluster.ports).toEqual([
-      { roomId: `${FN}@1:step`, wall: "north", lo: 0, hi: 4 },
-      {
-        roomId: `${FN}@5:call`,
-        wall: "east",
-        lo: 4,
-        hi: 7,
-        reservedFor: "m.ts::g1",
-        portalId: `portal:${FN}@5`,
-      },
-      {
-        roomId: `${FN}@20:call`,
-        wall: "west",
-        lo: 7,
-        hi: 10,
-        reservedFor: "m.ts::g1",
-        portalId: `portal:${FN}@20`,
-      },
-      {
-        roomId: `${FN}@20:call`,
-        wall: "east",
-        lo: 7,
-        hi: 13,
-        reservedFor: "m.ts::g2",
-        portalId: `portal:${FN}@21`,
-      },
-      {
-        roomId: `${FN}@40:call`,
-        wall: "west",
-        lo: 13,
-        hi: 16,
-        reservedFor: "m.ts::g1",
-        portalId: `portal:${FN}@40`,
-      },
+    expect(
+      cluster.ports.map((port) => [
+        port.wall,
+        port.lo,
+        port.hi,
+        port.reservedFor,
+        port.portalId,
+      ])
+    ).toEqual([
+      ["north", 0, 4, undefined, undefined],
+      ["east", 4, 7, "m.ts::g1", `portal:${FN}@5`],
+      ["west", 4, 7, "m.ts::g1", `portal:${FN}@5`],
+      ["east", 7, 13, "m.ts::g1", `portal:${FN}@20`],
+      ["west", 7, 13, "m.ts::g2", `portal:${FN}@21`],
+      ["east", 13, 19, "m.ts::g1", `portal:${FN}@40`],
+      ["west", 13, 19, "m.ts::g1", `portal:${FN}@40`],
     ]);
     expect(cluster.portals.filter((portal) => portal.kind === "call")).toEqual(
       []
     );
   });
 
-  it("alternates walls for a run of single-call rooms without growing them", () => {
-    const rooms = Array.from({ length: 6 }, (_, index) =>
-      calling(10 * index + 5, 1)
+  it("alternates walls for a run of two-callee rooms without growing them beyond the pitch", () => {
+    const rooms = Array.from({ length: 4 }, (_, index) =>
+      calling(10 * index + 5, 2)
     );
     const cluster = layoutFlow(
       fnWith([step(1, 1), ...rooms.map((room) => room.node)]),
@@ -256,11 +238,13 @@ describe("layoutFlow", () => {
       cluster.ports.slice(1).map((port) => [port.wall, port.lo, port.hi])
     ).toEqual([
       ["east", 4, 7],
-      ["west", 7, 10],
-      ["east", 10, 13],
-      ["west", 13, 16],
-      ["east", 16, 19],
-      ["west", 19, 22],
+      ["west", 4, 7],
+      ["east", 7, 13],
+      ["west", 7, 13],
+      ["east", 13, 19],
+      ["west", 13, 19],
+      ["east", 19, 25],
+      ["west", 19, 25],
     ]);
   });
 

@@ -38,14 +38,15 @@ nodes, as is an expression-bodied arrow; `if` is a `branch` with `then`/`else`
 lanes (a missing `else` is an empty lane, `else if` a branch inside the
 alternate); `switch` keeps its cases with their labels, merges empty cases
 into the next body, drops a trailing `break` and flags `fallsThrough`; the
-five loop statements are `loop` nodes with their header text; `break` and
-`continue` name the loop or switch they leave. Statements after a terminal
-one are dropped as dead code. Nested named functions, classes and type
-declarations are not part of the enclosing flow.
+five loop statements are `loop` nodes with their header text; `try` is a
+`try` node whose block, handler and finalizer are sequences; `break` and
+`continue` name the loop or switch they leave. Calls in parameter defaults
+open the flow as one `call`. Statements after a terminal one are dropped as
+dead code. Nested named functions, classes and type declarations are not
+part of the enclosing flow.
 
-Flow limitations: `try`/`catch`/`finally` flatten into one run (the finalizer
-is kept after a `return`); a `break` out of a labelled block folds into a
-step; `return await x()` is a return, not a checkpoint; an `await` inside a
+Flow limitations: a `break` out of a labelled block folds into a step;
+`return await x()` is a return, not a checkpoint; an `await` inside a
 condition or loop header is not a checkpoint; condition and header text is
 cut at 60 characters.
 

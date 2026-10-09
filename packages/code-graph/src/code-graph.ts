@@ -128,6 +128,17 @@ type LoopNode = FlowNodeBase & {
   readonly body: SequenceNode;
 };
 
+/**
+ * `try`/`catch`/`finally`. The block and the handler are two ways through
+ * (control leaves by one or the other); the finalizer runs after both.
+ */
+type TryNode = FlowNodeBase & {
+  readonly kind: "try";
+  readonly block: SequenceNode;
+  readonly handler: SequenceNode | null;
+  readonly finalizer: SequenceNode | null;
+};
+
 type FlowStep =
   | StepNode
   | CallNode
@@ -137,7 +148,8 @@ type FlowStep =
   | ContinueNode
   | BranchNode
   | SwitchNode
-  | LoopNode;
+  | LoopNode
+  | TryNode;
 
 /** Statements in execution order; dead code after a terminal step is dropped. */
 type SequenceNode = FlowNodeBase & {
@@ -245,4 +257,5 @@ export type {
   StepNode,
   SwitchCase,
   SwitchNode,
+  TryNode,
 };

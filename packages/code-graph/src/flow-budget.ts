@@ -4,7 +4,7 @@
 import type { FlowRole } from "@repo/types";
 import { FLOW_BUDGET } from "@repo/world-generator/config";
 
-import { depthOf } from "./flow-measure";
+import { depthOf, PORT_PITCH } from "./flow-measure";
 import type { FlowCallee, FlowRoomSpec } from "./flow-measure";
 import { foldedText } from "./flow-text";
 
@@ -48,9 +48,13 @@ const merge = (
   };
 };
 
+/** A room with calls may be grown to the port pitch when placed; budget for it. */
+const placedDepth = (spec: FlowRoomSpec): number =>
+  spec.callees.length > 0 ? Math.max(spec.depth, PORT_PITCH) : spec.depth;
+
 const overBudget = (specs: readonly FlowRoomSpec[]): boolean =>
   specs.length > FLOW_BUDGET.rooms ||
-  specs.reduce((sum, spec) => sum + spec.depth, 0) > FLOW_BUDGET.depth;
+  specs.reduce((sum, spec) => sum + placedDepth(spec), 0) > FLOW_BUDGET.depth;
 
 /** The index of the shallowest adjacent foldable pair, or -1. */
 const shallowestPair = (specs: readonly FlowRoomSpec[]): number => {

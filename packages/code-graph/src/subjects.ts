@@ -1,5 +1,7 @@
 // From a world id back to the code: what a room or portal stands for.
 
+import type { RoomCluster } from "@repo/types";
+
 import type {
   CallSite,
   CodeGraph,
@@ -8,7 +10,8 @@ import type {
   ModuleNode,
 } from "./code-graph";
 import { findFlowNode } from "./flow";
-import { flowNodeText } from "./flow-text";
+import { layoutFlow } from "./flow-layout";
+import { flowNodeText, indexSites } from "./flow-text";
 import {
   hubModuleId,
   isFunctionId,
@@ -48,20 +51,41 @@ const functionSubject = (
 const sitesOf = (graph: CodeGraph, fnId: string): readonly CallSite[] =>
   graph.callSites.filter((site) => site.callerId === fnId);
 
-/** A flow room: a node of the function's flow, or the empty body's one room. */
+/** The template is pure, so one cluster per function node is enough. */
+const clusters = new WeakMap<FunctionNode, RoomCluster>();
+
+const clusterOf = (graph: CodeGraph, fn: FunctionNode): RoomCluster => {
+  const cached = clusters.get(fn);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const cluster = layoutFlow(fn, sitesOf(graph, fn.id));
+  clusters.set(fn, cluster);
+  return cluster;
+};
+
+/**
+ * A flow room: a node of the function's flow, or the empty body's one room.
+ * The text is the room's label from the template (deterministic, so it is
+ * rebuilt here), which for a room folded into budget sums what it holds;
+ * such a room keeps the id of the first node folded into it.
+ */
 const flowSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
   const ref = parseFlowNodeId(roomId);
   const subject = ref === null ? null : functionSubject(graph, ref.functionId);
   if (ref === null || subject === null) {
     return null;
   }
+  const label = clusterOf(graph, subject.fn).rooms.find(
+    (room) => room.id === roomId
+  )?.label;
   if (ref.kind === "step" && ref.tag === "empty") {
     return {
       kind: "flow",
       ...subject,
       node: subject.fn.flow,
       ancestors: [],
-      text: "empty body",
+      text: label ?? "empty body",
     };
   }
   const found = findFlowNode(subject.fn.flow, roomId);
@@ -74,9 +98,10 @@ const flowSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
     node: found.node,
     ancestors: found.ancestors,
     text:
-      found.node.kind === "sequence"
+      label ??
+      (found.node.kind === "sequence"
         ? ""
-        : flowNodeText(found.node, sitesOf(graph, subject.fn.id)),
+        : flowNodeText(found.node, indexSites(sitesOf(graph, subject.fn.id)))),
   };
 };
 

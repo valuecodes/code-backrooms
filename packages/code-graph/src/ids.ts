@@ -36,6 +36,7 @@ const FLOW_ID_KINDS: ReadonlySet<string> = new Set<FlowIdKind>([
   "branch",
   "switch",
   "loop",
+  "try",
   "sequence",
   "case",
 ]);

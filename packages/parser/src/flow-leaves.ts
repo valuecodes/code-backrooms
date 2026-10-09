@@ -31,14 +31,37 @@ const textOf = (source: string, start: number, end: number): string => {
   return text.length > TEXT_LIMIT ? `${text.slice(0, TEXT_LIMIT - 1)}…` : text;
 };
 
-/** The call sites lying inside a span, by offsets (sites carry no AST node). */
+/**
+ * The call sites lying inside a span, by offsets (sites carry no AST node).
+ * Sites come sorted by start, so the first candidate is found by bisection
+ * and the scan stops at the first one starting past the span.
+ */
 const sitesWithin = (
   sites: readonly CallSite[],
   span: SourceSpan
-): readonly CallSite[] =>
-  sites.filter(
-    (site) => site.span.start >= span.start && site.span.end <= span.end
-  );
+): readonly CallSite[] => {
+  let lo = 0;
+  let hi = sites.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if ((sites[mid]?.span.start ?? Infinity) < span.start) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  const within: CallSite[] = [];
+  for (let index = lo; index < sites.length; index += 1) {
+    const site = sites[index];
+    if (site === undefined || site.span.start > span.end) {
+      break;
+    }
+    if (site.span.end <= span.end) {
+      within.push(site);
+    }
+  }
+  return within;
+};
 
 const resolvedIds = (sites: readonly CallSite[]): readonly string[] =>
   sites.filter((site) => site.resolution === "resolved").map((site) => site.id);

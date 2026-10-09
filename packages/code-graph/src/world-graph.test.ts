@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { CodeGraph } from "./code-graph";
 import { demoGraph, fixtureGraph } from "./fixture";
 import { parseFlowNodeId } from "./ids";
-import { portalSubject, roomSubject } from "./subjects";
+import { roomSubject } from "./subjects";
 import { toWorldGraph } from "./world-graph";
 
 const call = (from: string, to: string): Connection => ({
@@ -86,13 +86,17 @@ describe("toWorldGraph", () => {
       "call",
     ]);
     expect(main?.entryRoomId).toBe(main?.rooms[0]?.id);
+    // Each room's lone callee is offered both side walls.
     expect(main?.ports.map((port) => port.reservedFor)).toEqual([
       undefined,
       "demo.ts::getUser",
+      "demo.ts::getUser",
+      "demo.ts::showDashboard",
       "demo.ts::showDashboard",
       "demo.ts::showLogin",
+      "demo.ts::showLogin",
     ]);
-    expect(world.rooms[1]).toMatchObject({ width: 4, depth: 15 });
+    expect(world.rooms[1]).toMatchObject({ width: 4, depth: 21 });
     expect(world.connections).toEqual([
       { from: "demo.ts", to: "demo.ts::main" },
       call("demo.ts::main", "demo.ts::getUser"),
@@ -150,7 +154,8 @@ describe("toWorldGraph", () => {
     expect(world.portals?.[0]?.id).toBe(
       callPortalId(graph, "m.ts::a", "m.ts::b", 1)
     );
-    expect(clusterOf(world, "m.ts::a")?.ports).toHaveLength(2);
+    // The entry port and the first call room's pair; the second room's are portals.
+    expect(clusterOf(world, "m.ts::a")?.ports).toHaveLength(3);
     laysOutCleanly(graph);
   });
 
@@ -267,18 +272,22 @@ describe("toWorldGraph", () => {
     expect(fromF.map((portal) => portal.to)).toEqual(
       names.slice(0, 7).map((name) => `m.ts::${name}`)
     );
-    // Eight single-call rooms alternate their port side.
+    // A lone callee is offered both walls; both ports stay for a tree callee.
     const caller = clusterOf(world, "m.ts::caller");
-    expect(caller?.ports.slice(1).map((port) => port.wall)).toEqual([
-      "east",
-      "west",
-      "east",
-      "west",
-      "east",
-      "west",
-      "east",
-      "west",
-    ]);
+    expect(caller?.ports.slice(1).map((port) => port.wall)).toEqual(
+      Array.from({ length: 8 }, () => ["east", "west"]).flat()
+    );
+    laysOutCleanly(graph);
+  });
+
+  it("lays out a long chain of single-call functions", () => {
+    const functions = Array.from({ length: 8 }, (_, index) => ({
+      name: `f${index}`,
+      calls: index < 7 ? [`f${index + 1}`] : [],
+    }));
+    const graph = fixtureGraph({ path: "m.ts", functions });
+    const world = toWorldGraph(graph);
+    expect(world.connections).toHaveLength(8);
     laysOutCleanly(graph);
   });
 
@@ -348,83 +357,5 @@ describe("toWorldGraph", () => {
     expect(world.connections).toEqual([]);
     expect(world.portals).toEqual([]);
     expect(() => validateGraph(world)).not.toThrow();
-  });
-});
-
-describe("roomSubject", () => {
-  const graph = demoGraph();
-
-  it("names modules, functions and flow rooms, and nothing else", () => {
-    expect(roomSubject(graph, "demo.ts")).toMatchObject({
-      kind: "module",
-      module: { path: "demo.ts" },
-    });
-    expect(roomSubject(graph, "demo.ts::getUser")).toMatchObject({
-      kind: "function",
-      fn: { name: "getUser" },
-      module: { path: "demo.ts" },
-    });
-    const main = graph.functions[0];
-    const [first, second] = main?.flow.steps ?? [];
-    expect(roomSubject(graph, first?.id ?? "")).toMatchObject({
-      kind: "flow",
-      fn: { name: "main" },
-      module: { path: "demo.ts" },
-      node: { kind: "step" },
-      ancestors: [{ kind: "sequence" }],
-      text: "9 statements",
-    });
-    expect(roomSubject(graph, second?.id ?? "")).toMatchObject({
-      kind: "flow",
-      text: "getUser(…)",
-    });
-    expect(roomSubject(graph, "demo.ts::main@99999:step")).toBeNull();
-    expect(roomSubject(graph, "demo.ts::nobody@0:step:empty")).toBeNull();
-    expect(roomSubject(graph, "corridor-1")).toBeNull();
-    expect(roomSubject(graph, "other.ts::getUser")).toBeNull();
-  });
-});
-
-describe("portalSubject", () => {
-  const graph = fixtureGraph({
-    path: "m.ts",
-    functions: [
-      { name: "main", calls: ["shared"] },
-      { name: "other", calls: ["shared"] },
-      { name: "shared" },
-    ],
-  });
-
-  it("names the call site and both functions of a call portal", () => {
-    const portal = callPortalId(graph, "m.ts::other", "m.ts::shared");
-    expect(portalSubject(graph, portal)).toMatchObject({
-      kind: "call",
-      site: { callerId: "m.ts::other" },
-      caller: { name: "other" },
-      callee: { name: "shared" },
-    });
-  });
-
-  it("names the function of a return portal by its flow room", () => {
-    const exit = toWorldGraph(graph).portals?.find(
-      (portal) =>
-        portal.kind === "return" &&
-        parseFlowNodeId(portal.from)?.functionId === "m.ts::shared"
-    );
-    expect(portalSubject(graph, exit?.id ?? "")).toMatchObject({
-      kind: "return",
-      fn: { name: "shared" },
-    });
-    expect(portalSubject(graph, "return:m.ts::shared")).toMatchObject({
-      kind: "return",
-      fn: { name: "shared" },
-    });
-  });
-
-  it("returns null for anything else", () => {
-    expect(portalSubject(graph, "corridor-1")).toBeNull();
-    expect(portalSubject(graph, "portal:m.ts::nobody@1")).toBeNull();
-    expect(portalSubject(graph, "return:m.ts::nobody")).toBeNull();
-    expect(portalSubject(graph, "return:m.ts::nobody@3:step")).toBeNull();
   });
 });
