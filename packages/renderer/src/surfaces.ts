@@ -38,9 +38,12 @@ const voidMaterial = (emissive: string): MeshStandardMaterial =>
 
 const createSurfaces = (anisotropy: number): Surfaces => {
   const textures = createSurfaceTextures(anisotropy);
+  // Walls and frames carry vertex colours: white as built, a lane's tint
+  // inside a fork of a function.
   const wall = new MeshStandardMaterial({
     map: textures.wallpaper,
     roughness: 0.85,
+    vertexColors: true,
   });
   const floor = new MeshStandardMaterial({
     map: textures.carpet,
@@ -56,7 +59,11 @@ const createSurfaces = (anisotropy: number): Surfaces => {
     emissiveIntensity: 1.6,
     roughness: 0.4,
   });
-  const frame = new MeshStandardMaterial({ color: "#4a3620", roughness: 0.7 });
+  const frame = new MeshStandardMaterial({
+    color: "#4a3620",
+    roughness: 0.7,
+    vertexColors: true,
+  });
   const voidCall = voidMaterial("#1b2a4a");
   const voidReturn = voidMaterial("#4a1f12");
   const voidJump = voidMaterial("#2a2a2a");
