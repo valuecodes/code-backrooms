@@ -5,6 +5,7 @@
 
 import type { LaneLabel } from "@repo/types";
 import {
+  FLOW_BUDGET,
   FLOW_LANE_WIDTH,
   FLOW_LEAF_DEPTH,
   FLOW_MAX_CASES,
@@ -50,6 +51,43 @@ type ForkSpec = {
 };
 
 type FlowTree = FlowRoomSpec | ForkSpec;
+
+/**
+ * How many forks a function may open: a fork is four rooms at least, so
+ * beyond a quarter of the room budget the rest would only be folded back.
+ * Bounding it up front keeps the budget pass cheap for huge functions.
+ */
+const FORK_QUOTA = Math.floor(FLOW_BUDGET.rooms / 4);
+
+/** Lane texts are source slices; merged case labels are cut like any other. */
+const LANE_TEXT_MAX = 60;
+
+type Quota = {
+  /** Takes one from the quota; false when none is left. */
+  readonly take: () => boolean;
+};
+
+const forkQuota = (count: number): Quota => {
+  let left = count;
+  return {
+    take: () => {
+      if (left === 0) {
+        return false;
+      }
+      left -= 1;
+      return true;
+    },
+  };
+};
+
+/** What one function's measuring carries along. */
+type Measure = {
+  readonly sites: SiteIndex;
+  readonly quota: Quota;
+};
+
+const cut = (text: string): string =>
+  text.length > LANE_TEXT_MAX ? `${text.slice(0, LANE_TEXT_MAX - 1)}…` : text;
 
 /** A `break` the parser kept is nested in a case; it needs a jump portal to leave. */
 const hasNestedBreak = (node: SwitchNode): boolean => {
@@ -120,20 +158,36 @@ const laneOf = (
   label: LaneLabel,
   body: SequenceNode | null,
   rejoins: boolean,
-  sites: SiteIndex
+  measure: Measure
 ): LaneSpec => ({
   id,
   label,
   body:
     body === null || body.steps.length === 0
       ? [plainSpec(id, "lane", emptyLaneText(label))]
-      : measureSteps(body.steps, sites, false),
+      : measureSteps(body.steps, measure, false),
   rejoins,
 });
 
+/**
+ * Whether each case runs out of the switch: a case that falls through
+ * ends when the case it falls into does, so this is settled from the back.
+ * A falling-through case that does not end is drawn as rejoining the merge
+ * (a jump portal into the next lane comes later).
+ */
+const caseRejoins = (cases: SwitchNode["cases"]): readonly boolean[] => {
+  const rejoins: boolean[] = [];
+  let nextEnds = false;
+  for (const item of [...cases].reverse()) {
+    nextEnds = isTerminal(item.body) || (item.fallsThrough && nextEnds);
+    rejoins.unshift(!nextEnds);
+  }
+  return rejoins;
+};
+
 const lanesOf = (
   node: BranchNode | SwitchNode,
-  sites: SiteIndex
+  measure: Measure
 ): readonly LaneSpec[] => {
   if (node.kind === "branch") {
     return [
@@ -142,32 +196,33 @@ const lanesOf = (
         { kind: "true" },
         node.consequent,
         !isTerminal(node.consequent),
-        sites
+        measure
       ),
       laneOf(
         node.alternate.id,
         { kind: "false" },
         node.alternate,
         !isTerminal(node.alternate),
-        sites
+        measure
       ),
     ];
   }
-  const lanes = node.cases.map((item) => {
+  const rejoins = caseRejoins(node.cases);
+  const lanes = node.cases.map((item, index) => {
     const isDefault = item.labels.includes("default");
     const label: LaneLabel =
       isDefault && item.labels.length === 1
         ? { kind: "default" }
         : {
             kind: isDefault ? "default" : "case",
-            text: item.labels.join(", "),
+            text: cut(item.labels.join(", ")),
           };
     return laneOf(
       item.body.id,
       label,
       item.body,
-      !isTerminal(item.body) || item.fallsThrough,
-      sites
+      rejoins[index] ?? true,
+      measure
     );
   });
   // Without a `default` the switch may match nothing and run straight on.
@@ -176,20 +231,26 @@ const lanesOf = (
     ? lanes
     : [
         ...lanes,
-        laneOf(tagged(node, "default"), { kind: "default" }, null, true, sites),
+        laneOf(
+          tagged(node, "default"),
+          { kind: "default" },
+          null,
+          true,
+          measure
+        ),
       ];
 };
 
 const forkOf = (
   node: BranchNode | SwitchNode,
-  sites: SiteIndex,
+  measure: Measure,
   entry: boolean
 ): ForkSpec => {
-  const lanes = lanesOf(node, sites);
+  const lanes = lanesOf(node, measure);
   return {
     kind: "fork",
     node,
-    head: headSpec(node, sites, entry),
+    head: headSpec(node, measure.sites, entry),
     lanes,
     merge: lanes.some((lane) => lane.rejoins)
       ? plainSpec(tagged(node, "merge"), "merge", mergeText(node))
@@ -199,21 +260,28 @@ const forkOf = (
 
 const measureSteps = (
   steps: readonly FlowStep[],
-  sites: SiteIndex,
+  measure: Measure,
   entry: boolean
 ): readonly FlowTree[] =>
   steps.map((step, position) =>
-    expands(step)
-      ? forkOf(step, sites, entry && position === 0)
-      : specOf(step, sites, entry && position === 0)
+    expands(step) && measure.quota.take()
+      ? forkOf(step, measure, entry && position === 0)
+      : specOf(step, measure.sites, entry && position === 0)
   );
 
-/** The tree of a function's body; an empty body is one empty step. */
+/**
+ * The tree of a function's body, the first FORK_QUOTA forks in source
+ * order opened and the rest kept collapsed; an empty body is one empty step.
+ */
 const measureTree = (
   fn: FunctionNode,
   sites: SiteIndex
 ): readonly FlowTree[] => {
-  const items = measureSteps(fn.flow.steps, sites, true);
+  const items = measureSteps(
+    fn.flow.steps,
+    { sites, quota: forkQuota(FORK_QUOTA) },
+    true
+  );
   return items.length > 0 ? items : [emptyBodySpec(fn)];
 };
 
@@ -287,6 +355,7 @@ const labelsOf = (items: readonly FlowTree[]): ReadonlyMap<string, string> => {
 
 export {
   depthEstimate,
+  FORK_QUOTA,
   labelsOf,
   laneWidth,
   measureTree,

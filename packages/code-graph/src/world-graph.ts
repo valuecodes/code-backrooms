@@ -1,13 +1,16 @@
 import type {
   ClusterPortal,
   Connection,
+  GeneratedWorld,
   GraphRoom,
   Port,
   Portal,
   RoomCluster,
   WorldGraph,
 } from "@repo/types";
+import { generateWorld } from "@repo/world-generator";
 import { FLOW_TOP_MIN_WIDTH } from "@repo/world-generator/config";
+import { LayoutError } from "@repo/world-generator/layout";
 
 import type {
   CallEdge,
@@ -40,20 +43,26 @@ type ModulePlan = {
   readonly tree: readonly CallEdge[];
 };
 
+/** `source->target`: the key of a call edge in `portalOnly`. */
+const edgeKey = (source: string, target: string): string =>
+  `${source}->${target}`;
+
 /**
  * Which calls become doors: a breadth-first walk of the module's call graph
  * from its roots, each function entered once, through the ports its rooms
- * offer (`candidates`: the callees a function has a port for). The door
- * therefore belongs to the caller that first reaches a function in that
- * walk, which is usually but not always its first caller in source order.
- * A directed walk from the roots misses functions that only cycles reach
- * (`a <-> b` called by nobody else), so whatever is left over is attached
- * to the hub in source order and walked from there.
+ * offer (`candidates`: the callees a function has a port for) and never
+ * along an edge in `portalOnly`. The door therefore belongs to the caller
+ * that first reaches a function in that walk, which is usually but not
+ * always its first caller in source order. A directed walk from the roots
+ * misses functions that only cycles reach (`a <-> b` called by nobody
+ * else), so whatever is left over is attached to the hub in source order
+ * and walked from there.
  */
 const planModule = (
   graph: CodeGraph,
   functions: readonly FunctionNode[],
-  candidates: ReadonlyMap<string, ReadonlySet<string>>
+  candidates: ReadonlyMap<string, ReadonlySet<string>>,
+  portalOnly: ReadonlySet<string>
 ): ModulePlan => {
   const ids = new Set(functions.map((fn) => fn.id));
   const outgoing = new Map<string, CallEdge[]>();
@@ -80,7 +89,8 @@ const planModule = (
         if (
           ids.has(edge.target) &&
           !visited.has(edge.target) &&
-          candidates.get(id)?.has(edge.target) === true
+          candidates.get(id)?.has(edge.target) === true &&
+          !portalOnly.has(edgeKey(id, edge.target))
         ) {
           visited.add(edge.target);
           tree.push(edge);
@@ -229,7 +239,8 @@ const sitesByCaller = (
 const moduleWorld = (
   graph: CodeGraph,
   module: ModuleNode,
-  extraHubDegree: number
+  extraHubDegree: number,
+  portalOnly: ReadonlySet<string>
 ): ModuleWorld => {
   const functions = graph.functions.filter((fn) => fn.moduleId === module.id);
   const sites = sitesByCaller(graph.callSites);
@@ -253,7 +264,12 @@ const moduleWorld = (
       ),
     ])
   );
-  const { attached, tree } = planModule(graph, functions, candidates);
+  const { attached, tree } = planModule(
+    graph,
+    functions,
+    candidates,
+    portalOnly
+  );
   const treeCallees = new Map<string, Set<string>>();
   for (const edge of tree) {
     treeCallees.set(
@@ -330,9 +346,13 @@ const moduleWorld = (
  * call on the breadth-first tree from those roots through the rooms' ports,
  * and a call portal for every other resolved call. The entrances of
  * successive modules are chained too, so the world is one connected
- * component, and the first module's entrance is the start room.
+ * component, and the first module's entrance is the start room. Edges in
+ * `portalOnly` (`source->target`) never become doors.
  */
-const toWorldGraph = (graph: CodeGraph): WorldGraph => {
+const toWorldGraph = (
+  graph: CodeGraph,
+  portalOnly: ReadonlySet<string> = new Set()
+): WorldGraph => {
   const rooms: GraphRoom[] = [];
   const connections: Connection[] = [];
   const portals: Portal[] = [];
@@ -340,7 +360,7 @@ const toWorldGraph = (graph: CodeGraph): WorldGraph => {
   graph.modules.forEach((module, index) => {
     const chained =
       (index > 0 ? 1 : 0) + (index < graph.modules.length - 1 ? 1 : 0);
-    const world = moduleWorld(graph, module, chained);
+    const world = moduleWorld(graph, module, chained, portalOnly);
     rooms.push(...world.hubs, ...world.rooms);
     const entrance = world.hubs[0];
     if (previousHub !== null && entrance !== undefined) {
@@ -356,4 +376,29 @@ const toWorldGraph = (graph: CodeGraph): WorldGraph => {
     : { rooms, connections, portals, start };
 };
 
-export { toWorldGraph };
+/**
+ * The code graph laid out; the seed only changes the placement. A call
+ * door the layout cannot place (a call inside a lane offers one wall only,
+ * and that side may be taken) is demoted to a portal and the layout tried
+ * again, so a program that parses always becomes a world: tree calls are
+ * walkable where the walls allow, the rest teleport.
+ */
+const generateCodeWorld = (graph: CodeGraph, seed: number): GeneratedWorld => {
+  const portalOnly = new Set<string>();
+  for (;;) {
+    try {
+      return generateWorld({ seed, graph: toWorldGraph(graph, portalOnly) });
+    } catch (error) {
+      const failed =
+        error instanceof LayoutError && error.connection.kind === "call"
+          ? edgeKey(error.connection.from, error.connection.to)
+          : null;
+      if (failed === null || portalOnly.has(failed)) {
+        throw error;
+      }
+      portalOnly.add(failed);
+    }
+  }
+};
+
+export { generateCodeWorld, toWorldGraph };

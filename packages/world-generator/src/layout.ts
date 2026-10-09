@@ -25,6 +25,19 @@ type Failure = {
   readonly to: string;
 };
 
+/** The layout gave up: `connection` is the one the last attempt could not place. */
+class LayoutError extends Error {
+  readonly connection: Connection;
+
+  constructor(connection: Connection) {
+    super(
+      `Could not lay out the graph after ${MAX_LAYOUT_ATTEMPTS} attempts: no placement for ${connection.from} -> ${connection.to}. Rooms with many connections need longer walls.`
+    );
+    this.name = "LayoutError";
+    this.connection = connection;
+  }
+}
+
 type Attempt =
   | {
       readonly ok: true;
@@ -257,10 +270,15 @@ const generateLayout = (graph: WorldGraph, seed: number): WorldLayout => {
   if (best !== null) {
     return best;
   }
-  const edge = failure === null ? "?" : `${failure.from} -> ${failure.to}`;
-  throw new Error(
-    `Could not lay out the graph after ${MAX_LAYOUT_ATTEMPTS} attempts: no placement for ${edge}. Rooms with many connections need longer walls.`
+  const failed = graph.connections.find(
+    (connection) =>
+      failure !== null &&
+      connectionKey(connection.from, connection.to) ===
+        connectionKey(failure.from, failure.to)
+  );
+  throw new LayoutError(
+    failed ?? { from: failure?.from ?? "?", to: failure?.to ?? "?" }
   );
 };
 
-export { generateLayout };
+export { generateLayout, LayoutError };

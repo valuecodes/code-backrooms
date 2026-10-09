@@ -81,7 +81,12 @@ through a port of the caller that first reaches it in that walk; every other
 reserved port, recursion and extra callers of a shared function included,
 becomes a `call` portal at the port's centre, and the column's `return` portal
 leads back to the module hub when nothing is on the navigation stack. The
-physical graph of units is therefore a tree and always lays out. Functions a
+physical graph of units is therefore a tree. A call inside a lane offers one
+wall only and that side may be taken, so `generateCodeWorld(graph, seed)`
+lays the world out and, when the layout reports a call door it cannot place
+(`LayoutError`), marks that edge portal-only (`toWorldGraph(graph,
+portalOnly)`), which turns the call into a portal and attaches the callee
+elsewhere, and tries again: a program that parses always becomes a world. Functions a
 directed walk from the roots cannot reach (mutual recursion with no outside
 caller) are attached to the hub in source order. A hub has at most five doors,
 links to the neighbouring hubs included, so a module whose roots need more

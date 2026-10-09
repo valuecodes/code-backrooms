@@ -159,6 +159,30 @@ describe("toWorldGraph", () => {
     laysOutCleanly(graph);
   });
 
+  it("never makes a door of an edge marked portal-only, attaching the callee to the hub", () => {
+    const graph = fixtureGraph({
+      path: "m.ts",
+      functions: [
+        { name: "a", calls: ["b"] },
+        { name: "b", calls: ["c"] },
+        { name: "c" },
+      ],
+    });
+    const world = toWorldGraph(graph, new Set(["m.ts::a->m.ts::b"]));
+    expect(world.connections).toEqual([
+      { from: "m.ts", to: "m.ts::a" },
+      { from: "m.ts", to: "m.ts::b" },
+      call("m.ts::b", "m.ts::c"),
+    ]);
+    expect(world.portals?.map(shape)).toEqual([
+      callShape(graph, "m.ts::a", "m.ts::b"),
+      returnShape("m.ts::a", "m.ts"),
+      returnShape("m.ts::b", "m.ts"),
+      returnShape("m.ts::c", "m.ts"),
+    ]);
+    laysOutCleanly(graph);
+  });
+
   it("turns recursion into a portal back into the same unit", () => {
     const graph = fixtureGraph({
       path: "m.ts",

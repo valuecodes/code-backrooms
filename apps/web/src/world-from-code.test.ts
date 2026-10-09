@@ -1,4 +1,5 @@
 import { parseFlowNodeId } from "@repo/code-graph/ids";
+import { buildCodeGraph } from "@repo/parser";
 import type { GeneratedWorld } from "@repo/types";
 import { checkLayout } from "@repo/world-generator/layout-checks";
 import type { Frame } from "@repo/world-generator/navigation";
@@ -35,6 +36,9 @@ const frame = (callerRoomId: string, calleeRoomId: string): Frame => ({
 /** The flow rooms of a function, in flow order. */
 const roomsOf = (world: GeneratedWorld, fnId: string) =>
   world.layout.rooms.filter((room) => room.cluster === fnId);
+
+const world = (codeGraph: Parameters<typeof worldFromCode>[0]) =>
+  worldFromCode(codeGraph, 1);
 
 /** The function a portal's room belongs to. */
 const ownerOf = (from: string): string =>
@@ -282,6 +286,39 @@ describe("worldFromCode", () => {
         targetRoomId: main[4]?.id ?? "",
       })
     ).toBe("→ end if");
+    // The same door seen from inside the lane leads back to the fork.
+    expect(
+      promptOf(codeGraph, [], {
+        kind: "door",
+        roomId: main[2]?.id ?? "",
+        targetRoomId: fork?.id ?? "",
+        lane: { kind: "true" },
+      })
+    ).toBe("→ if (!user)");
+  });
+
+  it("lays out a chain of calls guarded by ifs, demoting doors that do not fit to portals", () => {
+    // Each lane offers one wall, and that side is often taken; the layout
+    // reports the door it cannot place and the call becomes a portal.
+    const source = Array.from(
+      { length: 8 },
+      (_, index) =>
+        `function f${index}(x: boolean) { if (x) { f${index + 1}(x); } }`
+    ).join("\n");
+    const codeGraph = buildCodeGraph([
+      { path: "chain.ts", source: `${source}\nfunction f8() {}` },
+    ]);
+    for (let seed = 1; seed <= 30; seed += 1) {
+      const world = worldFromCode(codeGraph, seed);
+      expect(world.layout.unresolved, `seed ${seed}`).toEqual([]);
+      expect(checkLayout(world.graph, world.layout), `seed ${seed}`).toEqual(
+        []
+      );
+    }
+    const doors = world(codeGraph).graph.connections.filter(
+      (connection) => connection.kind === "call"
+    );
+    expect(doors.length).toBeLessThan(8);
   });
 
   it("words the breadcrumb and the prompts", () => {
