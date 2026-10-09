@@ -82,6 +82,7 @@ const baseDepth = (role: FlowRole, statements: number): number => {
     case "switch":
     case "lane":
     case "loop-head":
+    case "loop-test":
     case "loop-end":
     case "loop-back":
     default: {

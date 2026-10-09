@@ -26,8 +26,10 @@ fixtures); every door frame in the world is one more, and the portals add
 one frame mesh plus one dark plane mesh per kind. Walls and frames carry
 vertex colours (`lane-tint.ts`): white walls and dark-wood frames as built,
 and inside a function's fork a wash of the lane's colour on the walls (sage
-for true, dusty red for false, slate for a case, grey for default) with the
-full colour on the lintel and frame of the door into the lane. Lighting is a fixed
+for true, dusty red for false, slate for a case, grey for default, ochre
+for a loop's body, a deeper ochre for its corridor back) with the full
+colour on the lintel and frame of the door into the lane; a loop's exit
+door keeps a plain lintel and a wooden frame. Lighting is a fixed
 pool of eight point lights that follow the player to the nearest fixtures, so
 shaders compile once, and a single static shadow map that re-renders only
 when the shadow light hops to another fixture.

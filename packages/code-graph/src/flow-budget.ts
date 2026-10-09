@@ -1,16 +1,23 @@
-// Keeps an interior within FLOW_BUDGET: forks nested deepest are collapsed
-// back into one room while the tree is too wide, then neighbouring rooms
-// fold into `collapsed` ones, shallowest pairs first, until it fits.
+// Keeps an interior within FLOW_BUDGET: forks and loops nested deepest are
+// collapsed back into one room while the tree is too wide, then neighbouring
+// rooms fold into `collapsed` ones, shallowest pairs first, until it fits.
 
 import type { FlowRole } from "@repo/types";
 import { FLOW_BUDGET } from "@repo/world-generator/config";
 
+import {
+  bodiesOf,
+  depthEstimate,
+  ownRooms,
+  roomCount,
+  treeWidth,
+  withBodies,
+} from "./flow-composite";
+import type { CompositeSpec, FlowTree } from "./flow-composite";
 import { depthOf, specOf } from "./flow-measure";
 import type { FlowCallee, FlowRoomSpec } from "./flow-measure";
 import { foldedText } from "./flow-text";
 import type { SiteIndex } from "./flow-text";
-import { depthEstimate, roomCount, treeWidth } from "./flow-tree";
-import type { FlowTree, ForkSpec } from "./flow-tree";
 
 /** Rooms that may merge: not returns, which end the flow. */
 const FOLDABLE: ReadonlySet<FlowRole> = new Set<FlowRole>([
@@ -60,7 +67,7 @@ const overBudget = (items: readonly FlowTree[]): boolean =>
   depthEstimate(items) > FLOW_BUDGET.depth;
 
 type Deepest = {
-  readonly fork: ForkSpec;
+  readonly composite: CompositeSpec;
   readonly level: number;
   readonly rooms: number;
 };
@@ -73,35 +80,35 @@ const deeper = (a: Deepest | null, b: Deepest | null): Deepest | null =>
     : a;
 
 /**
- * The fork nested deepest, ties to the one with most rooms, found in one
- * pass that counts rooms on the way back up.
+ * The composite nested deepest, ties to the one with most rooms, found in
+ * one pass that counts rooms on the way back up.
  */
-const deepestFork = (
+const deepestComposite = (
   items: readonly FlowTree[],
   level: number
 ): { readonly best: Deepest | null; readonly rooms: number } => {
   let best: Deepest | null = null;
   let rooms = 0;
   for (const item of items) {
-    if (item.kind !== "fork") {
+    if (item.kind === "room") {
       rooms += 1;
       continue;
     }
-    let own = 1 + (item.merge === null ? 0 : 1);
-    for (const lane of item.lanes) {
-      const inner = deepestFork(lane.body, level + 1);
+    let own = ownRooms(item).length;
+    for (const body of bodiesOf(item)) {
+      const inner = deepestComposite(body, level + 1);
       own += inner.rooms;
       best = deeper(best, inner.best);
     }
-    best = deeper(best, { fork: item, level, rooms: own });
+    best = deeper(best, { composite: item, level, rooms: own });
     rooms += own;
   }
   return { best, rooms };
 };
 
-const replaceFork = (
+const replaceComposite = (
   items: readonly FlowTree[],
-  target: ForkSpec,
+  target: CompositeSpec,
   sites: SiteIndex,
   top: boolean
 ): readonly FlowTree[] =>
@@ -109,27 +116,22 @@ const replaceFork = (
     if (item === target) {
       return specOf(item.node, sites, top && index === 0);
     }
-    if (item.kind === "fork") {
-      return {
-        ...item,
-        lanes: item.lanes.map((lane) => ({
-          ...lane,
-          body: replaceFork(lane.body, target, sites, false),
-        })),
-      };
-    }
-    return item;
+    return item.kind === "room"
+      ? item
+      : withBodies(item, (body) =>
+          replaceComposite(body, target, sites, false)
+        );
   });
 
-/** The tree with its deepest fork collapsed, or null when it has none. */
+/** The tree with its deepest composite collapsed, or null when it has none. */
 const collapseDeepest = (
   items: readonly FlowTree[],
   sites: SiteIndex
 ): readonly FlowTree[] | null => {
-  const deepest = deepestFork(items, 0).best;
+  const deepest = deepestComposite(items, 0).best;
   return deepest === null
     ? null
-    : replaceFork(items, deepest.fork, sites, true);
+    : replaceComposite(items, deepest.composite, sites, true);
 };
 
 type Pair = {
@@ -159,9 +161,9 @@ const shallowestPair = (items: readonly FlowTree[]): Pair | null => {
     }
   }
   for (const item of items) {
-    if (item.kind === "fork") {
-      for (const lane of item.lanes) {
-        consider(shallowestPair(lane.body));
+    if (item.kind !== "room") {
+      for (const body of bodiesOf(item)) {
+        consider(shallowestPair(body));
       }
     }
   }
@@ -176,15 +178,11 @@ const replaceSequence = (
   items === target
     ? replacement
     : items.map((item) =>
-        item.kind === "fork"
-          ? {
-              ...item,
-              lanes: item.lanes.map((lane) => ({
-                ...lane,
-                body: replaceSequence(lane.body, target, replacement),
-              })),
-            }
-          : item
+        item.kind === "room"
+          ? item
+          : withBodies(item, (body) =>
+              replaceSequence(body, target, replacement)
+            )
       );
 
 /** The tree with its shallowest foldable pair folded, or null when none is. */
@@ -207,9 +205,10 @@ const foldShallowest = (
 
 /**
  * Folds until the tree is within budget or nothing more can change. Too
- * wide: the deepest fork collapses into one room. Too deep or too many
- * rooms: neighbouring rooms fold, then forks collapse. A folded room keeps
- * its first room's id and a collapsed fork its node's, so the HUD still
+ * wide: the deepest fork or loop collapses into one room. Too deep or too
+ * many rooms: neighbouring rooms fold, then composites collapse. A folded
+ * room keeps its first room's id and a collapsed composite its node's, so
+ * the HUD still
  * resolves them; labels carry the true counts. The budget is a target, not
  * a guarantee: a room's own depth is capped, but the wall its distinct
  * callees need is not, so a room calling very many functions can still

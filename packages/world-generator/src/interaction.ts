@@ -23,7 +23,7 @@ type Target =
       readonly roomId: string;
       /** The room on the other side, or the unit a corridor leads to. */
       readonly targetRoomId: string;
-      /** The lane the door opens onto, when it is a fork's. */
+      /** The lane the door leads into, when walked with the flow. */
       readonly lane?: LaneLabel;
     };
 
@@ -113,7 +113,10 @@ const nearestTarget = (
                   kind: "door",
                   roomId,
                   targetRoomId: beyond(door.targetRoomId),
-                  ...(opening.lane === undefined ? {} : { lane: opening.lane }),
+                  // Only the way in names the lane; the way back names the room.
+                  ...(opening.lane === undefined || door.forward !== true
+                    ? {}
+                    : { lane: opening.lane }),
                 },
                 openingCentre(built.room, opening),
               ],

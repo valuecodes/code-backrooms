@@ -205,6 +205,55 @@ function track() {}
 `,
 };
 
+/**
+ * Loops as rings: a for-of whose body skips with `continue`, a while left
+ * by `break`, and a do-while asking again at the bottom.
+ */
+const loops: SourceFile = {
+  path: "loops.ts",
+  source: `function main() {
+  const items = loadItems();
+  for (const item of items) {
+    if (!item.ok) {
+      continue;
+    }
+    handle(item);
+  }
+  let tries = 0;
+  while (tries < 3) {
+    if (attempt()) {
+      break;
+    }
+    tries += 1;
+  }
+  do {
+    poll();
+  } while (pending());
+  finish();
+}
+
+function loadItems() {
+  return [{ ok: true }];
+}
+
+function handle(item: { ok: boolean }) {
+  return item.ok;
+}
+
+function attempt() {
+  return true;
+}
+
+function poll() {}
+
+function pending() {
+  return false;
+}
+
+function finish() {}
+`,
+};
+
 const examples = {
   demo,
   chain,
@@ -214,6 +263,7 @@ const examples = {
   portals,
   branches,
   switches,
+  loops,
 } as const;
 
 type ExampleName = keyof typeof examples;

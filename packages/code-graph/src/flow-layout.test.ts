@@ -217,20 +217,22 @@ describe("layoutFlow", () => {
     const a = site(5, "g");
     expect(depths([step(1, 1), awaitNode(5), ret(9)])).toEqual([4, 2, 2]);
     expect(depths([step(1, 1), ret(5, [a.id])], [a])).toEqual([4, 3]);
-    expect(depths([loop(1, [step(2, 1)])])).toEqual([4]);
-    expect(depths([step(1, 1), loop(5, [step(6, 1)])])).toEqual([4, 3]);
+    // A loop whose body ends in a return stays one collapsed room.
+    expect(depths([loop(1, [ret(2)])])).toEqual([4]);
+    expect(depths([step(1, 1), loop(5, [ret(6)])])).toEqual([4, 3]);
   });
 
   it("collapses a composite into one room carrying every call inside it", () => {
     const inner = calling(7, 2);
+    // The body ends in a return, so the loop cannot ring back: it collapses.
     const cluster = clusterOf(
-      [step(1, 1), loop(5, [step(6, 1), inner.node])],
+      [step(1, 1), loop(5, [step(6, 1), inner.node, ret(9)])],
       inner.sites
     );
     expect(cluster.rooms[1]).toMatchObject({
       id: `${FN}@5:loop`,
       role: "collapsed",
-      label: "while (x) · 2 statements · 2 calls",
+      label: "while (x) · 3 statements · 2 calls",
     });
     expect(
       cluster.ports

@@ -157,9 +157,9 @@ describe("nearestTarget", () => {
     });
   });
 
-  it("carries the lane of a fork's door onto the target", () => {
+  it("carries a lane door's lane onto the target only walked with the flow", () => {
     const lane = { kind: "true" } as const;
-    const laned: GeneratedWorld = {
+    const laned = (forward: boolean): GeneratedWorld => ({
       ...world,
       built: {
         ...world.built,
@@ -170,7 +170,9 @@ describe("nearestTarget", () => {
                 room: {
                   ...built.room,
                   doors: built.room.doors.map((door) =>
-                    door.targetRoomId === "login" ? { ...door, lane } : door
+                    door.targetRoomId === "login"
+                      ? { ...door, lane, ...(forward ? { forward } : {}) }
+                      : door
                   ),
                 },
                 openings: built.openings.map((opening, index) =>
@@ -182,13 +184,10 @@ describe("nearestTarget", () => {
             : built
         ),
       },
-    };
-    expect(promptAtLoginDoor(laned)).toEqual({
-      kind: "door",
-      roomId: "main",
-      targetRoomId: "login",
-      lane,
     });
+    const target = { kind: "door", roomId: "main", targetRoomId: "login" };
+    expect(promptAtLoginDoor(laned(true))).toEqual({ ...target, lane });
+    expect(promptAtLoginDoor(laned(false))).toEqual(target);
   });
 
   it("names the room at the far end of a corridor", () => {

@@ -286,13 +286,13 @@ describe("worldFromCode", () => {
         targetRoomId: main[4]?.id ?? "",
       })
     ).toBe("→ end if");
-    // The same door seen from inside the lane leads back to the fork.
+    // The same door seen from inside the lane leads back to the fork; the
+    // target carries no lane that way (only a forward door does).
     expect(
       promptOf(codeGraph, [], {
         kind: "door",
         roomId: main[2]?.id ?? "",
         targetRoomId: fork?.id ?? "",
-        lane: { kind: "true" },
       })
     ).toBe("→ if (!user)");
   });
@@ -344,7 +344,6 @@ describe("worldFromCode", () => {
         kind: "door",
         roomId: lane?.id ?? "",
         targetRoomId: rooms[0]?.id ?? "",
-        lane: { kind: "default" },
       })
     ).toBe("→ switch (x)");
   });

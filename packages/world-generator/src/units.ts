@@ -196,7 +196,7 @@ const orient = (
     doors.get(door.from)?.push({
       wall: edge.wall,
       targetRoomId: door.to,
-      ...lane,
+      ...(door.lane === undefined ? {} : { lane: door.lane, forward: true }),
     });
     doors.get(door.to)?.push({
       wall: OPPOSITE[edge.wall],
