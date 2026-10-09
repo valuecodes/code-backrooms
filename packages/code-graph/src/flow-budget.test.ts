@@ -137,4 +137,15 @@ describe("port pitch", () => {
       ["west", 10, 22],
     ]);
   });
+
+  it("keeps the portals below a port clear of a wide callee's door", () => {
+    const { node, sites } = calling(1, 3);
+    const along = (width: number) =>
+      clusterOf([node], sites, () => width).portals.find(
+        (portal) => portal.kind === "call"
+      )?.along;
+    // A plain column's door ends at the port; a 6 m callee's reaches 1 m on.
+    expect(along(4)).toBe(6);
+    expect(along(6)).toBe(9);
+  });
 });

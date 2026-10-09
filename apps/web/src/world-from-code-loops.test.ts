@@ -1,5 +1,6 @@
 import { buildCodeGraph } from "@repo/parser";
 import type { RoomData } from "@repo/types";
+import { checkLayout } from "@repo/world-generator/layout-checks";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -21,6 +22,10 @@ const graphOf = (name: "loops") => {
 /** The door of `from` that leads to `to`. */
 const door = (from: RoomData | undefined, to: RoomData | undefined) =>
   from?.doors.find((candidate) => candidate.targetRoomId === to?.id);
+
+/** A function whose loop makes its column wider than a plain one. */
+const looping = (name: string) =>
+  `function ${name}(xs: { ok(): void }[]) { for (const x of xs) { x.ok(); } }`;
 
 describe("loops", () => {
   it("lays the loops example out as rings with repeat and exit doors at the bottom", () => {
@@ -110,5 +115,27 @@ describe("loops", () => {
         .filter((room) => room.cluster === "find.ts::find")
         .map((room) => room.role)
     ).toEqual(["collapsed", "return"]);
+  });
+
+  it("keeps a call portal clear of the door to a callee widened by its loop", () => {
+    const codeGraph = buildCodeGraph([
+      {
+        path: "m.ts",
+        source: [
+          "function f() { use(a([]), b([]), c([])); }",
+          "function use(...xs: unknown[]) { return xs; }",
+          looping("a"),
+          looping("b"),
+          looping("c"),
+        ].join("\n"),
+      },
+    ]);
+    for (let seed = 1; seed <= 30; seed += 1) {
+      const generated = worldFromCode(codeGraph, seed);
+      expect(
+        checkLayout(generated.graph, generated.layout),
+        `seed ${seed}`
+      ).toEqual([]);
+    }
   });
 });
