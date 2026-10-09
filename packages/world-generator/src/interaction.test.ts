@@ -1,4 +1,4 @@
-import type { BuiltPortal, Point } from "@repo/types";
+import type { BuiltPortal, GeneratedWorld, Point } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
 import { openingCentre, placementInside } from "./geometry";
@@ -67,6 +67,13 @@ describe("portalToEnter", () => {
     expect(portalToEnter(world.built.portals, away, true)).toBeNull();
     const standing = { position, forward: intoWall, velocity: { x: 0, z: 0 } };
     expect(portalToEnter(world.built.portals, standing, true)).toBeNull();
+    // A smoothed velocity that has all but decayed is standing too.
+    const drifting = {
+      position,
+      forward: intoWall,
+      velocity: scaled(intoWall, 0.05),
+    };
+    expect(portalToEnter(world.built.portals, drifting, true)).toBeNull();
   });
 
   it("stays quiet until re-armed, and outside every trigger", () => {
@@ -106,14 +113,14 @@ describe("nearestTarget", () => {
     ).toBeNull();
   });
 
-  it("names the room beyond a door, through a corridor if there is one", () => {
-    const main = world.built.rooms.find(({ room }) => room.id === "main");
-    expect(main).toBeDefined();
+  /** The prompt from just inside main's door towards login, in `candidate`. */
+  const promptAtLoginDoor = (candidate: GeneratedWorld) => {
+    const main = candidate.built.rooms.find(({ room }) => room.id === "main");
     if (main === undefined) {
-      return;
+      throw new Error("No main room");
     }
     const index = main.room.doors.findIndex((door) => {
-      const target = world.layout.rooms.find(
+      const target = candidate.layout.rooms.find(
         (room) => room.id === door.targetRoomId
       );
       return (
@@ -123,9 +130,8 @@ describe("nearestTarget", () => {
       );
     });
     const opening = main.openings[index];
-    expect(opening).toBeDefined();
     if (opening === undefined) {
-      return;
+      throw new Error("No door from main to login");
     }
     const inside = placementInside(main.room, opening.wall, opening.along);
     const door = openingCentre(main.room, opening);
@@ -135,13 +141,40 @@ describe("nearestTarget", () => {
     };
     const length = Math.hypot(forward.x, forward.z);
     expect(length).toBeLessThanOrEqual(PROMPT_DISTANCE);
-    expect(
-      nearestTarget(world.built, "main", {
-        position: inside.position,
-        forward: scaled(forward, 1 / length),
-        velocity: { x: 0, z: 0 },
-      })
-    ).toEqual({ kind: "door", roomId: "main", targetRoomId: "login" });
+    return nearestTarget(candidate.built, "main", {
+      position: inside.position,
+      forward: scaled(forward, 1 / length),
+      velocity: { x: 0, z: 0 },
+    });
+  };
+
+  it("names the room beyond a door", () => {
+    expect(promptAtLoginDoor(world)).toEqual({
+      kind: "door",
+      roomId: "main",
+      targetRoomId: "login",
+    });
+  });
+
+  it("names the room at the far end of a corridor", () => {
+    const corridorWorld = [2, 3, 5, 4, 6, 7, 8]
+      .map((seed) => portalWorld(seed))
+      .find((candidate) =>
+        candidate.layout.rooms.some(
+          (data) =>
+            data.kind === "corridor" &&
+            data.connection?.from === "main" &&
+            data.connection.to === "login"
+        )
+      );
+    expect(corridorWorld).toBeDefined();
+    const prompt =
+      corridorWorld === undefined ? null : promptAtLoginDoor(corridorWorld);
+    expect(prompt).toEqual({
+      kind: "door",
+      roomId: "main",
+      targetRoomId: "login",
+    });
   });
 
   it("knows nothing outside every room", () => {

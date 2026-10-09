@@ -94,7 +94,8 @@ const App = () => {
   // R navigate, and only while walking, so a free pointer leaves them alone.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat) {
+      // Ctrl/Cmd+R and friends belong to the browser.
+      if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
         return;
       }
       if (event.code === "KeyN") {

@@ -336,18 +336,30 @@ const attempt = (graph: WorldGraph, start: string, rng: Rng): Attempt => {
 };
 
 /**
+ * Packings tried when the first leaves portals without a wall. Portal
+ * placement is deterministic per packing, so a room that simply has more
+ * portals than wall would otherwise cost every attempt on every seed.
+ */
+const PORTAL_PACKINGS = 4;
+
+/** What a layout failed to realise, doors weighted far above portals. */
+const shortfall = (layout: WorldLayout): number =>
+  layout.unresolved.length * 1000 + layout.unplacedPortals.length;
+
+/**
  * Places every room of a validated graph on the plane. Deterministic for a
  * given graph and seed. Retries with a bumped seed when the greedy search
  * paints itself into a corner, then throws naming the connection it could
  * not place. Portals go onto free wall space afterwards; when a packing
- * leaves some without a wall, later attempts are tried and the best one is
- * returned with its `unplacedPortals`, never an error.
+ * leaves some without a wall, a few more packings are tried and the best
+ * one is returned with its `unplacedPortals`, never an error.
  */
 const generateLayout = (graph: WorldGraph, seed: number): WorldLayout => {
   validateGraph(graph);
   const start = graph.start ?? graph.rooms[0]?.id ?? "";
   let failure: Failure | null = null;
   let best: WorldLayout | null = null;
+  let packings = 0;
   for (let tries = 0; tries < MAX_LAYOUT_ATTEMPTS; tries += 1) {
     const result = attempt(graph, start, createRng(seed + tries * 1_000_003));
     if (!result.ok) {
@@ -363,8 +375,13 @@ const generateLayout = (graph: WorldGraph, seed: number): WorldLayout => {
     if (placed.unplaced.length === 0) {
       return layout;
     }
-    if (best === null || placed.unplaced.length < best.unplacedPortals.length) {
+    // A missing door matters more than a missing portal.
+    if (best === null || shortfall(layout) < shortfall(best)) {
       best = layout;
+    }
+    packings += 1;
+    if (packings >= PORTAL_PACKINGS) {
+      break;
     }
   }
   if (best !== null) {

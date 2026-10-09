@@ -171,7 +171,30 @@ describe("createNavigator", () => {
     ]);
   });
 
-  it("treats Backspace as the room's return portal, or the start when there is none", () => {
+  it("unwinds to a callee's frame when the player walks out through its call door", () => {
+    // Enter shared by portal from login, then walk out through main's door.
+    const inShared = run(navigator, [
+      room("hub"),
+      room("main"),
+      room("login"),
+      portal("portal:login>shared"),
+    ]).state;
+    expect(inShared.frames.map((frame) => frame.calleeRoomId)).toEqual([
+      "login",
+      "shared",
+    ]);
+    const out = navigator.step(inShared, room("main"));
+    expect(out.teleport).toBeNull();
+    expect(out.state).toEqual({ frames: [], roomId: "main" });
+    // Walking out of a room the stack never entered leaves it alone.
+    const stranger = navigator.step(
+      { frames: [], roomId: "shared" },
+      room("main")
+    );
+    expect(stranger.state).toEqual({ frames: [], roomId: "main" });
+  });
+
+  it("treats Backspace as the room's return portal, and stays put with nothing to return to", () => {
     const atLogin = run(navigator, [
       room("hub"),
       room("main"),
@@ -187,8 +210,32 @@ describe("createNavigator", () => {
       { frames: [], roomId: "hub" },
       { type: "back" }
     );
-    expect(inHub.teleport?.position).toEqual(world.built.start);
+    expect(inHub.teleport).toBeNull();
     expect(inHub.state).toEqual({ frames: [], roomId: "hub" });
+  });
+
+  it("resolves a call door that opens onto a corridor", () => {
+    const corridorWorld = [2, 3, 5, 4, 6, 7, 8]
+      .map((seed) => portalWorld(seed))
+      .find((candidate) =>
+        candidate.layout.rooms.some(
+          (data) =>
+            data.kind === "corridor" &&
+            data.connection?.from === "main" &&
+            data.connection.to === "login"
+        )
+      );
+    expect(corridorWorld).toBeDefined();
+    if (corridorWorld === undefined) {
+      return;
+    }
+    const nav = createNavigator(corridorWorld);
+    const { state } = run(nav, [room("hub"), room("main"), room("login")]);
+    const frame = state.frames[0];
+    expect(frame?.calleeRoomId).toBe("login");
+    expect(
+      inRoom(corridorWorld, "main", frame?.returnTo.position ?? { x: 0, z: 0 })
+    ).toBe(true);
   });
 
   it("goes home with an empty stack", () => {

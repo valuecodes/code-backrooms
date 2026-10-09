@@ -104,7 +104,8 @@ const Player = ({
     // Forget the room too, so the first frame reports the new start room.
     roomId.current = null;
     armed.current = true;
-    nearKey.current = null;
+    // The near-target key is kept on purpose: the next frame compares the
+    // new world's answer against it and so reports a prompt that went away.
   }, [place, world]);
 
   useLayoutEffect(() => {

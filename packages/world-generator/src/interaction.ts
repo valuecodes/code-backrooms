@@ -29,6 +29,12 @@ type Target =
 const PROMPT_DISTANCE = 1.5;
 /** Cosine of the half-angle within which something counts as "faced". */
 const FACING = 0.5;
+/**
+ * Speed into the wall, in metres per second, below which the player is
+ * standing, not walking in: a smoothed velocity only ever decays towards
+ * zero, so an exact test would fire long after the keys were released.
+ */
+const MIN_APPROACH = 0.2;
 
 const dot = (a: Point, b: Point): number => a.x * b.x + a.z * b.z;
 
@@ -55,7 +61,7 @@ const portalToEnter = (
   }
   const intoWall = { x: -inside.normal.x, z: -inside.normal.z };
   return dot(motion.forward, intoWall) > FACING &&
-    dot(motion.velocity, intoWall) > 0
+    dot(motion.velocity, intoWall) > MIN_APPROACH
     ? inside
     : null;
 };
@@ -92,14 +98,23 @@ const nearestTarget = (
     return connection.from === roomId ? connection.to : connection.from;
   };
   const candidates: (readonly [Target, Point])[] = [
-    ...built.openings.map((opening, index): readonly [Target, Point] => [
-      {
-        kind: "door",
-        roomId,
-        targetRoomId: beyond(built.room.doors[index]?.targetRoomId ?? ""),
-      },
-      openingCentre(built.room, opening),
-    ]),
+    ...built.openings.flatMap(
+      (opening, index): (readonly [Target, Point])[] => {
+        const door = built.room.doors[index];
+        return door === undefined
+          ? []
+          : [
+              [
+                {
+                  kind: "door",
+                  roomId,
+                  targetRoomId: beyond(door.targetRoomId),
+                },
+                openingCentre(built.room, opening),
+              ],
+            ];
+      }
+    ),
     ...world.portals
       .filter((portal) => portal.portal.from === roomId)
       .map((portal): readonly [Target, Point] => [
