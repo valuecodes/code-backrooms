@@ -29,7 +29,9 @@ const onGrid = (value: number): boolean =>
  * Rejects graphs the layout cannot honour, naming the offender. The
  * supported contract: unique ids, dimensions on the grid and at least
  * MIN_SHARED, undirected connections between distinct known rooms with no
- * duplicates, and one connected component.
+ * duplicates, portals with unique ids between known rooms (a portal may
+ * lead back into its own room), and one connected component over the
+ * connections.
  */
 const validateGraph = (graph: WorldGraph): void => {
   if (graph.rooms.length === 0) {
@@ -65,6 +67,20 @@ const validateGraph = (graph: WorldGraph): void => {
       throw new Error(`Connection ${from} -> ${to} is duplicated`);
     }
     keys.add(key);
+  }
+  const portalIds = new Set<string>();
+  for (const portal of graph.portals ?? []) {
+    if (portal.id === "" || portalIds.has(portal.id) || ids.has(portal.id)) {
+      throw new Error(
+        `Portal id "${portal.id}" is empty, duplicated or already a room id`
+      );
+    }
+    portalIds.add(portal.id);
+    if (!ids.has(portal.from) || !ids.has(portal.to)) {
+      throw new Error(
+        `Portal "${portal.id}" (${portal.from} -> ${portal.to}) references an unknown room`
+      );
+    }
   }
   const start = graph.start ?? graph.rooms[0]?.id;
   if (start === undefined || !ids.has(start)) {

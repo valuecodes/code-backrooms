@@ -13,6 +13,54 @@ const connected = (graph: WorldGraph): boolean => {
   }
 };
 
+describe("validateGraph portals", () => {
+  const rooms = [
+    { id: "a", width: 6, depth: 6 },
+    { id: "b", width: 6, depth: 6 },
+  ];
+  const connections = [{ from: "a", to: "b" }];
+
+  it("accepts portals between known rooms, including back into their own", () => {
+    expect(() =>
+      validateGraph({
+        rooms,
+        connections,
+        portals: [
+          { id: "p", kind: "call", from: "a", to: "b" },
+          { id: "self", kind: "call", from: "a", to: "a" },
+        ],
+      })
+    ).not.toThrow();
+  });
+
+  it("rejects a portal to an unknown room or with a used id", () => {
+    expect(() =>
+      validateGraph({
+        rooms,
+        connections,
+        portals: [{ id: "p", kind: "call", from: "a", to: "zzz" }],
+      })
+    ).toThrow(/unknown room/);
+    expect(() =>
+      validateGraph({
+        rooms,
+        connections,
+        portals: [
+          { id: "p", kind: "call", from: "a", to: "b" },
+          { id: "p", kind: "return", from: "b", to: "a" },
+        ],
+      })
+    ).toThrow(/duplicated/);
+    expect(() =>
+      validateGraph({
+        rooms,
+        connections,
+        portals: [{ id: "a", kind: "call", from: "a", to: "b" }],
+      })
+    ).toThrow(/already a room id/);
+  });
+});
+
 describe("generateGraph", () => {
   it("creates the requested number of rooms with unique ids", () => {
     const graph = generateGraph({ seed: 1, roomCount: 15 });

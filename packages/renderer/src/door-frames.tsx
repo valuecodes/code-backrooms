@@ -66,4 +66,4 @@ const DoorFrames = ({ doorways }: DoorFramesProps) => {
   );
 };
 
-export { DoorFrames };
+export { DoorFrames, frameBoxes };

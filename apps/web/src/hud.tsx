@@ -6,6 +6,10 @@ type HudProps = {
   readonly code: string | null;
   /** Where the player is: `file · fn()` for code worlds, else the room id. */
   readonly place: string | null;
+  /** The navigation stack, callers first: `main() → login()`. */
+  readonly breadcrumb: string | null;
+  /** What the door or portal in front of the player leads to. */
+  readonly prompt: string | null;
   readonly warnings: readonly string[];
   readonly error: string | null;
 };
@@ -14,6 +18,8 @@ const hints: readonly (readonly [string, string])[] = [
   ["WASD", "move"],
   ["Mouse", "look"],
   ["Shift", "sprint"],
+  ["Backspace", "return to the caller"],
+  ["R", "back to the entrance"],
   ["N", "next seed"],
   ["Esc", "release the mouse"],
 ];
@@ -31,7 +37,15 @@ const whereOf = ({
 };
 
 /** Start prompt while the pointer is free; a crosshair dot once it is locked. */
-const Hud = ({ locked, place, warnings, error, ...rest }: HudProps) => {
+const Hud = ({
+  locked,
+  place,
+  breadcrumb,
+  prompt,
+  warnings,
+  error,
+  ...rest
+}: HudProps) => {
   const where = whereOf(rest);
   if (locked) {
     return (
@@ -40,11 +54,19 @@ const Hud = ({ locked, place, warnings, error, ...rest }: HudProps) => {
           aria-hidden
           className="pointer-events-none absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-50/70"
         />
+        {prompt !== null && (
+          <p className="pointer-events-none absolute top-1/2 left-1/2 mt-4 -translate-x-1/2 font-mono text-sm text-amber-50/80">
+            {prompt}
+          </p>
+        )}
         <div className="pointer-events-none absolute bottom-3 left-4 flex flex-col gap-0.5 font-mono text-xs text-amber-100/50">
           {warnings.length > 0 && (
             <p className="text-amber-300/60">
-              {warnings.length} connections not laid out
+              {warnings.length} connections or portals not laid out
             </p>
+          )}
+          {breadcrumb !== null && (
+            <p className="text-amber-100/70">{breadcrumb}</p>
           )}
           <p>{place === null ? where : `${where} · ${place}`}</p>
         </div>

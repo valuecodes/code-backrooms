@@ -8,8 +8,10 @@
     "./config": "./src/config.ts",
     "./geometry": "./src/geometry.ts",
     "./graph": "./src/graph.ts",
+    "./interaction": "./src/interaction.ts",
     "./layout": "./src/layout.ts",
     "./locate": "./src/locate.ts",
+    "./navigation": "./src/navigation.ts",
     "./presets": "./src/presets.ts",
     "./random": "./src/random.ts"
   },

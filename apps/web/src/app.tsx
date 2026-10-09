@@ -5,17 +5,25 @@ import { Player } from "@repo/renderer/player";
 import { World } from "@repo/renderer/world";
 import type { GeneratedWorld } from "@repo/types";
 import { generateWorld } from "@repo/world-generator";
+import type { Target } from "@repo/world-generator/interaction";
 import { presets } from "@repo/world-generator/presets";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Hud } from "~/hud";
 import { parseWorldParams, withSeed } from "~/params";
-import { codeGraphOf, describeRoom, worldFromCode } from "~/world-from-code";
+import { useNavigation } from "~/use-navigation";
+import {
+  breadcrumbOf,
+  codeGraphOf,
+  describeRoom,
+  promptOf,
+  worldFromCode,
+} from "~/world-from-code";
 
 type Generated = {
   readonly world: GeneratedWorld | null;
   readonly codeGraph: CodeGraph | null;
-  /** Graph connections the layout could not realise, one line each. */
+  /** Graph connections and portals the layout could not realise, one line each. */
   readonly warnings: readonly string[];
   readonly error: string | null;
 };
@@ -51,9 +59,14 @@ const useGeneratedWorld = (seed: number): Generated =>
     try {
       const world = generate(seed);
       // Shown in the HUD, so the console stays quiet.
-      const warnings = world.layout.unresolved.map(
-        ({ from, to }) => `${from} -> ${to} could not be laid out`
-      );
+      const warnings = [
+        ...world.layout.unresolved.map(
+          ({ from, to }) => `${from} -> ${to} could not be laid out`
+        ),
+        ...world.layout.unplacedPortals.map(
+          ({ id }) => `${id} has no wall space`
+        ),
+      ];
       return { world, codeGraph, warnings, error: null };
     } catch (error) {
       return { world: null, codeGraph, warnings: [], error: String(error) };
@@ -64,18 +77,38 @@ const App = () => {
   const [locked, setLocked] = useState(false);
   const [seed, setSeed] = useState(initial.seed);
   const [roomId, setRoomId] = useState<string | null>(null);
+  const [target, setTarget] = useState<Target | null>(null);
   const generated = useGeneratedWorld(seed);
+  const navigation = useNavigation(generated.world);
+  const { onRoomChange, back, home } = navigation;
 
-  // N: next seed. Only this regenerates the world.
+  const onRoom = useCallback(
+    (id: string | null) => {
+      setRoomId(id);
+      onRoomChange(id);
+    },
+    [onRoomChange]
+  );
+
+  // N: next seed (the only thing that regenerates the world). Backspace and
+  // R navigate, and only while walking, so a free pointer leaves them alone.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.code === "KeyN" && !event.repeat) {
+      if (event.repeat) {
+        return;
+      }
+      if (event.code === "KeyN") {
         setSeed((current) => current + 1);
+      } else if (locked && event.code === "Backspace") {
+        event.preventDefault();
+        back();
+      } else if (locked && event.code === "KeyR") {
+        home();
       }
     };
     globalThis.addEventListener("keydown", onKeyDown);
     return () => globalThis.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [locked, back, home]);
 
   // Keep the URL shareable: it always names the seed on screen.
   useEffect(() => {
@@ -123,7 +156,10 @@ const App = () => {
           <Player
             world={generated.world.built}
             enabled={locked}
-            onRoomChange={setRoomId}
+            onRoomChange={onRoom}
+            placement={navigation.placement}
+            onPortal={navigation.onPortal}
+            onNearTarget={setTarget}
           />
           <PointerLook />
         </Canvas>
@@ -135,6 +171,12 @@ const App = () => {
         preset={initial.preset}
         code={initial.code}
         place={place}
+        breadcrumb={breadcrumbOf(
+          generated.codeGraph,
+          navigation.frames,
+          navigation.roomId
+        )}
+        prompt={promptOf(generated.codeGraph, navigation.frames, target)}
         warnings={generated.warnings}
         error={generated.error}
       />

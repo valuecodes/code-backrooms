@@ -1,10 +1,13 @@
 import type {
+  BuiltPortal,
   BuiltRoom,
   BuiltWorld,
   DoorData,
   DoorOpening,
   Doorway,
+  Placement,
   Point,
+  PortalData,
   Rect,
   RoomData,
   WallSegment,
@@ -12,7 +15,14 @@ import type {
   WorldData,
 } from "@repo/types";
 
-import { DOOR_HEIGHT, DOOR_WIDTH, WALL_HEIGHT, WALL_THICKNESS } from "./config";
+import {
+  ARRIVAL_INSET,
+  DOOR_HEIGHT,
+  DOOR_WIDTH,
+  PORTAL_TRIGGER_DEPTH,
+  WALL_HEIGHT,
+  WALL_THICKNESS,
+} from "./config";
 
 const EPSILON = 1e-6;
 const WALL_SIDES: readonly WallSide[] = ["north", "south", "east", "west"];
@@ -21,6 +31,13 @@ const OPPOSITE: Record<WallSide, WallSide> = {
   south: "north",
   east: "west",
   west: "east",
+};
+/** Unit vector from a wall into its room. */
+const INWARD: Record<WallSide, Point> = {
+  north: { x: 0, z: 1 },
+  south: { x: 0, z: -1 },
+  east: { x: -1, z: 0 },
+  west: { x: 1, z: 0 },
 };
 
 /** Walls on the north/south edges run along X; east/west walls run along Z. */
@@ -192,6 +209,108 @@ const doorway = (room: RoomData, opening: DoorOpening): Doorway => {
   };
 };
 
+/** The floor point `inset` in from a wall at `along` on the wall's axis. */
+const pointInside = (
+  room: RoomData,
+  wall: WallSide,
+  along: number,
+  inset: number
+): Point => {
+  const edge = wallEdge(roomBounds(room), wall);
+  const inward = INWARD[wall];
+  return wallAxis(wall) === "x"
+    ? { x: along, z: edge + inward.z * inset }
+    : { x: edge + inward.x * inset, z: along };
+};
+
+/** A landing just inside a wall at `along`, facing away from the wall. */
+const placementInside = (
+  room: RoomData,
+  wall: WallSide,
+  along: number,
+  inset = ARRIVAL_INSET
+): Placement => ({
+  position: pointInside(room, wall, along, inset),
+  facing: pointInside(room, wall, along, inset + 1),
+});
+
+/**
+ * Where a teleport into a room lands: just inside its first return portal
+ * (so turning round leads back out), else the centre facing the first
+ * doorway, which is also how the start room is entered.
+ */
+const roomEntry = ({ room, openings }: BuiltRoom): Placement => {
+  const exit = room.portals?.find((portal) => portal.kind === "return");
+  if (exit !== undefined) {
+    return placementInside(room, exit.wall, exit.along);
+  }
+  const position = { x: room.position[0], z: room.position[2] };
+  const first = openings[0];
+  return {
+    position,
+    facing:
+      first === undefined
+        ? { x: position.x + 1, z: position.z }
+        : openingCentre(room, first),
+  };
+};
+
+/**
+ * A portal's frame sits on the wall's inner face (the wall behind stays
+ * solid, so there is no opening); its trigger is a shallow strip of floor
+ * in front of it.
+ */
+const buildPortal = (
+  room: RoomData,
+  portal: PortalData,
+  entryOf: ReadonlyMap<string, Placement>
+): BuiltPortal => {
+  const arrival = entryOf.get(portal.to);
+  if (arrival === undefined) {
+    throw new Error(
+      `Portal "${portal.id}" leads to unknown room "${portal.to}"`
+    );
+  }
+  const { wall, along } = portal;
+  const axis = wallAxis(wall);
+  const centre = pointInside(room, wall, along, WALL_THICKNESS / 2);
+  const face = pointInside(room, wall, along, WALL_THICKNESS);
+  const reach = pointInside(
+    room,
+    wall,
+    along,
+    WALL_THICKNESS + PORTAL_TRIGGER_DEPTH
+  );
+  const half = DOOR_WIDTH / 2;
+  const trigger: Rect =
+    axis === "x"
+      ? {
+          minX: along - half,
+          maxX: along + half,
+          minZ: Math.min(face.z, reach.z),
+          maxZ: Math.max(face.z, reach.z),
+        }
+      : {
+          minX: Math.min(face.x, reach.x),
+          maxX: Math.max(face.x, reach.x),
+          minZ: along - half,
+          maxZ: along + half,
+        };
+  return {
+    portal,
+    frame: {
+      center: [centre.x, 0, centre.z],
+      axis,
+      width: DOOR_WIDTH,
+      depth: WALL_THICKNESS,
+    },
+    normal: INWARD[wall],
+    trigger,
+    arrival,
+    returnPoint: placementInside(room, wall, along),
+  };
+};
+
 const buildRoom = (
   room: RoomData,
   byId: ReadonlyMap<string, RoomData>
@@ -238,20 +357,31 @@ const buildWorld = (data: WorldData): BuiltWorld => {
         : [];
     })
   );
-  const start = { x: startRoom.position[0], z: startRoom.position[2] };
-  const firstDoor = rooms.find((built) => built.room.id === startRoom.id)
-    ?.openings[0];
-  const facing =
-    firstDoor === undefined
-      ? { x: start.x + 1, z: start.z }
-      : openingCentre(startRoom, firstDoor);
-  return { rooms, doorways, colliders, start, facing };
+  const entryOf = new Map(
+    rooms.map((built) => [built.room.id, roomEntry(built)])
+  );
+  const portals = rooms.flatMap((built) =>
+    (built.room.portals ?? []).map((portal) =>
+      buildPortal(built.room, portal, entryOf)
+    )
+  );
+  const startBuilt = rooms.find((built) => built.room.id === startRoom.id);
+  const entry =
+    startBuilt === undefined ? null : (entryOf.get(startBuilt.room.id) ?? null);
+  const start = entry?.position ?? {
+    x: startRoom.position[0],
+    z: startRoom.position[2],
+  };
+  const facing = entry?.facing ?? { x: start.x + 1, z: start.z };
+  return { rooms, doorways, portals, colliders, start, facing };
 };
 
 export {
   buildWorld,
   doorOpening,
+  openingCentre,
   OPPOSITE,
+  placementInside,
   roomBounds,
   wallAxis,
   wallSegments,

@@ -48,7 +48,18 @@ const MAX_DEGREE = 6;
 /** Whole-layout retries with a bumped seed before giving up on a graph. */
 const MAX_LAYOUT_ATTEMPTS = 16;
 
+/** Clearance between a portal opening and corners, doors and other portals. */
+const PORTAL_GAP = 0.5;
+/** How far a portal's trigger reaches into the room from the wall's inner face. */
+const PORTAL_TRIGGER_DEPTH = 0.45;
+/**
+ * Distance from a room edge to a landing point: past the wall, past the
+ * trigger, with room for the player's footprint before it.
+ */
+const ARRIVAL_INSET = 1;
+
 export {
+  ARRIVAL_INSET,
   CORRIDOR_LENGTHS,
   CORRIDOR_WIDTH,
   DOOR_HEIGHT,
@@ -59,6 +70,8 @@ export {
   MAX_LAYOUT_ATTEMPTS,
   MIN_GAP,
   MIN_SHARED,
+  PORTAL_GAP,
+  PORTAL_TRIGGER_DEPTH,
   ROOM_SIZE_CLASSES,
   WALL_HEIGHT,
   WALL_THICKNESS,
