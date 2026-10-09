@@ -44,11 +44,11 @@ describe("portal ids", () => {
       kind: "call",
       callSiteId: "src/a@b.ts::Svc.load@42",
     });
-    const back = returnPortalId("src/a@b.ts::Svc.load");
-    expect(back).toBe("return:src/a@b.ts::Svc.load");
+    const back = returnPortalId("src/a@b.ts::Svc.load@57:return");
+    expect(back).toBe("return:src/a@b.ts::Svc.load@57:return");
     expect(parsePortalId(back)).toEqual({
       kind: "return",
-      functionId: "src/a@b.ts::Svc.load",
+      roomId: "src/a@b.ts::Svc.load@57:return",
     });
   });
 

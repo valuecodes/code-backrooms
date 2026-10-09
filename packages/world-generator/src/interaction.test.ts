@@ -1,6 +1,7 @@
 import type { BuiltPortal, GeneratedWorld, Point } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
+import { clusterWorld } from "./cluster-world";
 import { openingCentre, placementInside } from "./geometry";
 import {
   inAnyTrigger,
@@ -175,6 +176,50 @@ describe("nearestTarget", () => {
       roomId: "main",
       targetRoomId: "login",
     });
+  });
+
+  it("names the unit beyond a corridor from a room of a cluster", () => {
+    const corridorWorld = Array.from({ length: 30 }, (_, index) =>
+      clusterWorld(index + 1)
+    ).find((candidate) =>
+      candidate.layout.rooms.some(
+        (data) =>
+          data.kind === "corridor" &&
+          data.connection?.from === "fn" &&
+          data.connection.to === "callee"
+      )
+    );
+    expect(corridorWorld).toBeDefined();
+    if (corridorWorld === undefined) {
+      return;
+    }
+    const call = corridorWorld.built.rooms.find(
+      ({ room }) => room.id === "call"
+    );
+    const index = call?.room.doors.findIndex((door) => {
+      const target = corridorWorld.layout.rooms.find(
+        (room) => room.id === door.targetRoomId
+      );
+      return target?.connection?.to === "callee";
+    });
+    const opening = index === undefined ? undefined : call?.openings[index];
+    if (call === undefined || opening === undefined) {
+      throw new Error("No corridor door from call to callee");
+    }
+    const inside = placementInside(call.room, opening.wall, opening.along);
+    const door = openingCentre(call.room, opening);
+    const forward = {
+      x: door.x - inside.position.x,
+      z: door.z - inside.position.z,
+    };
+    const length = Math.hypot(forward.x, forward.z);
+    expect(
+      nearestTarget(corridorWorld.built, "call", {
+        position: inside.position,
+        forward: scaled(forward, 1 / length),
+        velocity: { x: 0, z: 0 },
+      })
+    ).toEqual({ kind: "door", roomId: "call", targetRoomId: "callee" });
   });
 
   it("knows nothing outside every room", () => {

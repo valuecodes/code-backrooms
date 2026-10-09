@@ -93,13 +93,16 @@ const RETURN_PORTAL_PREFIX = "return:";
 const callPortalId = (callSiteId: string): string =>
   `${CALL_PORTAL_PREFIX}${callSiteId}`;
 
-/** A function's return portal: `return:demo.ts::main`. */
-const returnPortalId = (functionId: string): string =>
-  `${RETURN_PORTAL_PREFIX}${functionId}`;
+/**
+ * A return portal is named by the room that hosts it: a function's last
+ * flow room, `return:demo.ts::main@57:return`.
+ */
+const returnPortalId = (roomId: string): string =>
+  `${RETURN_PORTAL_PREFIX}${roomId}`;
 
 type PortalRef =
   | { readonly kind: "call"; readonly callSiteId: string }
-  | { readonly kind: "return"; readonly functionId: string };
+  | { readonly kind: "return"; readonly roomId: string };
 
 /** What a portal id names, or null for ids that are not portals of this grammar. */
 const parsePortalId = (id: string): PortalRef | null => {
@@ -107,13 +110,13 @@ const parsePortalId = (id: string): PortalRef | null => {
     return { kind: "call", callSiteId: id.slice(CALL_PORTAL_PREFIX.length) };
   }
   if (id.startsWith(RETURN_PORTAL_PREFIX)) {
-    return {
-      kind: "return",
-      functionId: id.slice(RETURN_PORTAL_PREFIX.length),
-    };
+    return { kind: "return", roomId: id.slice(RETURN_PORTAL_PREFIX.length) };
   }
   return null;
 };
+
+/** The module a hub id belongs to: `demo.ts#2` → `demo.ts`. */
+const hubModuleId = (roomId: string): string => roomId.replace(/#\d+$/, "");
 
 /**
  * Keeps qualified names unique within a module: the first `foo` stays `foo`,
@@ -133,6 +136,7 @@ export {
   callSiteId,
   flowNodeId,
   functionId,
+  hubModuleId,
   isFunctionId,
   moduleId,
   parseFlowNodeId,

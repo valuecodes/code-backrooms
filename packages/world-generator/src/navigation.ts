@@ -56,50 +56,60 @@ const unitsOf = (built: readonly BuiltRoom[]): ReadonlyMap<string, string> =>
 const stay = (state: NavigationState): Step => ({ state, teleport: null });
 
 /**
- * The landing just inside the caller's door to `callee`, whether the door
- * opens straight into the callee or onto a corridor that leads there.
+ * The landing just inside the door of unit `caller` that leads into unit
+ * `callee`, whether it opens straight into the callee or onto a corridor
+ * that leads there. The door may be on any room of the caller.
  */
 const doorPlacement = (
-  caller: BuiltRoom,
+  caller: string,
   callee: string,
-  rooms: ReadonlyMap<string, BuiltRoom>
+  rooms: ReadonlyMap<string, BuiltRoom>,
+  unitOf: (roomId: string) => string
 ): Placement | null => {
-  const index = caller.room.doors.findIndex((door) => {
-    if (door.targetRoomId === callee) {
-      return true;
+  for (const built of rooms.values()) {
+    if (built.room.kind === "corridor" || unitOf(built.room.id) !== caller) {
+      continue;
     }
-    const connection = rooms.get(door.targetRoomId)?.room.connection;
-    return (
-      connection !== undefined &&
-      ((connection.from === caller.room.id && connection.to === callee) ||
-        (connection.to === caller.room.id && connection.from === callee))
-    );
-  });
-  const opening = caller.openings[index];
-  return index === -1 || opening === undefined
-    ? null
-    : placementInside(caller.room, opening.wall, opening.along);
+    const index = built.room.doors.findIndex((door) => {
+      const target = rooms.get(door.targetRoomId)?.room;
+      if (target === undefined) {
+        return false;
+      }
+      const { connection } = target;
+      return connection === undefined
+        ? unitOf(target.id) === callee
+        : (connection.from === caller && connection.to === callee) ||
+            (connection.to === caller && connection.from === callee);
+    });
+    const opening = built.openings[index];
+    if (index !== -1 && opening !== undefined) {
+      return placementInside(built.room, opening.wall, opening.along);
+    }
+  }
+  return null;
 };
 
 /** Call doors by caller unit, then callee unit, with the return landing. */
 const callDoorsOf = (
   world: World,
   rooms: ReadonlyMap<string, BuiltRoom>,
-  units: ReadonlyMap<string, string>
+  unitOf: (roomId: string) => string
 ): ReadonlyMap<string, ReadonlyMap<string, Placement>> => {
   const doors = new Map<string, Map<string, Placement>>();
   for (const connection of world.graph.connections) {
-    const caller = rooms.get(connection.from);
-    if (connection.kind !== "call" || caller === undefined) {
+    if (connection.kind !== "call") {
       continue;
     }
-    const placement = doorPlacement(caller, connection.to, rooms);
-    const from = units.get(connection.from) ?? connection.from;
-    const to = units.get(connection.to) ?? connection.to;
+    const placement = doorPlacement(
+      connection.from,
+      connection.to,
+      rooms,
+      unitOf
+    );
     if (placement !== null) {
-      const own = doors.get(from) ?? new Map<string, Placement>();
-      own.set(to, placement);
-      doors.set(from, own);
+      const own = doors.get(connection.from) ?? new Map<string, Placement>();
+      own.set(connection.to, placement);
+      doors.set(connection.from, own);
     }
   }
   return doors;
@@ -118,10 +128,11 @@ const createNavigator = (world: World): Navigator => {
   const hubs = new Set(
     world.graph.rooms.filter((room) => room.hub === true).map((room) => room.id)
   );
-  const callDoors = callDoorsOf(world, rooms, units);
+  const callDoors = callDoorsOf(world, rooms, unitOf);
   const portals = new Map(
     built.portals.map((portal) => [portal.portal.id, portal])
   );
+  // The first return portal of a unit in layout order answers Backspace.
   const returnPortalOf = new Map<string, BuiltPortal>();
   for (const portal of built.portals) {
     const unit = unitOf(portal.portal.from);

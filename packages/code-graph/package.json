@@ -5,7 +5,9 @@
   "exports": {
     ".": "./src/code-graph.ts",
     "./flow": "./src/flow.ts",
+    "./flow-layout": "./src/flow-layout.ts",
     "./ids": "./src/ids.ts",
+    "./subjects": "./src/subjects.ts",
     "./world-graph": "./src/world-graph.ts"
   },
   "scripts": {

@@ -1,6 +1,7 @@
-import type { WorldGraph } from "@repo/types";
+import type { RoomCluster, WorldGraph } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
+import { cluster, clusterGraph } from "./cluster-world";
 import { GRID, ROOM_SIZE_CLASSES } from "./config";
 import { generateGraph, validateGraph } from "./graph";
 
@@ -58,6 +59,151 @@ describe("validateGraph portals", () => {
         portals: [{ id: "a", kind: "call", from: "a", to: "b" }],
       })
     ).toThrow(/already a room id/);
+  });
+});
+
+/** The cluster graph with `fn`'s cluster replaced. */
+const withCluster = (
+  patch: Partial<RoomCluster>,
+  extra: Partial<WorldGraph> = {}
+): WorldGraph => ({
+  ...clusterGraph,
+  ...extra,
+  rooms: clusterGraph.rooms.map((room) =>
+    room.id === "fn" ? { ...room, cluster: { ...cluster, ...patch } } : room
+  ),
+});
+
+/** The fixture's rooms with one of them changed. */
+const roomsWith = (
+  id: string,
+  change: Partial<RoomCluster["rooms"][number]>
+): RoomCluster["rooms"] =>
+  cluster.rooms.map((room) => (room.id === id ? { ...room, ...change } : room));
+
+describe("validateGraph clusters", () => {
+  it("accepts the cluster fixture and a portal on one of its rooms", () => {
+    expect(() => validateGraph(clusterGraph)).not.toThrow();
+  });
+
+  it("rejects rooms off the grid, overlapping, outside or not filling the box", () => {
+    expect(() =>
+      validateGraph(
+        withCluster({
+          rooms: roomsWith("step", {
+            rect: { minX: 0, maxX: 4, minZ: 0, maxZ: 4.3 },
+          }),
+        })
+      )
+    ).toThrow(/off the grid/);
+    expect(() =>
+      validateGraph(
+        withCluster({
+          rooms: roomsWith("step", {
+            rect: { minX: 0, maxX: 4, minZ: 0, maxZ: 5 },
+          }),
+        })
+      )
+    ).toThrow(/overlap/);
+    expect(() =>
+      validateGraph(
+        withCluster({
+          rooms: cluster.rooms.filter((room) => room.id !== "step"),
+          doors: cluster.doors.filter((door) => door.from !== "step"),
+          ports: cluster.ports.filter((port) => port.roomId !== "step"),
+        })
+      )
+    ).toThrow(/do not fill/);
+  });
+
+  it("rejects duplicate ids, including across clusters and graph rooms", () => {
+    expect(() =>
+      validateGraph(withCluster({ rooms: roomsWith("call", { id: "hub" }) }))
+    ).toThrow(/duplicated/);
+  });
+
+  it("rejects ports off the boundary, more than one entry port, and an entry port elsewhere", () => {
+    expect(() =>
+      validateGraph(
+        withCluster({
+          ports: [
+            ...cluster.ports,
+            {
+              roomId: "step",
+              wall: "south",
+              lo: 0,
+              hi: 4,
+              reservedFor: "callee",
+            },
+          ],
+        })
+      )
+    ).toThrow(/boundary/);
+    expect(() =>
+      validateGraph(
+        withCluster({
+          ports: [
+            ...cluster.ports,
+            { roomId: "ret", wall: "south", lo: 0, hi: 4 },
+          ],
+        })
+      )
+    ).toThrow(/entry port/);
+    expect(() =>
+      validateGraph(withCluster({ ports: cluster.ports.slice(1) }))
+    ).toThrow(/exactly one entry port/);
+    expect(() =>
+      validateGraph(
+        withCluster({
+          ports: [
+            {
+              roomId: "call",
+              wall: "east",
+              lo: 4,
+              hi: 7,
+              reservedFor: "nobody",
+            },
+            ...cluster.ports,
+          ],
+        })
+      )
+    ).toThrow(/unknown room "nobody"/);
+  });
+
+  it("rejects a door without a shared edge and an unreachable room", () => {
+    expect(() =>
+      validateGraph(withCluster({ doors: [{ from: "step", to: "ret" }] }))
+    ).toThrow(/shared edge/);
+    expect(() =>
+      validateGraph(withCluster({ doors: cluster.doors.slice(0, 1) }))
+    ).toThrow(/not reachable from the entry/);
+  });
+
+  it("ties a cluster's placed portals to the graph's", () => {
+    expect(() => validateGraph(withCluster({}, { portals: [] }))).toThrow(
+      /which the graph does not have/
+    );
+    expect(() =>
+      validateGraph(
+        withCluster(
+          {},
+          {
+            portals: [
+              { id: "return:fn", kind: "return", from: "call", to: "hub" },
+            ],
+          }
+        )
+      )
+    ).toThrow(/placed on "ret"/);
+    expect(() =>
+      validateGraph(
+        withCluster({
+          portals: [
+            { id: "return:fn", kind: "return", roomId: "ret", wall: "south" },
+          ],
+        })
+      )
+    ).toThrow(/both a wall and a position/);
   });
 });
 

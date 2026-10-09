@@ -1,4 +1,4 @@
-import type { Rect, WallSide } from "@repo/types";
+import type { Port, Rect, WallSide } from "@repo/types";
 
 import { CORRIDOR_LENGTHS, CORRIDOR_WIDTH, GRID, MIN_SHARED } from "./config";
 import { snap } from "./fit";
@@ -13,8 +13,10 @@ type Extent = {
 };
 
 type Candidate = {
-  /** The wall of the anchor room the new room (or its corridor) hangs off. */
+  /** The wall of the anchor the new unit (or its corridor) hangs off. */
   readonly wall: WallSide;
+  /** The stretch of that wall it attaches to, and the room that wall belongs to. */
+  readonly port: Port;
   readonly room: Rect;
   readonly corridor: Rect | null;
 };
@@ -51,6 +53,13 @@ const makeRect = (
     ? { minX: alongLo, maxX: alongHi, minZ: crossLo, maxZ: crossHi }
     : { minZ: alongLo, maxZ: alongHi, minX: crossLo, maxX: crossHi };
 
+/** The whole of each wall: how a plain room offers itself as an anchor. */
+const fullWallPorts = (roomId: string, rect: Rect): readonly Port[] =>
+  WALLS.map((wall) => {
+    const cross = other(OUTWARD[wall].axis);
+    return { roomId, wall, lo: lo(rect, cross), hi: hi(rect, cross) };
+  });
+
 /** Every grid value in [min, max]; both ends are on the grid already. */
 const gridRange = (min: number, max: number): number[] =>
   Array.from(
@@ -83,10 +92,15 @@ const lengthOrder = (rng: Rng): number[] => {
   return [first, 0, ...CORRIDOR_LENGTHS.filter((length) => length !== first)];
 };
 
-/** Every placement of `room` off one wall of `anchor`, with or without a corridor. */
+/**
+ * Every placement of `room` off one port of `anchor`, with or without a
+ * corridor. A direct contact overlaps the port by at least MIN_SHARED; a
+ * corridor starts inside it.
+ */
 const candidatesOnWall = (
   rng: Rng,
   anchor: Rect,
+  port: Port,
   room: Extent,
   wall: WallSide,
   length: number
@@ -100,8 +114,8 @@ const candidatesOnWall = (
   const far = near + sign * along;
   const [roomLo, roomHi] = sign > 0 ? [near, far] : [far, near];
   const [corridorLo, corridorHi] = sign > 0 ? [edge, near] : [near, edge];
-  const anchorLo = lo(anchor, cross);
-  const anchorHi = hi(anchor, cross);
+  const anchorLo = port.lo;
+  const anchorHi = port.hi;
   const anchorMid = (anchorLo + anchorHi) / 2;
 
   // Corner-first packing keeps the middle of long walls free for later
@@ -114,13 +128,14 @@ const candidatesOnWall = (
       anchorHi - MIN_SHARED
     ).map((start) => ({
       wall,
+      port,
       room: makeRect(axis, roomLo, roomHi, start, start + across),
       corridor: null,
     }));
   }
 
-  // The corridor end must sit fully inside the anchor wall, and the room's
-  // wall must fully contain the corridor's other end.
+  // The corridor end must sit fully inside the port, and the room's wall
+  // must fully contain the corridor's other end.
   return offsets(
     rng,
     [anchorLo, anchorHi - CORRIDOR_WIDTH, anchorMid - CORRIDOR_WIDTH / 2],
@@ -140,6 +155,7 @@ const candidatesOnWall = (
       corridorStart
     ).map((start) => ({
       wall,
+      port,
       room: makeRect(axis, roomLo, roomHi, start, start + across),
       corridor: makeRect(
         axis,
@@ -153,14 +169,17 @@ const candidatesOnWall = (
 };
 
 /**
- * Candidate placements of `room` next to `anchor`, in priority order. Each
- * call of the returned function yields the next wall-and-length batch, so a
- * caller that finds a fit early never builds the rest.
+ * Candidate placements next to `anchor`, in priority order. Each call of the
+ * returned function yields the next wall-and-length batch (every port on
+ * that wall; a wall without one yields nothing and draws no random numbers),
+ * so a caller that finds a fit early never builds the rest. `footprint`
+ * gives the extent to place for a wall, which a rotated unit changes.
  */
 const candidateBatches = (
   rng: Rng,
   anchor: Rect,
-  room: Extent
+  ports: readonly Port[],
+  footprint: (wall: WallSide) => Extent
 ): (() => Candidate[] | null) => {
   const walls = shuffle(rng, WALLS);
   const lengths = lengthOrder(rng);
@@ -172,9 +191,13 @@ const candidateBatches = (
       return null;
     }
     index += 1;
-    return candidatesOnWall(rng, anchor, room, wall, length);
+    return ports
+      .filter((port) => port.wall === wall)
+      .flatMap((port) =>
+        candidatesOnWall(rng, anchor, port, footprint(wall), wall, length)
+      );
   };
 };
 
-export { candidateBatches, hi, lo, makeRect, OUTWARD };
-export type { Axis, Candidate };
+export { candidateBatches, fullWallPorts, hi, lo, makeRect, OUTWARD };
+export type { Axis, Candidate, Extent };

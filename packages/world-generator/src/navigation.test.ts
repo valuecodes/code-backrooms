@@ -1,6 +1,7 @@
 import type { BuiltPortal, GeneratedWorld, Point } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
+import { clusterWorld } from "./cluster-world";
 import { roomBounds } from "./geometry";
 import { containsPoint } from "./locate";
 import { createNavigator } from "./navigation";
@@ -251,6 +252,32 @@ describe("createNavigator", () => {
       position: world.built.start,
       facing: world.built.facing,
     });
+  });
+
+  it("treats the rooms of a cluster as one unit with the door on any of them", () => {
+    const generated = clusterWorld();
+    const nav = createNavigator(generated);
+    const inside = run(nav, [room("hub"), room("step"), room("call")]);
+    expect(inside.state).toEqual({ frames: [], roomId: "fn" });
+    const entered = nav.step(inside.state, room("callee"));
+    expect(entered.state.roomId).toBe("callee");
+    expect(entered.state.frames).toEqual([
+      expect.objectContaining({
+        portalId: null,
+        callerRoomId: "fn",
+        calleeRoomId: "callee",
+      }),
+    ]);
+    const returnTo = entered.state.frames[0]?.returnTo.position ?? {
+      x: 0,
+      z: 0,
+    };
+    expect(inRoom(generated, "call", returnTo)).toBe(true);
+    const back = nav.step(entered.state, room("call"));
+    expect(back.state).toEqual({ frames: [], roomId: "fn" });
+    const exit = nav.step(back.state, { type: "back" });
+    expect(exit.state).toEqual({ frames: [], roomId: "hub" });
+    expect(exit.teleport?.position).toEqual(generated.built.start);
   });
 
   it("ignores unknown portals and never mutates its input", () => {

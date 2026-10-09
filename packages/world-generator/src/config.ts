@@ -58,12 +58,41 @@ const PORTAL_TRIGGER_DEPTH = 0.45;
  */
 const ARRIVAL_INSET = 1;
 
+// Unit interiors (a function laid out as a column of flow rooms).
+
+/** Width of one lane of an interior: a corridor's width. */
+const FLOW_LANE_WIDTH = 2;
+/** The entry room is at least this wide and deep: room for the door in and a port. */
+const FLOW_TOP_MIN_WIDTH = 4;
+const FLOW_TOP_MIN_DEPTH = 4;
+/**
+ * Depth of a room with a call: its side wall then hosts a callee door or a
+ * portal, which needs 2.5 m of wall (a frame plus PORTAL_GAP at each end).
+ */
+const FLOW_CALL_DEPTH = 3;
+/** Depth of an await, return or jump room without a call. */
+const FLOW_LEAF_DEPTH = 2;
+/** A step room grows with its statements up to this depth. */
+const FLOW_STEP_DEPTH_MAX = 8;
+/** Centre spacing of portals pre-placed on one wall (> DOOR_WIDTH + PORTAL_GAP). */
+const FLOW_PORTAL_PITCH = 2;
+/** An interior is folded until it fits in this many metres and rooms. */
+const FLOW_BUDGET = { depth: 96, rooms: 64 } as const;
+
 export {
   ARRIVAL_INSET,
   CORRIDOR_LENGTHS,
   CORRIDOR_WIDTH,
   DOOR_HEIGHT,
   DOOR_WIDTH,
+  FLOW_BUDGET,
+  FLOW_CALL_DEPTH,
+  FLOW_LANE_WIDTH,
+  FLOW_LEAF_DEPTH,
+  FLOW_PORTAL_PITCH,
+  FLOW_STEP_DEPTH_MAX,
+  FLOW_TOP_MIN_DEPTH,
+  FLOW_TOP_MIN_WIDTH,
   GRID,
   MAX_CORRIDOR_LENGTH,
   MAX_DEGREE,

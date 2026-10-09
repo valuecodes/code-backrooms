@@ -10,6 +10,7 @@
     "./graph": "./src/graph.ts",
     "./interaction": "./src/interaction.ts",
     "./layout": "./src/layout.ts",
+    "./layout-checks": "./src/layout-checks.ts",
     "./locate": "./src/locate.ts",
     "./navigation": "./src/navigation.ts",
     "./presets": "./src/presets.ts",

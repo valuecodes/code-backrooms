@@ -1,9 +1,7 @@
 import type { CodeGraph } from "@repo/code-graph";
-import {
-  portalSubject,
-  roomSubject,
-  toWorldGraph,
-} from "@repo/code-graph/world-graph";
+import { portalSubject, roomSubject } from "@repo/code-graph/subjects";
+import type { RoomSubject } from "@repo/code-graph/subjects";
+import { toWorldGraph } from "@repo/code-graph/world-graph";
 import { buildCodeGraph } from "@repo/parser";
 import type { GeneratedWorld } from "@repo/types";
 import { generateWorld } from "@repo/world-generator";
@@ -35,9 +33,15 @@ const codeGraphOf = (name: ExampleName): CodeResult => {
 const worldFromCode = (codeGraph: CodeGraph, seed: number): GeneratedWorld =>
   generateWorld({ seed, graph: toWorldGraph(codeGraph) });
 
-/** `Class.method()` for a function room, the path for a hub, the id otherwise. */
+const subjectOf = (
+  codeGraph: CodeGraph | null,
+  roomId: string
+): RoomSubject | null =>
+  codeGraph === null ? null : roomSubject(codeGraph, roomId);
+
+/** `Class.method()` for a function or one of its rooms, the path for a hub, the id otherwise. */
 const labelOf = (codeGraph: CodeGraph | null, roomId: string): string => {
-  const subject = codeGraph === null ? null : roomSubject(codeGraph, roomId);
+  const subject = subjectOf(codeGraph, roomId);
   if (subject === null) {
     return roomId;
   }
@@ -47,17 +51,20 @@ const labelOf = (codeGraph: CodeGraph | null, roomId: string): string => {
 };
 
 /**
- * The HUD line for a room: the file for a hub, `file · Class.method()` for a
- * function, and the raw id for anything else (corridors, preset rooms).
+ * The HUD line for a room: the file for a hub, `file · Class.method()` for
+ * a function, `file · Class.method() · await fetch(…)` for a room of its
+ * flow, and the raw id for anything else (corridors, preset rooms).
  */
 const describeRoom = (codeGraph: CodeGraph | null, roomId: string): string => {
-  const subject = codeGraph === null ? null : roomSubject(codeGraph, roomId);
+  const subject = subjectOf(codeGraph, roomId);
   if (subject === null) {
     return roomId;
   }
-  return subject.kind === "module"
-    ? subject.module.path
-    : `${subject.module.path} · ${subject.fn.qualifiedName}()`;
+  if (subject.kind === "module") {
+    return subject.module.path;
+  }
+  const head = `${subject.module.path} · ${subject.fn.qualifiedName}()`;
+  return subject.kind === "flow" ? `${head} · ${subject.text}` : head;
 };
 
 /** `main() → login() → validateUser()`: every caller on the stack, then here. */
@@ -74,6 +81,22 @@ const breadcrumbOf = (
     .join(" → ");
 };
 
+/** `→ await load(…)` within a function, `→ getUser()` into another one. */
+const doorPrompt = (codeGraph: CodeGraph | null, target: Target): string => {
+  if (target.kind !== "door") {
+    return "";
+  }
+  const here = subjectOf(codeGraph, target.roomId);
+  const there = subjectOf(codeGraph, target.targetRoomId);
+  const withinFunction =
+    here?.kind === "flow" &&
+    there?.kind === "flow" &&
+    here.fn.id === there.fn.id;
+  return withinFunction
+    ? `→ ${there.text}`
+    : `→ ${labelOf(codeGraph, target.targetRoomId)}`;
+};
+
 /** What stepping through the thing in front of the player would do. */
 const promptOf = (
   codeGraph: CodeGraph | null,
@@ -84,7 +107,7 @@ const promptOf = (
     return null;
   }
   if (target.kind === "door") {
-    return `→ ${labelOf(codeGraph, target.targetRoomId)}`;
+    return doorPrompt(codeGraph, target);
   }
   const subject =
     codeGraph === null ? null : portalSubject(codeGraph, target.portalId);
