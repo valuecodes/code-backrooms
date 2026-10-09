@@ -1,16 +1,21 @@
 // Places a tree of rooms in a column: rooms stack from the top, a fork puts
 // its head across the column, its lanes side by side below it and its merge
 // room across again, each lane a column of its own. Lanes are stretched to
-// the deepest one so the rooms tile the rectangle. A loop is a ring: head
-// across, body beside a back corridor, test across, end across.
+// the deepest one so the rooms tile the rectangle; a case that falls through
+// has a door from its last room into the next lane's first. A loop is a
+// ring: head across, body beside a back corridor, test across, end across.
 
 import type { ClusterDoor, ClusterPortal, LaneLabel, Port } from "@repo/types";
-import { FLOW_LANE_WIDTH, GRID } from "@repo/world-generator/config";
+import {
+  FLOW_LANE_WIDTH,
+  GRID,
+  MIN_SHARED,
+} from "@repo/world-generator/config";
 
 import { BACK_LANE, BODY_LANE, EXIT_LANE, laneWidth } from "./flow-composite";
 import type { FlowTree, ForkSpec, LaneSpec, LoopSpec } from "./flow-composite";
 import { hangCallees, newTrackers } from "./flow-hang";
-import type { Trackers } from "./flow-hang";
+import type { Side, Trackers } from "./flow-hang";
 import type { FlowRoomSpec } from "./flow-measure";
 
 /** A room while the column is built: its rect may still be stretched. */
@@ -35,6 +40,15 @@ type ColumnState = {
   readonly ports: Port[];
   readonly portals: ClusterPortal[];
 };
+
+/** Side walls a sequence's first and last rooms keep free for fallthrough doors. */
+type Edges = {
+  readonly first: ReadonlySet<Side>;
+  readonly last: ReadonlySet<Side>;
+};
+
+const NO_SIDES: ReadonlySet<Side> = new Set();
+const NO_EDGES: Edges = { first: NO_SIDES, last: NO_SIDES };
 
 /** What a placed sequence offers its neighbours: a room to enter, one to leave. */
 type Placed = {
@@ -63,7 +77,8 @@ const placeRoom = (
   x1: number,
   z: number,
   lane: LaneLabel | undefined,
-  state: ColumnState
+  state: ColumnState,
+  blocked: ReadonlySet<Side> = NO_SIDES
 ): ColumnRoom => {
   const hung = hangCallees(
     spec,
@@ -72,7 +87,8 @@ const placeRoom = (
     x1,
     state.width,
     state.trackers,
-    state.widthOf
+    state.widthOf,
+    blocked
   );
   const room: ColumnRoom = {
     id: spec.id,
@@ -110,15 +126,48 @@ const laneWidths = (
   );
 };
 
+/** A room at least `depth` deep: the room itself, or a composite's head. */
+const deepened = (item: FlowTree, depth: number): FlowTree => {
+  const grow = (spec: FlowRoomSpec): FlowRoomSpec =>
+    spec.floor >= depth
+      ? spec
+      : { ...spec, floor: depth, depth: Math.max(spec.depth, depth) };
+  return item.kind === "room" ? grow(item) : { ...item, head: grow(item.head) };
+};
+
+/**
+ * The body of a lane fallen into, its first room deep enough to share
+ * MIN_SHARED of its west wall with the last room of the lane before, which
+ * starts at `from` and is stretched to the bottom of the fork.
+ */
+const reaching = (
+  body: readonly FlowTree[],
+  top: number,
+  from: number
+): readonly FlowTree[] => {
+  const [first, ...rest] = body;
+  const depth = from + MIN_SHARED - top;
+  return first === undefined || depth <= 0
+    ? body
+    : [deepened(first, depth), ...rest];
+};
+
+/** The side walls a lane's rooms keep free for the doors of its fallthroughs. */
+const laneEdges = (lane: LaneSpec): Edges => ({
+  first: lane.fallenInto ? new Set<Side>(["west"]) : NO_SIDES,
+  last: lane.fallsThrough ? new Set<Side>(["east"]) : NO_SIDES,
+});
+
 const placeFork = (
   fork: ForkSpec,
   x0: number,
   x1: number,
   z: number,
   lane: LaneLabel | undefined,
-  state: ColumnState
+  state: ColumnState,
+  blocked: ReadonlySet<Side> = NO_SIDES
 ): Placed => {
-  const head = placeRoom(fork.head, x0, x1, z, lane, state);
+  const head = placeRoom(fork.head, x0, x1, z, lane, state, blocked);
   const top = head.maxZ;
   const widths = laneWidths(fork.lanes, x1 - x0);
   const ends: {
@@ -129,13 +178,37 @@ const placeFork = (
   }[] = [];
   let x = x0;
   let bottom = top;
+  // The last room of a lane that falls through, for the next lane's door.
+  let falling: ColumnRoom | undefined;
   for (const [index, item] of fork.lanes.entries()) {
     const width = widths[index] ?? 0;
     const from = state.rooms.length;
-    const placed = placeItems(item.body, x, x + width, top, item.label, state);
+    const body =
+      item.fallenInto && falling !== undefined
+        ? reaching(item.body, top, falling.minZ)
+        : item.body;
+    const placed = placeItems(
+      body,
+      x,
+      x + width,
+      top,
+      item.label,
+      state,
+      laneEdges(item)
+    );
     if (placed.first !== null) {
       state.doors.push({ from: head.id, to: placed.first, lane: item.label });
+      if (item.fallenInto && falling !== undefined) {
+        state.doors.push({
+          from: falling.id,
+          to: placed.first,
+          lane: item.label,
+        });
+      }
     }
+    falling = item.fallsThrough
+      ? state.rooms.find((room) => room.id === placed.last)
+      : undefined;
     ends.push({ lane: item, placed, from, to: state.rooms.length });
     bottom = Math.max(bottom, placed.bottom);
     x += width;
@@ -172,9 +245,10 @@ const placeLoop = (
   x1: number,
   z: number,
   lane: LaneLabel | undefined,
-  state: ColumnState
+  state: ColumnState,
+  blocked: ReadonlySet<Side> = NO_SIDES
 ): Placed => {
-  const head = placeRoom(loop.head, x0, x1, z, lane, state);
+  const head = placeRoom(loop.head, x0, x1, z, lane, state, blocked);
   const split = x1 - FLOW_LANE_WIDTH;
   const body = placeItems(loop.body, x0, split, head.maxZ, BODY_LANE, state);
   if (body.first !== null) {
@@ -206,19 +280,29 @@ const placeLoop = (
   return { first: head.id, last: end.id, bottom: end.maxZ };
 };
 
-/** Stacks the items from `z` between `x0` and `x1`, a door between neighbours. */
+/**
+ * Stacks the items from `z` between `x0` and `x1`, a door between
+ * neighbours. `edges` names the side walls the first room (a composite's
+ * head) and the last room keep free for fallthrough doors; a composite's
+ * last room is a merge or end room, which has no calls.
+ */
 const placeItems = (
   items: readonly FlowTree[],
   x0: number,
   x1: number,
   z: number,
   lane: LaneLabel | undefined,
-  state: ColumnState
+  state: ColumnState,
+  edges: Edges = NO_EDGES
 ): Placed => {
   let first: string | null = null;
   let last: string | null = null;
   let bottom = z;
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
+    const blocked = new Set<Side>([
+      ...(index === 0 ? edges.first : []),
+      ...(index === items.length - 1 && item.kind === "room" ? edges.last : []),
+    ]);
     if (last !== null) {
       state.doors.push({
         from: last,
@@ -227,11 +311,11 @@ const placeItems = (
     }
     let placed: Placed;
     if (item.kind === "fork") {
-      placed = placeFork(item, x0, x1, bottom, lane, state);
+      placed = placeFork(item, x0, x1, bottom, lane, state, blocked);
     } else if (item.kind === "loop") {
-      placed = placeLoop(item, x0, x1, bottom, lane, state);
+      placed = placeLoop(item, x0, x1, bottom, lane, state, blocked);
     } else {
-      const room = placeRoom(item, x0, x1, bottom, lane, state);
+      const room = placeRoom(item, x0, x1, bottom, lane, state, blocked);
       placed = {
         first: room.id,
         last: item.terminal ? null : room.id,

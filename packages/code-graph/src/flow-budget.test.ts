@@ -2,6 +2,7 @@ import { FLOW_BUDGET } from "@repo/world-generator/config";
 import { describe, expect, it } from "vitest";
 
 import type { FlowStep, FunctionNode } from "./code-graph";
+import { depthEstimate } from "./flow-composite";
 import {
   branch,
   call,
@@ -33,7 +34,42 @@ const rings = (depth: number, offset: number): FlowStep =>
     depth === 0 ? step(offset + 1, 1) : rings(depth - 1, offset + 10),
   ]);
 
+/**
+ * A switch of `count` cases, each five 5.5 m steps falling into the next
+ * but the last: each lane alone is shallow, the chain is not.
+ */
+const fallingChain = (count: number): FlowStep =>
+  switchNode(
+    1,
+    Array.from({ length: count }, (_, index) => ({
+      labels: [`case ${index}`],
+      body: [0, 1, 2, 3, 4].map((at) => step(100 + 10 * index + at, 8)),
+      fallsThrough: index < count - 1,
+    }))
+  );
+
 describe("budget", () => {
+  it("estimates a short fallthrough chain at its placed depth", () => {
+    const fn = fnWith([fallingChain(2)]);
+    const plan = planFlow(fn, []);
+    expect(depthEstimate(plan.items)).toBe(layoutFlow(plan).depth);
+  });
+
+  it("counts a fallthrough chain at its cumulative depth and folds it", () => {
+    const fn = fnWith([fallingChain(6)]);
+    const plan = planFlow(fn, []);
+    const cluster = valid(layoutFlow(plan));
+    expect(cluster.depth).toBeLessThanOrEqual(FLOW_BUDGET.depth);
+    expect(depthEstimate(measureTree(fn, indexSites([])))).toBeGreaterThan(
+      FLOW_BUDGET.depth
+    );
+    expect(depthEstimate(plan.items)).toBeGreaterThanOrEqual(cluster.depth);
+    // 30 steps fit the room budget and each lane the depth budget; only
+    // the chain's depth made them fold.
+    expect(cluster.rooms[0]?.role).toBe("switch");
+    expect(cluster.rooms.some((room) => room.role === "collapsed")).toBe(true);
+  });
+
   it("collapses the deepest forks first until the column fits the width budget", () => {
     const cluster = valid(clusterOf([nested(20, 1)]));
     expect(cluster.width).toBeLessThanOrEqual(FLOW_BUDGET.width);

@@ -5,7 +5,15 @@
 // placer walk composites through `bodiesOf` and `withBodies`.
 
 import type { LaneLabel } from "@repo/types";
-import { FLOW_LANE_WIDTH } from "@repo/world-generator/config";
+import {
+  DOOR_WIDTH,
+  FLOW_LANE_WIDTH,
+  FLOW_PORTAL_PITCH,
+  GRID,
+  MIN_SHARED,
+  PORTAL_GAP,
+  WALL_THICKNESS,
+} from "@repo/world-generator/config";
 
 import type { BranchNode, LoopNode, SwitchNode } from "./code-graph";
 import { PORT_PITCH } from "./flow-measure";
@@ -19,6 +27,10 @@ type LaneSpec = {
   readonly body: readonly FlowTree[];
   /** Control may run out of the lane's end into the merge room. */
   readonly rejoins: boolean;
+  /** A case that runs on into the next lane: its last room has a door there. */
+  readonly fallsThrough: boolean;
+  /** The lane before falls through into this one's first room. */
+  readonly fallenInto: boolean;
 };
 
 type ForkSpec = {
@@ -82,7 +94,37 @@ const ownRooms = (item: CompositeSpec): readonly FlowRoomSpec[] => {
 const bodyWidth = (body: readonly FlowTree[]): number =>
   Math.max(FLOW_LANE_WIDTH, treeWidth(body));
 
-const laneWidth = (lane: LaneSpec): number => bodyWidth(lane.body);
+/**
+ * The one room of a lane with a fallthrough door on both side walls: the
+ * lane before falls into it and it falls into the next. Its calls can only
+ * be portals on its south wall.
+ */
+const boxedRoom = (lane: LaneSpec): FlowRoomSpec | null => {
+  const [only] = lane.body;
+  return lane.fallsThrough &&
+    lane.fallenInto &&
+    lane.body.length === 1 &&
+    only?.kind === "room"
+    ? only
+    : null;
+};
+
+/** Centre of a portal to the corner of its wall: half a frame, the wall, a gap. */
+const PORTAL_MARGIN = DOOR_WIDTH / 2 + WALL_THICKNESS + PORTAL_GAP;
+
+/** The width a south wall needs for `count` portals FLOW_PORTAL_PITCH apart. */
+const southWidth = (count: number): number =>
+  count === 0
+    ? 0
+    : Math.ceil(
+        (2 * PORTAL_MARGIN + (count - 1) * FLOW_PORTAL_PITCH) / GRID - 1e-9
+      ) * GRID;
+
+const laneWidth = (lane: LaneSpec): number =>
+  Math.max(
+    bodyWidth(lane.body),
+    southWidth(boxedRoom(lane)?.callees.length ?? 0)
+  );
 
 /** A fork's lanes side by side; a loop's body beside its back corridor. */
 const compositeWidth = (item: CompositeSpec): number =>
@@ -113,6 +155,56 @@ const roomCount = (items: readonly FlowTree[]): number =>
 const placedDepth = (spec: FlowRoomSpec): number =>
   spec.callees.length > 0 ? Math.max(spec.depth, PORT_PITCH) : spec.depth;
 
+/** The depth of a sequence's first room: a room, or a composite's head. */
+const firstDepth = (body: readonly FlowTree[]): number => {
+  const [first] = body;
+  if (first === undefined) {
+    return 0;
+  }
+  return placedDepth(first.kind === "room" ? first : first.head);
+};
+
+/** The depth of a sequence's last room: a room, a merge or a loop's end. */
+const lastDepth = (body: readonly FlowTree[]): number => {
+  const last = body.at(-1);
+  switch (last?.kind) {
+    case "room": {
+      return placedDepth(last);
+    }
+    case "fork": {
+      return last.merge?.depth ?? 0;
+    }
+    case "loop": {
+      return last.end.depth;
+    }
+    case undefined:
+    default: {
+      return 0;
+    }
+  }
+};
+
+/**
+ * The depth a fork's lanes take side by side. A lane fallen into has its
+ * first room deepened to reach MIN_SHARED below the top of the last room of
+ * the lane before, so along a chain of fallthroughs the lanes step down.
+ */
+const lanesDepth = (lanes: readonly LaneSpec[]): number => {
+  let deepest = 0;
+  // The depth from the fork's top to the top of the last lane's last room.
+  let reach = 0;
+  for (const lane of lanes) {
+    const own = depthEstimate(lane.body);
+    const first = firstDepth(lane.body);
+    const depth = lane.fallenInto
+      ? own - first + Math.max(first, reach + MIN_SHARED)
+      : own;
+    deepest = Math.max(deepest, depth);
+    reach = depth - lastDepth(lane.body);
+  }
+  return deepest;
+};
+
 /** The depth a sequence will take once placed: lanes side by side count once. */
 const depthEstimate = (items: readonly FlowTree[]): number =>
   items.reduce((depth, item) => {
@@ -121,7 +213,7 @@ const depthEstimate = (items: readonly FlowTree[]): number =>
         return (
           depth +
           placedDepth(item.head) +
-          Math.max(...item.lanes.map((lane) => depthEstimate(lane.body))) +
+          lanesDepth(item.lanes) +
           (item.merge === null ? 0 : item.merge.depth)
         );
       }

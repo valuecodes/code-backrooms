@@ -204,6 +204,7 @@ describe("worldFromCode", () => {
     expect(route.map((room) => [room.role, room.label])).toEqual([
       ["switch", "switch (status)"],
       ["return", "return showDashboard(…)"],
+      ["call", "warnSuspended(…)"],
       ["fork", "if (isAppealing())"],
       ["jump", "break"],
       ["lane", "false · empty"],
@@ -217,8 +218,8 @@ describe("worldFromCode", () => {
       kind: "case",
       text: 'case "active", case "trial"',
     });
-    expect(route[7]?.lane).toEqual({ kind: "default" });
-    expect(describeRoom(codeGraph, route[8]?.id ?? "")).toBe(
+    expect(route[8]?.lane).toEqual({ kind: "default" });
+    expect(describeRoom(codeGraph, route[9]?.id ?? "")).toBe(
       "switches.ts · route() · end switch"
     );
     // The middle case touches no outer wall: its calls are hub-side portals.
@@ -226,6 +227,7 @@ describe("worldFromCode", () => {
       (portal) => portal.kind === "call"
     );
     expect(calls.map((portal) => [ownerOf(portal.from), portal.to])).toEqual([
+      ["switches.ts::route", "switches.ts::warnSuspended"],
       ["switches.ts::route", "switches.ts::isAppealing"],
       ["switches.ts::route", "switches.ts::showBanned"],
     ]);
