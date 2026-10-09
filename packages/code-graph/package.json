@@ -4,6 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/code-graph.ts",
+    "./cfg": "./src/cfg.ts",
+    "./cfg-checks": "./src/cfg-checks.ts",
     "./flow": "./src/flow.ts",
     "./flow-layout": "./src/flow-layout.ts",
     "./flow-text": "./src/flow-text.ts",

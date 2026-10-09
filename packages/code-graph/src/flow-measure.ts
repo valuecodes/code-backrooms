@@ -264,5 +264,5 @@ const emptyBodySpec = (fn: FunctionNode): FlowRoomSpec => ({
   terminal: false,
 });
 
-export { calleesOf, depthOf, emptyBodySpec, PORT_PITCH, specOf };
+export { calleesOf, depthOf, emptyBodySpec, jumpTarget, PORT_PITCH, specOf };
 export type { FlowCallee, FlowRoomSpec };
