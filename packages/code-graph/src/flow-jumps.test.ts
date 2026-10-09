@@ -1,6 +1,8 @@
 import type { RoomCluster } from "@repo/types";
+import { FLOW_MAX_CASES } from "@repo/world-generator/config";
 import { describe, expect, it } from "vitest";
 
+import type { FlowStep } from "./code-graph";
 import {
   branch,
   breakOut,
@@ -29,6 +31,16 @@ const portalsOf = (cluster: RoomCluster) =>
 
 const rolesOf = (cluster: RoomCluster) =>
   cluster.rooms.map((room) => room.role);
+
+/**
+ * Cases that pad a switch past FLOW_MAX_CASES so it stays one collapsed
+ * room, each with `body` at its own offset from `offset` up.
+ */
+const padding = (offset: number, body: (at: number) => FlowStep) =>
+  Array.from({ length: FLOW_MAX_CASES - 1 }, (_, index) => ({
+    labels: [`case ${offset + index}`],
+    body: [body(offset + index)],
+  }));
 
 /** Doors into or out of a room. */
 const doorsAt = (cluster: RoomCluster, id: string) =>
@@ -128,10 +140,42 @@ describe("jump portals", () => {
     ]);
   });
 
+  it("opens a switch whose falling-through case also breaks out of it", () => {
+    // case 1: if (s) break; a; (falls into case 2) · case 2: return · default: return
+    const cluster = valid(
+      clusterOf([
+        switchNode(1, [
+          {
+            labels: ["case 1"],
+            body: [branch(10, [breakOut(11, SWITCH)]), step(12, 1)],
+            fallsThrough: true,
+          },
+          { labels: ["case 2"], body: [ret(13)] },
+          { labels: ["default"], body: [ret(14)] },
+        ]),
+        step(20, 1),
+      ])
+    );
+    const merge = `${SWITCH}:merge`;
+    expect(portalsOf(cluster)).toContainEqual([
+      "jump",
+      "11:break",
+      "1:switch:merge",
+    ]);
+    // The case runs on into case 2, not into the merge room.
+    expect(cluster.doors).toContainEqual({
+      from: `${FN}@12:step`,
+      to: `${FN}@13:return`,
+      lane: { kind: "case", text: "case 2" },
+    });
+    expect(doorsAt(cluster, merge).map((door) => door.from)).toEqual([merge]);
+  });
+
   it("gives a collapsed room that ends by jumping out a jump portal, not a return", () => {
     const collapsed = switchNode(2, [
       { labels: ["case 1"], body: [step(10, 1)], fallsThrough: true },
       { labels: ["default"], body: [breakOut(11, LOOP)] },
+      ...padding(40, (at) => breakOut(at, LOOP)),
     ]);
     const cluster = valid(clusterOf([step(0, 1), loop(1, [collapsed])]));
     expect(rolesOf(cluster)).toEqual([
@@ -158,6 +202,7 @@ describe("jump portals", () => {
         fallsThrough: true,
       },
       { labels: ["case 2"], body: [step(12, 1)] },
+      ...padding(40, (at) => step(at, 1)),
     ]);
     const steps = [step(0, 1), loop(1, [swallowing, ret(20)]), step(30, 1)];
     const cluster = valid(clusterOf(steps));
@@ -169,14 +214,15 @@ describe("jump portals", () => {
   });
 
   it("collapses a loop that a collapsed room leaves in more than one way", () => {
-    // A falling-through case keeps the switch collapsed; it ends by leaving
-    // the loop through a break and a continue, or a break and a return,
-    // and one portal cannot show both.
+    // Too many cases keep the switch collapsed; it ends by leaving the
+    // loop through a break and a continue, or a break and a return, and
+    // one portal cannot show both.
     for (const other of [continueOut(12, LOOP), ret(12)]) {
       const mixed = switchNode(2, [
         { labels: ["case 1"], body: [step(10, 1)], fallsThrough: true },
         { labels: ["case 2"], body: [breakOut(11, LOOP)] },
         { labels: ["default"], body: [other] },
+        ...padding(40, (at) => breakOut(at, LOOP)),
       ]);
       const cluster = valid(
         clusterOf([step(0, 1), loop(1, [mixed]), step(30, 1)])
@@ -198,6 +244,7 @@ describe("jump portals", () => {
         fallsThrough: true,
       },
       { labels: ["case 2"], body: [step(12, 1)] },
+      ...padding(40, (at) => step(at, 1)),
     ]);
     const cluster = valid(
       clusterOf([step(0, 1), loop(1, [hiding, step(20, 1)]), step(30, 1)])

@@ -2,7 +2,7 @@
 // boundary (another unit can hang off them) and pre-placed portals on any
 // wall, with the depth the room must grow to for them.
 
-import type { ClusterPortal, Port } from "@repo/types";
+import type { ClusterPortal, Port, WallSide } from "@repo/types";
 import {
   FLOW_CALL_DEPTH,
   FLOW_PORTAL_PITCH,
@@ -108,7 +108,10 @@ const portHangs = (
  * past the previous port on its wall, so the room grows when the column is
  * busy on that side. Every other callee gets a pre-placed portal: below the
  * port at FLOW_PORTAL_PITCH on a wall that has one, from the top of the
- * room on a wall that does not, alternating walls.
+ * room on a wall that does not, alternating walls. A `blocked` side wall
+ * holds a fallthrough door, so it gets no portals; with both blocked they
+ * go on the south wall, centred (a room walled in like that neither
+ * rejoins nor ends, so nothing else is there).
  */
 const hangCallees = (
   spec: FlowRoomSpec,
@@ -117,11 +120,13 @@ const hangCallees = (
   x1: number,
   width: number,
   trackers: Trackers,
-  widthOf: (unitId: string) => number
+  widthOf: (unitId: string) => number,
+  blocked: ReadonlySet<Side> = new Set()
 ): Hung => {
-  const free = SIDES.filter((side) =>
-    side === "west" ? x0 === 0 : x1 === width
+  const free = SIDES.filter(
+    (side) => !blocked.has(side) && (side === "west" ? x0 === 0 : x1 === width)
   );
+  const open = SIDES.filter((side) => !blocked.has(side));
   const primary: Side =
     trackers.west.lastHi < trackers.east.lastHi ? "west" : "east";
   const hangs = portHangs(spec.callees, free, primary);
@@ -129,8 +134,13 @@ const hangCallees = (
   const extras = spec.callees.slice(Math.min(spec.callees.length, free.length));
   const firstExtraWall: Side =
     free.length === 1 ? (free[0] ?? primary) : primary;
-  const extraWall = (position: number): Side =>
-    position % 2 === 0 ? firstExtraWall : otherSide(firstExtraWall);
+  const extraWall = (position: number): WallSide => {
+    const [only] = open;
+    if (open.length === 2) {
+      return position % 2 === 0 ? firstExtraWall : otherSide(firstExtraWall);
+    }
+    return only ?? "south";
+  };
   const extrasOn = (wall: Side): number =>
     extras.filter((_, position) => extraWall(position) === wall).length;
   const spans = new Map<Side, Span>();
@@ -182,14 +192,26 @@ const hangCallees = (
     trackers[wall].lastWidth = widthOf(callee.unitId);
   }
   const portals: ClusterPortal[] = [];
-  const placedOn: Record<Side, number> = { east: 0, west: 0 };
+  const placedOn: Record<WallSide, number> = {
+    north: 0,
+    south: 0,
+    east: 0,
+    west: 0,
+  };
+  // South-wall portals are centred on the room, FLOW_PORTAL_PITCH apart.
+  const southFirst =
+    (x0 + x1) / 2 - ((extras.length - 1) * FLOW_PORTAL_PITCH) / 2;
   for (const [position, callee] of extras.entries()) {
     const wall = extraWall(position);
-    const span = spans.get(wall);
-    const along =
-      span === undefined
-        ? z + PORTAL_TAIL + FLOW_PORTAL_PITCH * placedOn[wall]
-        : span.hi + span.reach + FLOW_PORTAL_PITCH * (placedOn[wall] + 1);
+    const span = wall === "east" || wall === "west" ? spans.get(wall) : null;
+    let along: number;
+    if (wall === "south") {
+      along = southFirst + FLOW_PORTAL_PITCH * placedOn[wall];
+    } else if (span === undefined || span === null) {
+      along = z + PORTAL_TAIL + FLOW_PORTAL_PITCH * placedOn[wall];
+    } else {
+      along = span.hi + span.reach + FLOW_PORTAL_PITCH * (placedOn[wall] + 1);
+    }
     placedOn[wall] += 1;
     portals.push({
       id: callPortalId(callee.siteId),
@@ -204,4 +226,4 @@ const hangCallees = (
 };
 
 export { hangCallees, newTrackers };
-export type { Trackers };
+export type { Side, Trackers };

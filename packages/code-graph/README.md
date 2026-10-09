@@ -52,9 +52,15 @@ the renderer's tints. Doors from a head carry the lane they open onto. Ids:
 a head is its node, a merge `<node id>:merge`, an empty lane its sequence,
 a synthesised default `<switch id>:default`, so `parseFlowNodeId` and
 `./subjects` resolve them. A `break` nested inside a case jumps to the merge
-room (which then exists even when every lane ends). A switch with more than
-`FLOW_MAX_CASES` cases or with a case that falls through (no door into the
-next lane yet) stays collapsed.
+room (which then exists even when every lane ends). A case that falls
+through does not run into the merge room: its last room has a side door
+into the first room of the next lane, declared from it with the next lane's
+label (`→ case "d"`), and that first room is deepened until the two share
+enough wall for a door. The side walls holding a fallthrough door get no
+call portals; a one-room lane with such a door on both sides puts its
+portals on its south wall and is widened to fit them. Empty cases are
+merged into the next case's labels by the parser, so they share its lane.
+A switch with more than `FLOW_MAX_CASES` cases stays collapsed.
 
 A loop is a ring: a `loop-head` room across the column (its header, `for
 (const x of xs)`, or `do` for a do-while, the header's calls hanging off it),

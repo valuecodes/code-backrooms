@@ -52,7 +52,7 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   and a loop whose body ended in a jump stayed collapsed. Lane prompts only
   show walking with the flow; the way back names the room (`→ again?`).
   See `?code=loops`.
-- Milestone 8 (current): jumps. A `break` or `continue` room has a jump
+- Milestone 8: jumps. A `break` or `continue` room has a jump
   portal on its far wall: `continue` leads to the loop's `again?` room,
   `break` to `end for` / `end while`, or to `end switch` from a `break`
   nested in a case. The prompt reads like a door (`→ again?`) and the stack
@@ -60,6 +60,12 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   switch with a nested `break`; a switch with a case that falls through or
   more than six cases, a loop whose body only returns, and `try` stay one
   collapsed room. See `?code=loops` and `?code=switches`.
+- Milestone 9 (current): switch fallthrough. A case that falls through
+  has a side door from its last room into the next case's first room,
+  tinted and prompted like a lane door (`→ case "banned"`), instead of a
+  door into `end switch`; its call portals move to the other walls. Only a
+  switch with more than six cases still stays one collapsed room. See
+  `?code=switches` (`case "suspended"`).
 
 ---
 

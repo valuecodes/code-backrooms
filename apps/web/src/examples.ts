@@ -177,8 +177,9 @@ function track() {}
 
 /**
  * A switch as a head room with a door per case: merged labels, an early
- * return, a middle lane whose call can only be a portal and whose nested
- * `break` jumps to `end switch`, and a default.
+ * return, a case that falls through into the next one's room, a middle
+ * lane whose call can only be a portal and whose nested `break` jumps to
+ * `end switch`, and a default.
  */
 const switches: SourceFile = {
   path: "switches.ts",
@@ -187,6 +188,8 @@ const switches: SourceFile = {
     case "active":
     case "trial":
       return showDashboard();
+    case "suspended":
+      warnSuspended();
     case "banned":
       if (isAppealing()) {
         break;
@@ -200,6 +203,8 @@ const switches: SourceFile = {
 }
 
 function showDashboard() {}
+
+function warnSuspended() {}
 
 function isAppealing() {
   return false;

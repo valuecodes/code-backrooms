@@ -291,20 +291,6 @@ describe("switches", () => {
     ]);
   });
 
-  it("keeps a switch with a falling-through case collapsed", () => {
-    const cluster = valid(
-      clusterOf([
-        switchNode(1, [
-          { labels: ["case 1"], body: [step(5, 1)], fallsThrough: true },
-          { labels: ["case 2"], body: [ret(6)] },
-          { labels: ["default"], body: [ret(7)] },
-        ]),
-      ])
-    );
-    expect(cluster.rooms.map((room) => room.role)).toEqual(["collapsed"]);
-    expect(returnsOf(cluster).map(([id]) => id)).toEqual([`${FN}@1:switch`]);
-  });
-
   it("cuts a long list of merged case labels", () => {
     const labels = Array.from({ length: 30 }, (_, index) => `case ${index}`);
     const cluster = clusterOf([

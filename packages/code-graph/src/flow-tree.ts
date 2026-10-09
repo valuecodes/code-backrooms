@@ -74,11 +74,11 @@ const cut = (text: string): string =>
 
 /**
  * Whether a composite is laid out as a fork or a ring rather than kept
- * collapsed. A switch with a case that falls through needs a door into the
- * next lane, which does not exist yet. A loop needs a way into its test
- * and end rooms: its body running out of its end, or a jump to the loop
- * (whose portal leads there); a body that only ever returns keeps it one
- * room.
+ * collapsed. A switch opens unless it has more than FLOW_MAX_CASES cases;
+ * a case that falls through gets a door into the next lane. A loop needs a
+ * way into its test and end rooms: its body running out of its end, or a
+ * jump to the loop (whose portal leads there); a body that only ever
+ * returns keeps it one room. A `try` stays one room.
  */
 const expands = (
   node: FlowStep
@@ -88,10 +88,7 @@ const expands = (
       return true;
     }
     case "switch": {
-      return (
-        node.cases.length <= FLOW_MAX_CASES &&
-        !node.cases.some((item) => item.fallsThrough)
-      );
+      return node.cases.length <= FLOW_MAX_CASES;
     }
     case "loop": {
       return !isTerminal(node.body) || jumpsTo(node.body, node.id);
@@ -156,11 +153,21 @@ const plainSpec = (
   terminal: false,
 });
 
+/** How control leaves a lane at its end, and whether it arrives from the one before. */
+type LaneFlow = Pick<LaneSpec, "rejoins" | "fallsThrough" | "fallenInto">;
+
+/** A lane that ends or runs on into the merge room. */
+const plainLane = (body: SequenceNode): LaneFlow => ({
+  rejoins: !isTerminal(body),
+  fallsThrough: false,
+  fallenInto: false,
+});
+
 const laneOf = (
   id: string,
   label: LaneLabel,
   body: SequenceNode | null,
-  rejoins: boolean,
+  flow: LaneFlow,
   measure: Measure
 ): LaneSpec => ({
   id,
@@ -169,7 +176,7 @@ const laneOf = (
     body === null || body.steps.length === 0
       ? [plainSpec(id, "lane", emptyLaneText(label))]
       : measureSteps(body.steps, measure, false),
-  rejoins,
+  ...flow,
 });
 
 const lanesOf = (
@@ -182,19 +189,19 @@ const lanesOf = (
         node.consequent.id,
         { kind: "true" },
         node.consequent,
-        !isTerminal(node.consequent),
+        plainLane(node.consequent),
         measure
       ),
       laneOf(
         node.alternate.id,
         { kind: "false" },
         node.alternate,
-        !isTerminal(node.alternate),
+        plainLane(node.alternate),
         measure
       ),
     ];
   }
-  const lanes = node.cases.map((item) => {
+  const lanes = node.cases.map((item, index) => {
     const isDefault = item.labels.includes("default");
     const label: LaneLabel =
       isDefault && item.labels.length === 1
@@ -203,11 +210,16 @@ const lanesOf = (
             kind: isDefault ? "default" : "case",
             text: cut(item.labels.join(", ")),
           };
+    // A case that falls through runs into the next lane, not the merge.
     return laneOf(
       item.body.id,
       label,
       item.body,
-      !isTerminal(item.body),
+      {
+        rejoins: !item.fallsThrough && !isTerminal(item.body),
+        fallsThrough: item.fallsThrough,
+        fallenInto: node.cases[index - 1]?.fallsThrough ?? false,
+      },
       measure
     );
   });
@@ -221,7 +233,7 @@ const lanesOf = (
           tagged(node, "default"),
           { kind: "default" },
           null,
-          true,
+          { rejoins: true, fallsThrough: false, fallenInto: false },
           measure
         ),
       ];
