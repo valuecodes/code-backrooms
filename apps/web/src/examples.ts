@@ -138,7 +138,83 @@ function countdown(n: number): number {
 `,
 };
 
-const examples = { demo, chain, pair, service, external, portals } as const;
+/**
+ * Branches as forks: an early-return guard, then an if / else-if / else
+ * staircase whose lanes rejoin before the last call.
+ */
+const branches: SourceFile = {
+  path: "branches.ts",
+  source: `function main() {
+  const user = getUser();
+  if (!user) {
+    return showLogin();
+  }
+  if (user.admin) {
+    showAdmin();
+  } else if (user.guest) {
+    showGuest();
+  } else {
+    showDashboard();
+  }
+  track();
+}
+
+function getUser() {
+  return { admin: true, guest: false };
+}
+
+function showLogin() {}
+
+function showAdmin() {}
+
+function showGuest() {}
+
+function showDashboard() {}
+
+function track() {}
+`,
+};
+
+/**
+ * A switch as a head room with a door per case: merged labels, an early
+ * return, a middle lane whose call can only be a portal, and a default.
+ */
+const switches: SourceFile = {
+  path: "switches.ts",
+  source: `function route(status: string) {
+  switch (status) {
+    case "active":
+    case "trial":
+      return showDashboard();
+    case "banned":
+      showBanned();
+      break;
+    default:
+      showLogin();
+  }
+  track();
+}
+
+function showDashboard() {}
+
+function showBanned() {}
+
+function showLogin() {}
+
+function track() {}
+`,
+};
+
+const examples = {
+  demo,
+  chain,
+  pair,
+  service,
+  external,
+  portals,
+  branches,
+  switches,
+} as const;
 
 type ExampleName = keyof typeof examples;
 

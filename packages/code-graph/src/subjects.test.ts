@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { demoGraph, fixtureGraph } from "./fixture";
-import { layoutFlow } from "./flow-layout";
+import { layoutFlow, planFlow } from "./flow-layout";
 import { parseFlowNodeId } from "./ids";
 import { portalSubject, roomSubject } from "./subjects";
 import { toWorldGraph } from "./world-graph";
@@ -111,7 +111,7 @@ describe("roomSubject folded rooms", () => {
       throw new Error("no function");
     }
     const sites = graph.callSites.filter((site) => site.callerId === big.id);
-    const folded = layoutFlow(big, sites).rooms.find(
+    const folded = layoutFlow(planFlow(big, sites)).rooms.find(
       (room) => room.role === "collapsed"
     );
     expect(folded).toBeDefined();

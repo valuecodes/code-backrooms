@@ -1,6 +1,14 @@
 // The words for a flow room: what the HUD says when the player stands in it.
 
-import type { CallSite, FlowNode, FlowStep } from "./code-graph";
+import type { LaneLabel } from "@repo/types";
+
+import type {
+  BranchNode,
+  CallSite,
+  FlowNode,
+  FlowStep,
+  SwitchNode,
+} from "./code-graph";
 import { countStatements, walkFlow } from "./flow";
 
 const plural = (count: number, noun: string): string =>
@@ -97,5 +105,31 @@ const flowNodeText = (node: FlowStep, sites: SiteIndex): string => {
   }
 };
 
-export { flowNodeText, foldedText, indexSites, resolvedSites, siteIdsUnder };
+/** The head room of an expanded composite: `if (user)`, `switch (status)`. */
+const forkText = (node: BranchNode | SwitchNode): string =>
+  node.kind === "branch"
+    ? `if (${node.condition})`
+    : `switch (${node.discriminant})`;
+
+/** The room where the lanes of a composite rejoin. */
+const mergeText = (node: BranchNode | SwitchNode): string =>
+  node.kind === "branch" ? "end if" : "end switch";
+
+/** A lane's own words: `true`, `false`, `case "x", case "y"`, `default`. */
+const laneText = (lane: LaneLabel): string => lane.text ?? lane.kind;
+
+/** The one room of a lane with nothing in it. */
+const emptyLaneText = (lane: LaneLabel): string => `${laneText(lane)} · empty`;
+
+export {
+  emptyLaneText,
+  flowNodeText,
+  foldedText,
+  forkText,
+  indexSites,
+  laneText,
+  mergeText,
+  resolvedSites,
+  siteIdsUnder,
+};
 export type { SiteIndex };

@@ -3,7 +3,7 @@
 // Pure functions over the built world, so the rules are testable without
 // a renderer.
 
-import type { BuiltPortal, BuiltWorld, Point } from "@repo/types";
+import type { BuiltPortal, BuiltWorld, LaneLabel, Point } from "@repo/types";
 
 import { openingCentre } from "./geometry";
 import { containsPoint } from "./locate";
@@ -23,6 +23,8 @@ type Target =
       readonly roomId: string;
       /** The room on the other side, or the unit a corridor leads to. */
       readonly targetRoomId: string;
+      /** The lane the door opens onto, when it is a fork's. */
+      readonly lane?: LaneLabel;
     };
 
 /** How close a door or portal must be, in metres, to be prompted. */
@@ -111,6 +113,7 @@ const nearestTarget = (
                   kind: "door",
                   roomId,
                   targetRoomId: beyond(door.targetRoomId),
+                  ...(opening.lane === undefined ? {} : { lane: opening.lane }),
                 },
                 openingCentre(built.room, opening),
               ],

@@ -1,4 +1,5 @@
 import type { CodeGraph } from "@repo/code-graph";
+import { laneText } from "@repo/code-graph/flow-text";
 import { portalSubject, roomSubject } from "@repo/code-graph/subjects";
 import type { RoomSubject } from "@repo/code-graph/subjects";
 import { toWorldGraph } from "@repo/code-graph/world-graph";
@@ -81,10 +82,16 @@ const breadcrumbOf = (
     .join(" → ");
 };
 
-/** `→ await load(…)` within a function, `→ getUser()` into another one. */
+/**
+ * `→ true` / `→ case "x"` into a lane, `→ await load(…)` within a
+ * function, `→ getUser()` into another one.
+ */
 const doorPrompt = (codeGraph: CodeGraph | null, target: Target): string => {
   if (target.kind !== "door") {
     return "";
+  }
+  if (target.lane !== undefined) {
+    return `→ ${laneText(target.lane)}`;
   }
   const here = subjectOf(codeGraph, target.roomId);
   const there = subjectOf(codeGraph, target.targetRoomId);

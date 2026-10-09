@@ -82,8 +82,12 @@ const checkClusters = (graph: WorldGraph, layout: WorldLayout): string[] => {
       ) {
         failures.push(`${room.id} is not where its cluster puts it`);
       }
-      if (actual.kind !== "room" || actual.role !== room.role) {
-        failures.push(`${room.id} lost its kind or role`);
+      if (
+        actual.kind !== "room" ||
+        actual.role !== room.role ||
+        !sameLane(actual.lane, room.lane)
+      ) {
+        failures.push(`${room.id} lost its kind, role or lane`);
       }
       for (const door of room.doors) {
         const kept = actual.doors.some(

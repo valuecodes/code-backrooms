@@ -24,14 +24,23 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   every function has a return portal, and an exploration stack remembers
   where each function was entered. The HUD shows the stack as a breadcrumb
   and names whatever door or portal the player faces.
-- Milestone 5 (current): control flow. A function is no longer one room but a
-  column of rooms, one per top-level statement of its body: folded plain
-  statements, a call, an `await` checkpoint, a `return`; an `if`, `switch`
-  or loop is one collapsed room for now. Calls hang off the side walls of
-  the room that makes them (a door for the first call to a function, a
-  portal otherwise), the return portal sits at the end of the column, and
-  the HUD line names the room: `demo.ts · main() · if (user) · 2 statements
-· 2 calls`.
+- Milestone 5: control flow. A function is no longer one room but a column
+  of rooms, one per top-level statement of its body: folded plain
+  statements, a call, an `await` checkpoint, a `return`. Calls hang off the
+  side walls of the room that makes them (a door for the first call to a
+  function, a portal otherwise), the return portal sits at the end of the
+  column, and the HUD line names the room: `demo.ts · main() · getUser(…)`.
+- Milestone 6 (current): forks. An `if` is a fork room that opens into a
+  true lane on the left and a false lane on the right, each a column of its
+  own, rejoining in an `end if` room; a `switch` is a head room with a door
+  per case (plus a default) and an `end switch`. Lanes are tinted (sage for
+  true, dusty red for false, slate for cases, grey for default) on their
+  walls and the frames of the doors into them, the door prompt names the
+  lane (`→ true`, `→ case "active"`), an early `return` ends its lane with
+  its own return portal, and the HUD names forks and merges (`… · if
+(user)`, `… · end if`, `… · false · empty`). Loops and `try` stay one
+  collapsed room; a switch with a nested `break` or more than six cases
+  does too.
 
 ---
 

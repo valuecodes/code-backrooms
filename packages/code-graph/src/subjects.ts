@@ -1,7 +1,5 @@
 // From a world id back to the code: what a room or portal stands for.
 
-import type { RoomCluster } from "@repo/types";
-
 import type {
   CallSite,
   CodeGraph,
@@ -10,14 +8,17 @@ import type {
   ModuleNode,
 } from "./code-graph";
 import { findFlowNode } from "./flow";
-import { layoutFlow } from "./flow-layout";
+import { planFlow } from "./flow-layout";
+import type { FlowPlan } from "./flow-layout";
 import { flowNodeText, indexSites } from "./flow-text";
 import {
+  flowNodeId,
   hubModuleId,
   isFunctionId,
   parseFlowNodeId,
   parsePortalId,
 } from "./ids";
+import type { FlowNodeRef } from "./ids";
 
 type FunctionSubject = {
   readonly fn: FunctionNode;
@@ -51,18 +52,29 @@ const functionSubject = (
 const sitesOf = (graph: CodeGraph, fnId: string): readonly CallSite[] =>
   graph.callSites.filter((site) => site.callerId === fnId);
 
-/** The template is pure, so one cluster per function node is enough. */
-const clusters = new WeakMap<FunctionNode, RoomCluster>();
+/** The template is pure, so one plan per function node is enough. */
+const plans = new WeakMap<FunctionNode, FlowPlan>();
 
-const clusterOf = (graph: CodeGraph, fn: FunctionNode): RoomCluster => {
-  const cached = clusters.get(fn);
+const planOf = (graph: CodeGraph, fn: FunctionNode): FlowPlan => {
+  const cached = plans.get(fn);
   if (cached !== undefined) {
     return cached;
   }
-  const cluster = layoutFlow(fn, sitesOf(graph, fn.id));
-  clusters.set(fn, cluster);
-  return cluster;
+  const plan = planFlow(fn, sitesOf(graph, fn.id));
+  plans.set(fn, plan);
+  return plan;
 };
+
+/**
+ * The flow node a room stands for. A fork's merge room and a switch's
+ * synthesised default lane carry a tag on the composite's own id, so they
+ * resolve to the composite.
+ */
+const nodeOf = (fn: FunctionNode, roomId: string, ref: FlowNodeRef) =>
+  (ref.kind === "branch" || ref.kind === "switch") &&
+  (ref.tag === "merge" || ref.tag === "default")
+    ? findFlowNode(fn.flow, flowNodeId(ref.functionId, ref.offset, ref.kind))
+    : findFlowNode(fn.flow, roomId);
 
 /**
  * A flow room: a node of the function's flow, or the empty body's one room.
@@ -76,9 +88,7 @@ const flowSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
   if (ref === null || subject === null) {
     return null;
   }
-  const label = clusterOf(graph, subject.fn).rooms.find(
-    (room) => room.id === roomId
-  )?.label;
+  const label = planOf(graph, subject.fn).labels.get(roomId);
   if (ref.kind === "step" && ref.tag === "empty") {
     return {
       kind: "flow",
@@ -88,7 +98,7 @@ const flowSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
       text: label ?? "empty body",
     };
   }
-  const found = findFlowNode(subject.fn.flow, roomId);
+  const found = nodeOf(subject.fn, roomId, ref);
   if (found === null) {
     return null;
   }

@@ -62,6 +62,8 @@ type ClusterRoom = {
   readonly rect: Rect;
   readonly role: FlowRole;
   readonly label?: string;
+  /** The innermost lane the room lies in, for tints. */
+  readonly lane?: LaneLabel;
 };
 
 /** A door between two rooms of the same cluster; they share an edge. */
@@ -196,6 +198,8 @@ type RoomData = {
   readonly cluster?: string;
   readonly role?: FlowRole;
   readonly label?: string;
+  /** The innermost lane of its unit the room lies in, for tints. */
+  readonly lane?: LaneLabel;
   /** The wall through which this room's unit is entered; the entry room only. */
   readonly entry?: WallSide;
 };
@@ -241,7 +245,7 @@ type WallSegment = {
   readonly center: Vec3;
   readonly size: Vec3;
   readonly kind: "wall" | "lintel";
-  /** On a lintel: the lane its door opens onto. */
+  /** On a lintel the lane its door opens onto, on a wall the lane its room lies in. */
   readonly lane?: LaneLabel;
 };
 

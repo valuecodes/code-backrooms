@@ -71,14 +71,32 @@ describe("worldFromCode", () => {
     expect(world.layout.startRoomId).toBe("demo.ts");
     expect(world.layout.unresolved).toEqual([]);
     const main = roomsOf(world, "demo.ts::main");
-    expect(main.map((room) => room.role)).toEqual(["call", "collapsed"]);
+    expect(main.map((room) => room.role)).toEqual([
+      "call",
+      "fork",
+      "call",
+      "call",
+      "merge",
+    ]);
+    expect(main.map((room) => room.lane?.kind)).toEqual([
+      undefined,
+      undefined,
+      "true",
+      "false",
+      undefined,
+    ]);
     expect(describeRoom(codeGraph, main[0]?.id ?? "")).toBe(
       "demo.ts · main() · getUser(…)"
     );
     expect(describeRoom(codeGraph, main[1]?.id ?? "")).toBe(
-      "demo.ts · main() · if (user) · 2 statements · 2 calls"
+      "demo.ts · main() · if (user)"
     );
-    expect(main[1]?.label).toBe("if (user) · 2 statements · 2 calls");
+    expect(describeRoom(codeGraph, main[2]?.id ?? "")).toBe(
+      "demo.ts · main() · showDashboard(…)"
+    );
+    expect(describeRoom(codeGraph, main[4]?.id ?? "")).toBe(
+      "demo.ts · main() · end if"
+    );
     const getUser = roomsOf(world, "demo.ts::getUser");
     expect(describeRoom(codeGraph, getUser[0]?.id ?? "")).toBe(
       "demo.ts · getUser() · return loadSession(…)"
@@ -163,7 +181,107 @@ describe("worldFromCode", () => {
       to: "portals.ts::format",
       kind: "call",
     });
-    expect(world.built.portals).toHaveLength(3 + 5);
+    // Five functions end in a return portal; countdown's early return adds one.
+    expect(world.built.portals).toHaveLength(3 + 6);
+    const countdown = roomsOf(world, "portals.ts::countdown");
+    expect(countdown.map((room) => room.role)).toEqual([
+      "fork",
+      "return",
+      "lane",
+      "merge",
+      "return",
+    ]);
+  });
+
+  it("lays a switch out as a head room with a door per case", () => {
+    const codeGraph = graphOf("switches");
+    const world = worldFromCode(codeGraph, 1);
+    const route = roomsOf(world, "switches.ts::route");
+    expect(route.map((room) => [room.role, room.label])).toEqual([
+      ["switch", "switch (status)"],
+      ["return", "return showDashboard(…)"],
+      ["call", "showBanned(…)"],
+      ["call", "showLogin(…)"],
+      ["merge", "end switch"],
+      ["call", "track(…)"],
+    ]);
+    expect(route[1]?.lane).toEqual({
+      kind: "case",
+      text: 'case "active", case "trial"',
+    });
+    expect(route[3]?.lane).toEqual({ kind: "default" });
+    expect(describeRoom(codeGraph, route[4]?.id ?? "")).toBe(
+      "switches.ts · route() · end switch"
+    );
+    // The middle case touches no outer wall, so its call is a portal and
+    // showBanned hangs off the hub instead.
+    const calls = (world.graph.portals ?? []).filter(
+      (portal) => portal.kind === "call"
+    );
+    expect(calls.map((portal) => [ownerOf(portal.from), portal.to])).toEqual([
+      ["switches.ts::route", "switches.ts::showBanned"],
+    ]);
+    expect(world.graph.connections).toContainEqual({
+      from: "switches.ts",
+      to: "switches.ts::showBanned",
+    });
+    const prompts = (route[0]?.doors ?? []).map((door) =>
+      promptOf(codeGraph, [], {
+        kind: "door",
+        roomId: route[0]?.id ?? "",
+        targetRoomId: door.targetRoomId,
+        ...(door.lane === undefined ? {} : { lane: door.lane }),
+      })
+    );
+    expect(prompts).toEqual(
+      expect.arrayContaining([
+        '→ case "active", case "trial"',
+        '→ case "banned"',
+        "→ default",
+      ])
+    );
+  });
+
+  it("nests an else-if inside the false lane and names empty lanes", () => {
+    const codeGraph = graphOf("branches");
+    const world = worldFromCode(codeGraph, 1);
+    const main = roomsOf(world, "branches.ts::main");
+    expect(main.map((room) => room.role)).toEqual([
+      "call",
+      "fork",
+      "return",
+      "lane",
+      "merge",
+      "fork",
+      "call",
+      "fork",
+      "call",
+      "call",
+      "merge",
+      "merge",
+      "call",
+    ]);
+    expect(describeRoom(codeGraph, main[3]?.id ?? "")).toBe(
+      "branches.ts · main() · false · empty"
+    );
+    expect(main[7]?.lane).toEqual({ kind: "false" });
+    expect(main[8]?.lane).toEqual({ kind: "true" });
+    const fork = main[1];
+    expect(
+      promptOf(codeGraph, [], {
+        kind: "door",
+        roomId: fork?.id ?? "",
+        targetRoomId: main[2]?.id ?? "",
+        lane: { kind: "true" },
+      })
+    ).toBe("→ true");
+    expect(
+      promptOf(codeGraph, [], {
+        kind: "door",
+        roomId: main[3]?.id ?? "",
+        targetRoomId: main[4]?.id ?? "",
+      })
+    ).toBe("→ end if");
   });
 
   it("words the breadcrumb and the prompts", () => {
