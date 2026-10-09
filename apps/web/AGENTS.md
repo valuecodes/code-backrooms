@@ -18,8 +18,10 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   (`@repo/code-graph`) and laid out by the same generator; the HUD names the
   file and function the player is standing in. The app itself is thin:
   parsing, generation and rendering all live in `packages/`.
-- Milestone 4 (current): call navigation. Calls are doors (the first caller)
-  or teleport portals (every other caller, recursion), every function room
+- Milestone 4 (current): call navigation. Each function has one call door
+  (from the caller that first reaches it in a breadth-first walk from the
+  file's roots, at most five doors out of a room); every other call is a
+  teleport portal (extra callers, recursion), every function room
   has a return portal, and an exploration stack remembers where each function
   was entered. The HUD shows the stack as a breadcrumb and names whatever
   door or portal the player faces.
@@ -85,9 +87,9 @@ Code → graph → layout → rendering, each in its own package:
 - `@repo/parser` parses one file with `@babel/parser` into functions and call
   sites (resolved, external or unresolved).
 - `@repo/code-graph` holds the language-independent `CodeGraph` types and the
-  spatial grammar: one room per function, one hub room per file, a door for
-  the first call to each function and a portal for every other call, plus a
-  return portal per function room.
+  spatial grammar: one room per function, one hub room per file, one call
+  door per function (a breadth-first tree over the calls, capped per room)
+  and a portal for every other call, plus a return portal per function room.
 - `@repo/types` holds the world data shapes for the three layers below.
 - `@repo/world-generator` turns a `WorldGraph` (rooms, connections, portals)
   into a `WorldLayout` (rooms and corridor-rooms with positions, doors and

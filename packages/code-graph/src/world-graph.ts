@@ -51,9 +51,13 @@ type ModulePlan = {
 /**
  * Which calls become doors: a breadth-first walk of the module's call graph
  * from its roots, each function entered once, at most MAX_CALL_DOORS doors
- * out of a room. A directed walk from the roots misses functions that only
- * cycles reach (`a <-> b` called by nobody else), so whatever is left over
- * is attached to the hub in source order and walked from there.
+ * out of a room. The door therefore belongs to the caller that first
+ * reaches a function in that walk, which is usually but not always its
+ * first caller in source order: a caller past its cap leaves the callee for
+ * a later one to reach by door. A directed walk from the roots misses
+ * functions that only cycles reach (`a <-> b` called by nobody else), so
+ * whatever is left over is attached to the hub in source order and walked
+ * from there.
  */
 const planModule = (
   graph: CodeGraph,
