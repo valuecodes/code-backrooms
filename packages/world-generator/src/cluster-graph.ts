@@ -2,7 +2,13 @@
 
 import type { GraphRoom, Rect, RoomCluster } from "@repo/types";
 
-import { GRID, MIN_SHARED } from "./config";
+import {
+  DOOR_WIDTH,
+  GRID,
+  MIN_SHARED,
+  PORTAL_GAP,
+  WALL_THICKNESS,
+} from "./config";
 import { rectsOverlap, sharedEdge } from "./fit";
 import { wallAxis } from "./geometry";
 
@@ -24,6 +30,7 @@ const clusterRects = (
 ): Map<string, Rect> => {
   const { width, depth } = cluster;
   const rects = new Map<string, Rect>();
+  let area = 0;
   const box = {
     minX: Infinity,
     maxX: -Infinity,
@@ -57,16 +64,19 @@ const clusterRects = (
       }
     }
     rects.set(room.id, rect);
+    area += (rect.maxX - rect.minX) * (rect.maxZ - rect.minZ);
     box.minX = Math.min(box.minX, rect.minX);
     box.maxX = Math.max(box.maxX, rect.maxX);
     box.minZ = Math.min(box.minZ, rect.minZ);
     box.maxZ = Math.max(box.maxZ, rect.maxZ);
   }
+  // Apart, inside, reaching every side and summing to the area: a tiling.
   if (
     box.minX !== 0 ||
     box.minZ !== 0 ||
     box.maxX !== width ||
-    box.maxZ !== depth
+    box.maxZ !== depth ||
+    Math.abs(area - width * depth) > 1e-9
   ) {
     throw new Error(
       `Cluster "${id}" rooms do not fill its ${width} x ${depth} rectangle`
@@ -185,7 +195,8 @@ const validateCluster = (
     throw new Error(`Cluster "${room.id}" must have exactly one entry port`);
   }
   for (const portal of cluster.portals) {
-    if (!rects.has(portal.roomId)) {
+    const rect = rects.get(portal.roomId);
+    if (rect === undefined) {
       throw new Error(
         `Cluster portal "${portal.id}" sits on unknown room "${portal.roomId}"`
       );
@@ -194,6 +205,23 @@ const validateCluster = (
       throw new Error(
         `Cluster portal "${portal.id}" needs both a wall and a position, or neither`
       );
+    }
+    if (portal.wall !== undefined && portal.along !== undefined) {
+      const [lo, hi] =
+        wallAxis(portal.wall) === "x"
+          ? [rect.minX, rect.maxX]
+          : [rect.minZ, rect.maxZ];
+      const margin = DOOR_WIDTH / 2 + WALL_THICKNESS + PORTAL_GAP;
+      if (
+        !Number.isFinite(portal.along) ||
+        !onGrid(portal.along * 2) ||
+        portal.along < lo + margin ||
+        portal.along > hi - margin
+      ) {
+        throw new Error(
+          `Cluster portal "${portal.id}" at ${portal.along} is off the lattice or too near a corner of its ${portal.wall} wall`
+        );
+      }
     }
   }
 };

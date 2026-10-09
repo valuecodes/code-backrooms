@@ -1,7 +1,7 @@
 // Walking and judging flow trees. Pure functions over the node family in
 // code-graph.ts; nothing here knows about parsers or rooms.
 
-import type { FlowNode } from "./code-graph";
+import type { FlowNode, SwitchNode } from "./code-graph";
 
 /** The nodes one level down: lanes, case bodies, loop bodies, steps. */
 const childrenOf = (node: FlowNode): readonly FlowNode[] => {
@@ -48,18 +48,43 @@ const walkFlow = (
   }
 };
 
-/** Whether a `break` anywhere under `node` leaves `targetId`. */
-const breaksOutOf = (node: FlowNode, targetId: string): boolean =>
-  node.kind === "break"
-    ? node.targetId === targetId
-    : childrenOf(node).some((child) => breaksOutOf(child, targetId));
+/** Whether a `break` (or, with `continues`, a `continue`) under `node` targets `targetId`. */
+const jumpsOutOf = (
+  node: FlowNode,
+  targetId: string,
+  continues: boolean
+): boolean => {
+  if (node.kind === "break" || (continues && node.kind === "continue")) {
+    return node.targetId === targetId;
+  }
+  return childrenOf(node).some((child) =>
+    jumpsOutOf(child, targetId, continues)
+  );
+};
+
+/**
+ * Whether every way into the cases ends: a case ends when its body does, or
+ * when it falls through into a case that ends.
+ */
+const casesEnd = (cases: SwitchNode["cases"]): boolean => {
+  let nextEnds = false;
+  for (const item of [...cases].reverse()) {
+    nextEnds = isTerminal(item.body) || (item.fallsThrough && nextEnds);
+    if (!nextEnds) {
+      return false;
+    }
+  }
+  return true;
+};
 
 /**
  * Whether control never runs past the node: a jump, a branch whose lanes
  * both are, a switch that covers `default`, ends every case and is never
- * broken out of, a try whose finalizer ends or whose block and handler both
- * end, a sequence by its last step. Loops never are (their condition may
- * fail at once), nor plain steps, calls and awaits.
+ * broken out of (a case that falls through ends when the next one does), a
+ * try whose finalizer ends or whose block and handler both end, a do-while
+ * whose body ends and is never left by a jump, a sequence by its last step.
+ * Other loops never are (their condition may fail at once), nor plain
+ * steps, calls and awaits.
  */
 const isTerminal = (node: FlowNode): boolean => {
   switch (node.kind) {
@@ -81,17 +106,23 @@ const isTerminal = (node: FlowNode): boolean => {
     case "switch": {
       return (
         node.cases.some((item) => item.labels.includes("default")) &&
-        node.cases.every(
-          (item) => isTerminal(item.body) && !item.fallsThrough
-        ) &&
-        !node.cases.some((item) => breaksOutOf(item.body, node.id))
+        casesEnd(node.cases) &&
+        !node.cases.some((item) => jumpsOutOf(item.body, node.id, false))
+      );
+    }
+    case "loop": {
+      // A do-while runs its body once before testing; any other loop may
+      // not run at all.
+      return (
+        node.loopKind === "do-while" &&
+        isTerminal(node.body) &&
+        !jumpsOutOf(node.body, node.id, true)
       );
     }
     case "sequence": {
       const last = node.steps.at(-1);
       return last !== undefined && isTerminal(last);
     }
-    case "loop":
     case "step":
     case "call":
     case "await":

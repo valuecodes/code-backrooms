@@ -73,6 +73,11 @@ const validateGraph = (graph: WorldGraph): void => {
     }
     for (const portal of room.cluster.portals) {
       if (portal.wall !== undefined) {
+        if (placedPortals.has(portal.id)) {
+          throw new Error(
+            `Portal "${portal.id}" is placed by more than one cluster room`
+          );
+        }
         placedPortals.set(portal.id, portal.roomId);
       }
     }

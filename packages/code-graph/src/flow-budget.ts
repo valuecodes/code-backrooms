@@ -80,8 +80,9 @@ const shallowestPair = (specs: readonly FlowRoomSpec[]): number => {
 /**
  * Folds until the column is within budget or nothing more can fold. A
  * folded room keeps its first room's id, so the HUD still resolves it; its
- * label carries the true counts. Collapsed depth is capped, so a handful of
- * rooms always fits.
+ * label carries the true counts. The budget is a target, not a guarantee:
+ * a collapsed room's own depth is capped, but the wall its distinct callees
+ * need is not, so a room calling very many functions can still exceed it.
  */
 const foldToBudget = (
   specs: readonly FlowRoomSpec[]

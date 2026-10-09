@@ -82,9 +82,7 @@ const jumpOf = (
   if (target === undefined) {
     return null;
   }
-  if (isBreak) {
-    context.broken.add(target.id);
-  }
+  (isBreak ? context.broken : context.continued).add(target.id);
   return isBreak
     ? {
         id: flowNodeId(context.functionId, span.start, "break"),
@@ -265,6 +263,7 @@ const buildFlow = ({
     byNode,
     targets: [],
     broken: new Set(),
+    continued: new Set(),
     depth: 0,
     run: runOf,
   };
