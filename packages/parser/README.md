@@ -29,6 +29,26 @@ globals (`console.log`, `fetch`, `new Map()`) are external. Imports,
 `obj.method()`, `super.x()` and computed callees are unresolved; cross-file
 resolution is a later milestone.
 
+Each function also carries its body as control flow (`FunctionNode.flow`, a
+`SequenceNode`), built after the calls are resolved so every statement can
+name the call sites inside it. Plain statements fold into one `step`; a
+statement holding a resolved call (callbacks included) is a `call`; one
+containing an `await` is an `await`; `return` and `throw` are `return`
+nodes, as is an expression-bodied arrow; `if` is a `branch` with `then`/`else`
+lanes (a missing `else` is an empty lane, `else if` a branch inside the
+alternate); `switch` keeps its cases with their labels, merges empty cases
+into the next body, drops a trailing `break` and flags `fallsThrough`; the
+five loop statements are `loop` nodes with their header text; `break` and
+`continue` name the loop or switch they leave. Statements after a terminal
+one are dropped as dead code. Nested named functions, classes and type
+declarations are not part of the enclosing flow.
+
+Flow limitations: `try`/`catch`/`finally` flatten into one run (the finalizer
+is kept after a `return`); a `break` out of a labelled block folds into a
+step; `return await x()` is a return, not a checkpoint; an `await` inside a
+condition or loop header is not a checkpoint; condition and header text is
+cut at 60 characters.
+
 Not represented yet: object-literal methods and class expressions (their calls
 count, their `this` is unresolved), `declare` overloads, decorators, computed
 keys, and block-level shadowing (a binding anywhere in a function shadows

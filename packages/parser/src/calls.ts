@@ -19,19 +19,18 @@ import type {
   CallKind,
   CallResolution,
   CallSite,
-  FunctionNode,
 } from "@repo/code-graph";
 import { callSiteId } from "@repo/code-graph/ids";
 
 import type { Discovered } from "./functions";
 import { KNOWN_GLOBALS } from "./globals";
-import type { ClassTable, Scope } from "./scope";
+import type { ClassTable, DiscoveredFunction, Scope } from "./scope";
 import { spanOf } from "./span";
 import { childrenOf, guardDepth } from "./walk";
 
 type Resolved = {
   readonly calleeName: string;
-  readonly target: FunctionNode | null;
+  readonly target: DiscoveredFunction | null;
   readonly resolution: CallResolution;
 };
 
@@ -47,7 +46,10 @@ const external = (calleeName: string): Resolved => ({
   resolution: "external",
 });
 
-const resolved = (calleeName: string, target: FunctionNode): Resolved => ({
+const resolved = (
+  calleeName: string,
+  target: DiscoveredFunction
+): Resolved => ({
   calleeName,
   target,
   resolution: "resolved",

@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   callPortalId,
   callSiteId,
+  flowNodeId,
   functionId,
   isFunctionId,
   moduleId,
+  parseFlowNodeId,
   parsePortalId,
   returnPortalId,
   uniqueNames,
@@ -54,6 +56,40 @@ describe("portal ids", () => {
     expect(parsePortalId("corridor-1")).toBeNull();
     expect(parsePortalId("demo.ts::main")).toBeNull();
     expect(parsePortalId("")).toBeNull();
+  });
+});
+
+describe("flow node ids", () => {
+  it("round-trips kinds and tags, splitting on the last @", () => {
+    const plain = flowNodeId("src/a@b.ts::Svc.load", 12, "branch");
+    expect(plain).toBe("src/a@b.ts::Svc.load@12:branch");
+    expect(parseFlowNodeId(plain)).toEqual({
+      functionId: "src/a@b.ts::Svc.load",
+      offset: 12,
+      kind: "branch",
+    });
+    const tagged = flowNodeId("src/a@b.ts::f", 0, "sequence", "body");
+    expect(tagged).toBe("src/a@b.ts::f@0:sequence:body");
+    expect(parseFlowNodeId(tagged)).toEqual({
+      functionId: "src/a@b.ts::f",
+      offset: 0,
+      kind: "sequence",
+      tag: "body",
+    });
+    expect(parseFlowNodeId(flowNodeId("t.ts::f", 7, "case"))).toMatchObject({
+      kind: "case",
+      offset: 7,
+    });
+  });
+
+  it("rejects call-site, hub, portal, module and malformed ids", () => {
+    expect(parseFlowNodeId("demo.ts::main@42")).toBeNull();
+    expect(parseFlowNodeId("demo.ts#2")).toBeNull();
+    expect(parseFlowNodeId("portal:demo.ts::main@42")).toBeNull();
+    expect(parseFlowNodeId("src/@x:y.ts")).toBeNull();
+    expect(parseFlowNodeId("demo.ts::main@42:room")).toBeNull();
+    expect(parseFlowNodeId("@12:step")).toBeNull();
+    expect(parseFlowNodeId("")).toBeNull();
   });
 });
 

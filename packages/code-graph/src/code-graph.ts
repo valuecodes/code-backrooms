@@ -34,6 +34,119 @@ type FunctionKind =
   | "getter"
   | "setter";
 
+// ---------------------------------------------------------------------------
+// Control flow inside a function: a tree of statements and composites, one
+// node per thing the world may give a room. Ids are `${functionId}@${offset}:
+// ${kind}[:${tag}]`; a sequence takes its owner's offset (the function, the
+// `if`, the loop or the case), every other node its own.
+
+/** Every flow node names where it came from. */
+type FlowNodeBase = {
+  readonly id: string;
+  readonly span: SourceSpan;
+};
+
+/** Plain statements folded together: nothing to walk into. */
+type StepNode = FlowNodeBase & {
+  readonly kind: "step";
+  readonly statements: number;
+};
+
+/** A statement holding at least one resolved call (callbacks included). */
+type CallNode = FlowNodeBase & {
+  readonly kind: "call";
+  readonly callSiteIds: readonly string[];
+};
+
+/** A statement containing an `await`: a checkpoint. Wins over `call`. */
+type AwaitNode = FlowNodeBase & {
+  readonly kind: "await";
+  readonly callSiteIds: readonly string[];
+};
+
+/** `return` or, with `throws`, `throw`. `return await x()` is a return. */
+type ReturnNode = FlowNodeBase & {
+  readonly kind: "return";
+  readonly throws: boolean;
+  readonly callSiteIds: readonly string[];
+};
+
+/** `break`: `targetId` is the enclosing loop or switch it leaves. */
+type BreakNode = FlowNodeBase & {
+  readonly kind: "break";
+  readonly targetId: string;
+};
+
+/** `continue`: `targetId` is the loop it restarts. */
+type ContinueNode = FlowNodeBase & {
+  readonly kind: "continue";
+  readonly targetId: string;
+};
+
+/**
+ * `if`/`else`. `callSiteIds` are the calls in the condition only. A missing
+ * `else` is an empty alternate; `else if` is a branch inside the alternate.
+ */
+type BranchNode = FlowNodeBase & {
+  readonly kind: "branch";
+  readonly condition: string;
+  readonly callSiteIds: readonly string[];
+  readonly consequent: SequenceNode;
+  readonly alternate: SequenceNode;
+};
+
+/**
+ * One arm of a switch. `labels` read `case "x"` or `default`; empty cases are
+ * merged into the next one that has a body. `fallsThrough`: the body runs on
+ * into the next case (no trailing `break`, not terminal, not the last case).
+ */
+type SwitchCase = FlowNodeBase & {
+  readonly labels: readonly string[];
+  readonly body: SequenceNode;
+  readonly fallsThrough: boolean;
+};
+
+type SwitchNode = FlowNodeBase & {
+  readonly kind: "switch";
+  readonly discriminant: string;
+  readonly callSiteIds: readonly string[];
+  readonly cases: readonly SwitchCase[];
+};
+
+type LoopKind = "while" | "do-while" | "for" | "for-of" | "for-in";
+
+/**
+ * Any loop. `header` is the source before the body (`while (running)`,
+ * `for (const x of xs)`), for do-while the `while (…)` after it;
+ * `callSiteIds` are the calls in the header.
+ */
+type LoopNode = FlowNodeBase & {
+  readonly kind: "loop";
+  readonly loopKind: LoopKind;
+  readonly header: string;
+  readonly callSiteIds: readonly string[];
+  readonly body: SequenceNode;
+};
+
+type FlowStep =
+  | StepNode
+  | CallNode
+  | AwaitNode
+  | ReturnNode
+  | BreakNode
+  | ContinueNode
+  | BranchNode
+  | SwitchNode
+  | LoopNode;
+
+/** Statements in execution order; dead code after a terminal step is dropped. */
+type SequenceNode = FlowNodeBase & {
+  readonly kind: "sequence";
+  readonly steps: readonly FlowStep[];
+};
+
+type FlowNode = FlowStep | SequenceNode;
+
 type FunctionNode = {
   /** `${moduleId}::${qualifiedName}`, suffixed `~2`, `~3` on repeats. */
   readonly id: string;
@@ -50,7 +163,8 @@ type FunctionNode = {
   /** The enclosing named function, for nested functions. */
   readonly parentId: string | null;
   readonly className: string | null;
-  // Control flow (branches, loops, returns) is added here in a later milestone.
+  /** The body as control flow; an expression-bodied arrow is one `return`. */
+  readonly flow: SequenceNode;
 };
 
 /**
@@ -105,16 +219,30 @@ type CodeGraph = {
 };
 
 export type {
+  AwaitNode,
+  BranchNode,
+  BreakNode,
   CallEdge,
   CallKind,
+  CallNode,
   CallResolution,
   CallSite,
   CodeGraph,
   ContainmentEdge,
+  ContinueNode,
+  FlowNode,
+  FlowStep,
   FunctionKind,
   FunctionNode,
   GraphEdge,
   Language,
+  LoopKind,
+  LoopNode,
   ModuleNode,
+  ReturnNode,
+  SequenceNode,
   SourceSpan,
+  StepNode,
+  SwitchCase,
+  SwitchNode,
 };

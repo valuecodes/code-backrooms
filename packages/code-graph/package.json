@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/code-graph.ts",
+    "./flow": "./src/flow.ts",
     "./ids": "./src/ids.ts",
     "./world-graph": "./src/world-graph.ts"
   },

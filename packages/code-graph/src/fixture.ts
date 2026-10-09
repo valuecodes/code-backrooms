@@ -6,11 +6,12 @@ import type {
   CallEdge,
   CallSite,
   CodeGraph,
+  FlowStep,
   FunctionNode,
   ModuleNode,
   SourceSpan,
 } from "./code-graph";
-import { callSiteId, functionId } from "./ids";
+import { callSiteId, flowNodeId, functionId } from "./ids";
 
 type FixtureFunction = {
   readonly name: string;
@@ -36,23 +37,61 @@ const spanAt = (startLine: number, lines: number): SourceSpan => ({
   endColumn: 1,
 });
 
+/** The call site a fixture function's n-th call gets: one offset past the start. */
+const siteOffset = (span: SourceSpan, index: number): number =>
+  span.start + index + 1;
+
+/** A flow of one step covering the lines, then one call node per callee. */
+const flowOf = (
+  id: string,
+  span: SourceSpan,
+  startLine: number,
+  lines: number,
+  calls: readonly string[]
+): FunctionNode["flow"] => {
+  const lineSpan = spanAt(startLine, 1);
+  const steps: FlowStep[] = [
+    {
+      id: flowNodeId(id, span.start, "step"),
+      kind: "step",
+      span: lineSpan,
+      statements: lines,
+    },
+    ...calls.map((_, index): FlowStep => ({
+      id: flowNodeId(id, siteOffset(span, index), "call"),
+      kind: "call",
+      span: lineSpan,
+      callSiteIds: [callSiteId(id, siteOffset(span, index))],
+    })),
+  ];
+  return {
+    id: flowNodeId(id, span.start, "sequence", "body"),
+    kind: "sequence",
+    span,
+    steps,
+  };
+};
+
 const fixtureModule = (module: FixtureModule): CodeGraph => {
   const functions: FunctionNode[] = [];
   let line = 1;
   for (const fn of module.functions) {
     const lines = fn.lines ?? 3;
+    const id = functionId(module.path, fn.name);
+    const span = spanAt(line, lines);
     functions.push({
-      id: functionId(module.path, fn.name),
+      id,
       moduleId: module.path,
       name: fn.name,
       qualifiedName: fn.name,
       kind: "declaration",
-      span: spanAt(line, lines),
+      span,
       exported: false,
       async: false,
       isStatic: false,
       parentId: null,
       className: null,
+      flow: flowOf(id, span, line, lines, fn.calls ?? []),
     });
     line += lines + 1;
   }
@@ -69,7 +108,7 @@ const fixtureModule = (module: FixtureModule): CodeGraph => {
         throw new Error(`Fixture calls unknown function "${callee}"`);
       }
       const site: CallSite = {
-        id: callSiteId(caller.id, caller.span.start + offset + 1),
+        id: callSiteId(caller.id, siteOffset(caller.span, offset)),
         callerId: caller.id,
         calleeName: callee,
         calleeId: target.id,

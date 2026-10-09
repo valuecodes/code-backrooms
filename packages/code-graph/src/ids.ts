@@ -1,6 +1,8 @@
 // Stable, human-readable ids. The same source always yields the same ids, so
 // layouts, tests and URLs can refer to them.
 
+import type { FlowNode } from "./code-graph";
+
 const FUNCTION_SEPARATOR = "::";
 
 /** Forward slashes, no leading `./`, no doubled separators: "src/demo.ts". */
@@ -20,6 +22,69 @@ const callSiteId = (callerId: string, offset: number): string =>
 
 /** Module ids are paths and never contain `::`; function ids always do. */
 const isFunctionId = (id: string): boolean => id.includes(FUNCTION_SEPARATOR);
+
+/** The kinds a flow node id may carry: every FlowNode kind plus a switch case. */
+type FlowIdKind = FlowNode["kind"] | "case";
+
+const FLOW_ID_KINDS: ReadonlySet<string> = new Set<FlowIdKind>([
+  "step",
+  "call",
+  "await",
+  "return",
+  "break",
+  "continue",
+  "branch",
+  "switch",
+  "loop",
+  "sequence",
+  "case",
+]);
+
+/**
+ * A flow node inside a function: `demo.ts::main@57:branch`,
+ * `demo.ts::main@57:sequence:else`. Unlike a call-site id the tail after the
+ * last `@` always carries a `:kind`, so the two never collide.
+ */
+const flowNodeId = (
+  functionId: string,
+  offset: number,
+  kind: FlowIdKind,
+  tag?: string
+): string =>
+  `${functionId}@${offset}:${kind}${tag === undefined ? "" : `:${tag}`}`;
+
+type FlowNodeRef = {
+  readonly functionId: string;
+  readonly offset: number;
+  readonly kind: FlowIdKind;
+  readonly tag?: string;
+};
+
+const FLOW_ID_TAIL = /^(\d+):([a-z-]+)(?::([a-z]+))?$/;
+
+/**
+ * What a flow node id names, or null for anything else. Splits on the last
+ * `@` (qualified names never contain one; module paths may) and demands the
+ * `<offset>:<kind>` tail, so call-site, hub and portal ids all return null.
+ */
+const parseFlowNodeId = (id: string): FlowNodeRef | null => {
+  const at = id.lastIndexOf("@");
+  if (at <= 0) {
+    return null;
+  }
+  const match = FLOW_ID_TAIL.exec(id.slice(at + 1));
+  const kind = match?.[2];
+  if (match === null || kind === undefined || !FLOW_ID_KINDS.has(kind)) {
+    return null;
+  }
+  const tag = match[3];
+  return {
+    functionId: id.slice(0, at),
+    offset: Number(match[1]),
+    kind: kind as FlowIdKind,
+    ...(tag === undefined ? {} : { tag }),
+  };
+};
 
 const CALL_PORTAL_PREFIX = "portal:";
 const RETURN_PORTAL_PREFIX = "return:";
@@ -66,11 +131,13 @@ const uniqueNames = (): ((qualifiedName: string) => string) => {
 export {
   callPortalId,
   callSiteId,
+  flowNodeId,
   functionId,
   isFunctionId,
   moduleId,
+  parseFlowNodeId,
   parsePortalId,
   returnPortalId,
   uniqueNames,
 };
-export type { PortalRef };
+export type { FlowIdKind, FlowNodeRef, PortalRef };
