@@ -133,10 +133,11 @@ const createNavigator = (world: World): Navigator => {
   // The same default the layout applies.
   const startUnit = unitOf(world.graph.start ?? world.graph.rooms[0]?.id ?? "");
 
+  /** Pops the top frame and lands at its return point; nothing to pop stays put. */
   const pop = (state: NavigationState): Step => {
     const top = state.frames.at(-1);
     if (top === undefined) {
-      return { state: { frames: [], roomId: startUnit }, teleport: start };
+      return stay(state);
     }
     return {
       state: { frames: state.frames.slice(0, -1), roomId: top.callerRoomId },
@@ -175,15 +176,6 @@ const createNavigator = (world: World): Navigator => {
     if (hubs.has(to)) {
       return stay({ frames: [], roomId: to });
     }
-    const top = state.frames.at(-1);
-    if (
-      top !== undefined &&
-      top.portalId === null &&
-      top.callerRoomId === to &&
-      top.calleeRoomId === from
-    ) {
-      return stay({ frames: state.frames.slice(0, -1), roomId: to });
-    }
     const returnTo = from === null ? undefined : callDoors.get(from)?.get(to);
     if (from !== null && returnTo !== undefined) {
       return stay({
@@ -194,7 +186,14 @@ const createNavigator = (world: World): Navigator => {
         roomId: to,
       });
     }
-    return stay({ frames: state.frames, roomId: to });
+    // Any other move is a walk back out: the top frame must be the room the
+    // player is in, so whatever was entered on the way (by door or portal)
+    // is unwound, however the player leaves it.
+    let frames = state.frames;
+    while (frames.length > 0 && frames.at(-1)?.calleeRoomId !== to) {
+      frames = frames.slice(0, -1);
+    }
+    return stay({ frames, roomId: to });
   };
 
   const step = (state: NavigationState, event: NavigationEvent): Step => {
