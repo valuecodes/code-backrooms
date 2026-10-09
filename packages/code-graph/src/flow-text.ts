@@ -26,19 +26,25 @@ const siteIdsUnder = (node: FlowNode): readonly string[] => {
   return ids;
 };
 
+/** Sites by id, built once per function so lookups stay cheap. */
+type SiteIndex = ReadonlyMap<string, CallSite>;
+
+const indexSites = (sites: readonly CallSite[]): SiteIndex =>
+  new Map(sites.map((site) => [site.id, site]));
+
 const resolvedSites = (
   ids: readonly string[],
-  sites: readonly CallSite[]
+  sites: SiteIndex
 ): readonly CallSite[] =>
   ids.flatMap((id) => {
-    const site = sites.find((candidate) => candidate.id === id);
+    const site = sites.get(id);
     return site?.resolution === "resolved" ? [site] : [];
   });
 
 const callee = (site: CallSite): string => `${site.calleeName}(…)`;
 
 /** ` · 4 statements · 2 calls` for a composite's own statements and calls. */
-const summary = (node: FlowStep, sites: readonly CallSite[]): string =>
+const summary = (node: FlowStep, sites: SiteIndex): string =>
   ` · ${foldedText(
     countStatements(node) - 1,
     resolvedSites(siteIdsUnder(node), sites).length
@@ -48,7 +54,7 @@ const summary = (node: FlowStep, sites: readonly CallSite[]): string =>
  * One line per room: `3 statements`, `getUser(…)`, `await fetch(…)`,
  * `return loadSession(…)`, `if (user) · 2 statements · 2 calls`.
  */
-const flowNodeText = (node: FlowStep, sites: readonly CallSite[]): string => {
+const flowNodeText = (node: FlowStep, sites: SiteIndex): string => {
   switch (node.kind) {
     case "step": {
       return statementsText(node.statements);
@@ -58,7 +64,7 @@ const flowNodeText = (node: FlowStep, sites: readonly CallSite[]): string => {
       return [...new Set(names)].join(", ");
     }
     case "await": {
-      const awaited = sites.find(
+      const awaited = [...sites.values()].find(
         (site) =>
           site.span.start >= node.span.start && site.span.end <= node.span.end
       );
@@ -80,6 +86,9 @@ const flowNodeText = (node: FlowStep, sites: readonly CallSite[]): string => {
         node.loopKind === "do-while" ? `do … ${node.header}` : node.header;
       return `${head}${summary(node, sites)}`;
     }
+    case "try": {
+      return `try${summary(node, sites)}`;
+    }
     case "break":
     case "continue":
     default: {
@@ -88,4 +97,5 @@ const flowNodeText = (node: FlowStep, sites: readonly CallSite[]): string => {
   }
 };
 
-export { flowNodeText, foldedText, resolvedSites, siteIdsUnder };
+export { flowNodeText, foldedText, indexSites, resolvedSites, siteIdsUnder };
+export type { SiteIndex };

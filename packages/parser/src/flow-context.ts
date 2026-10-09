@@ -42,6 +42,12 @@ type Run = {
   readonly terminal: boolean;
 };
 
+/** A composite step with its terminality, known from the runs it was built from. */
+type Built = {
+  readonly node: FlowStep;
+  readonly terminal: boolean;
+};
+
 type FlowContext = {
   readonly functionId: string;
   readonly source: string;
@@ -51,6 +57,8 @@ type FlowContext = {
   readonly byNode: ReadonlyMap<Node, unknown>;
   /** Innermost last. */
   readonly targets: readonly Target[];
+  /** Ids of the loops and switches a `break` leaves; shared by every level. */
+  readonly broken: Set<string>;
   readonly depth: number;
   /** The statement walker, for composites to build their bodies with. */
   readonly run: (statements: readonly Statement[], context: FlowContext) => Run;
@@ -116,4 +124,4 @@ const sequenceNode = (
 ): SequenceNode => ({ id, kind: "sequence", span, steps });
 
 export { headSites, isLoop, loopKindOf, nested, sequenceNode, slice };
-export type { FlowContext, Loop, Run };
+export type { Built, FlowContext, Loop, Run };

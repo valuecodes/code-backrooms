@@ -8,12 +8,20 @@ import {
   FLOW_PORTAL_PITCH,
   FLOW_STEP_DEPTH_MAX,
   FLOW_TOP_MIN_DEPTH,
+  FLOW_TOP_MIN_WIDTH,
   GRID,
+  MIN_GAP,
 } from "@repo/world-generator/config";
 
 import type { CallSite, FlowStep, FunctionNode } from "./code-graph";
 import { countStatements } from "./flow";
-import { flowNodeText, resolvedSites, siteIdsUnder } from "./flow-text";
+import {
+  flowNodeText,
+  indexSites,
+  resolvedSites,
+  siteIdsUnder,
+} from "./flow-text";
+import type { SiteIndex } from "./flow-text";
 import { flowNodeId } from "./ids";
 
 /** A function called from a room, with the first site that calls it there. */
@@ -33,6 +41,13 @@ type FlowRoomSpec = {
   readonly callees: readonly FlowCallee[];
   readonly depth: number;
 };
+
+/**
+ * How far apart two ports on one wall must end: a callee is a cluster
+ * FLOW_TOP_MIN_WIDTH wide along the wall and keeps MIN_GAP from the
+ * previous one, which may reach MIN_GAP past its own port.
+ */
+const PORT_PITCH = FLOW_TOP_MIN_WIDTH + MIN_GAP;
 
 const snap = (value: number): number => Math.round(value / GRID) * GRID;
 
@@ -103,7 +118,7 @@ const depthOf = (
 
 const calleesOf = (
   ids: readonly string[],
-  sites: readonly CallSite[]
+  sites: SiteIndex
 ): readonly FlowCallee[] => {
   const seen = new Set<string>();
   const callees: FlowCallee[] = [];
@@ -120,7 +135,8 @@ const roleOf = (node: FlowStep): FlowRole => {
   switch (node.kind) {
     case "branch":
     case "switch":
-    case "loop": {
+    case "loop":
+    case "try": {
       return "collapsed";
     }
     case "break":
@@ -139,7 +155,7 @@ const roleOf = (node: FlowStep): FlowRole => {
 
 const specOf = (
   node: FlowStep,
-  sites: readonly CallSite[],
+  sites: SiteIndex,
   entry: boolean
 ): FlowRoomSpec => {
   const role = roleOf(node);
@@ -166,8 +182,9 @@ const measureBody = (
   fn: FunctionNode,
   sites: readonly CallSite[]
 ): readonly FlowRoomSpec[] => {
-  const specs = fn.flow.steps.map((step, index) =>
-    specOf(step, sites, index === 0)
+  const index = indexSites(sites);
+  const specs = fn.flow.steps.map((step, position) =>
+    specOf(step, index, position === 0)
   );
   if (specs.length > 0) {
     return specs;
@@ -185,5 +202,5 @@ const measureBody = (
   ];
 };
 
-export { depthOf, measureBody };
+export { depthOf, measureBody, PORT_PITCH };
 export type { FlowCallee, FlowRoomSpec };

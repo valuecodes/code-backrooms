@@ -41,7 +41,12 @@ const sitesByCaller = (
 ): ReadonlyMap<string, readonly CallSite[]> => {
   const groups = new Map<string, CallSite[]>();
   for (const site of sites) {
-    groups.set(site.callerId, [...(groups.get(site.callerId) ?? []), site]);
+    const group = groups.get(site.callerId);
+    if (group === undefined) {
+      groups.set(site.callerId, [site]);
+    } else {
+      group.push(site);
+    }
   }
   return groups;
 };

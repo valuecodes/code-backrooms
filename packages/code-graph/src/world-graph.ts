@@ -58,7 +58,12 @@ const planModule = (
   const outgoing = new Map<string, CallEdge[]>();
   for (const edge of graph.edges) {
     if (edge.type === "call" && ids.has(edge.source)) {
-      outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge]);
+      const edges = outgoing.get(edge.source);
+      if (edges === undefined) {
+        outgoing.set(edge.source, [edge]);
+      } else {
+        edges.push(edge);
+      }
     }
   }
   const visited = new Set<string>();
@@ -134,10 +139,12 @@ type Realised = {
 
 /**
  * A function's cluster once the doors are decided: the entry port and the
- * first port per tree callee stay ports; every other reserved port becomes
- * a call portal at its centre (recursion, extra callers of a shared
- * function, a second room calling the same callee). Portals get their
- * graph form, `from` the flow room and `to` the callee or the module hub.
+ * ports of the first call to each tree callee stay ports (a single callee
+ * is offered both side walls, so those come as a pair); every other
+ * reserved port becomes a call portal at its centre (recursion, extra
+ * callers of a shared function, a second room calling the same callee),
+ * one per call site. Portals get their graph form, `from` the flow room
+ * and `to` the callee or the module hub.
  */
 const realise = (
   cluster: RoomCluster,
@@ -147,17 +154,26 @@ const realise = (
 ): Realised => {
   const kept: Port[] = [];
   const converted: ClusterPortal[] = [];
+  const doorSites = new Set<string>();
+  const portalSites = new Set<string>();
   const doorTo = new Set<string>();
   for (const port of cluster.ports) {
     const callee = port.reservedFor;
+    const site = port.portalId;
     if (callee === undefined) {
+      kept.push(port);
+    } else if (site !== undefined && doorSites.has(site)) {
       kept.push(port);
     } else if (treeCallees.has(callee) && !doorTo.has(callee)) {
       doorTo.add(callee);
       kept.push(port);
-    } else if (port.portalId !== undefined) {
+      if (site !== undefined) {
+        doorSites.add(site);
+      }
+    } else if (site !== undefined && !portalSites.has(site)) {
+      portalSites.add(site);
       converted.push({
-        id: port.portalId,
+        id: site,
         kind: "call",
         roomId: port.roomId,
         wall: port.wall,
@@ -199,7 +215,12 @@ const sitesByCaller = (
 ): ReadonlyMap<string, readonly CallSite[]> => {
   const groups = new Map<string, CallSite[]>();
   for (const site of sites) {
-    groups.set(site.callerId, [...(groups.get(site.callerId) ?? []), site]);
+    const group = groups.get(site.callerId);
+    if (group === undefined) {
+      groups.set(site.callerId, [site]);
+    } else {
+      group.push(site);
+    }
   }
   return groups;
 };

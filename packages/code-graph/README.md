@@ -21,7 +21,8 @@ call/containment edges. `./ids` builds the ids (`demo.ts`,
 A function's `flow` is a `SequenceNode` of steps: `step` (folded plain
 statements), `call`, `await`, `return`, `break`, `continue`, and the composites
 `branch` (two lane sequences), `switch` (cases with labels and a `fallsThrough`
-flag) and `loop` (body sequence). Flow node ids are
+flag), `loop` (body sequence) and `try` (block, handler and finalizer
+sequences). Flow node ids are
 `<function>@<offset>:<kind>[:<tag>]`; a sequence takes its owner's offset (the
 function for `:sequence:body`, the `if` for `:sequence:then` / `:else`, the
 loop for `:sequence:loop`, the case for `:sequence:case`), every other node its
@@ -31,8 +32,8 @@ past the node) and `countStatements`.
 
 `./flow-layout` turns a function into a `RoomCluster`: a 4 m-wide column of
 rooms, one per top-level flow node (a `step` of folded statements, a `call`,
-an `await`, a `return`; a branch, switch or loop is one `collapsed` room for
-now), stacked along +Z with a door between neighbours and a `return` portal on
+an `await`, a `return`; a branch, switch, loop or try is one `collapsed` room
+for now), stacked along +Z with a door between neighbours and a `return` portal on
 the last room's south wall. The entry room's north wall is the entry port. A
 room's first callee gets a port on the side wall used least recently, its
 second the other wall; further callees get a portal each, pre-placed below

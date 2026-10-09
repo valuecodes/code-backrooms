@@ -3,7 +3,6 @@ import { walkFlow } from "@repo/code-graph/flow";
 import { parseFlowNodeId } from "@repo/code-graph/ids";
 import { describe, expect, it } from "vitest";
 
-import { textOf } from "./flow-leaves";
 import { parseModule } from "./parser";
 
 const parse = (source: string, path = "t.ts") => parseModule({ path, source });
@@ -163,15 +162,41 @@ describe("returns and dead code", () => {
     expect(stepAt(thrown, 0, "return").throws).toBe(true);
   });
 
-  it("keeps a finalizer after a return and code after a catch", () => {
+  it("keeps a try as one node whose block, handler and finalizer are lanes", () => {
     const finalized = flowOf(
       `function f() { try { return a(); } finally { b(); } c(); }\n${HELPERS}`
     );
-    expect(kinds(finalized)).toEqual(["return", "call"]);
+    expect(kinds(finalized)).toEqual(["try"]);
+    const node = stepAt(finalized, 0, "try");
+    expect(node.id).toBe("t.ts::f@15:try");
+    expect(kinds(node.block)).toEqual(["return"]);
+    expect(node.handler).toBeNull();
+    expect(kinds(node.finalizer ?? node.block)).toEqual(["call"]);
+    expect(node.block.id).toBe("t.ts::f@15:sequence:try");
+    expect(node.finalizer?.id).toBe("t.ts::f@15:sequence:finally");
     const caught = flowOf(
       `function f() { try { return a(); } catch (e) { b(); } c(); }\n${HELPERS}`
     );
-    expect(kinds(caught)).toEqual(["return", "call", "call"]);
+    expect(kinds(caught)).toEqual(["try", "call"]);
+  });
+
+  it("does not let a caught return end an enclosing branch", () => {
+    const flow = flowOf(
+      `function f(x: boolean) { if (x) { try { a(); } catch { return; } } else { return; } b(); }\n${HELPERS}`
+    );
+    expect(kinds(flow)).toEqual(["branch", "call"]);
+  });
+
+  it("opens the flow with the calls in parameter defaults", () => {
+    const flow = flowOf(`function f(x = a()) { return x; }\n${HELPERS}`);
+    expect(kinds(flow)).toEqual(["call", "return"]);
+    expect(stepAt(flow, 0, "call")).toMatchObject({
+      id: "t.ts::f@0:call",
+      callSiteIds: ["t.ts::f@15"],
+      span: { start: 0, end: 20 },
+    });
+    const arrow = flowOf(`const f = (x = a()) => x;\n${HELPERS}`);
+    expect(kinds(arrow)).toEqual(["call", "return"]);
   });
 });
 
@@ -275,6 +300,17 @@ describe("switches", () => {
     expect(lane).toBeDefined();
     const branch = stepAt(lane ?? node.cases[0]?.body ?? flow, 0, "branch");
     expect(stepAt(branch.consequent, 0, "break").targetId).toBe(node.id);
+  });
+
+  it("counts the calls in case tests as the switch's own", () => {
+    const flow = flowOf(
+      `function f(s: number) { switch (s) { case a(): break; case b(): case c(): break; } }\n${HELPERS}`
+    );
+    expect(stepAt(flow, 0, "switch").callSiteIds).toEqual([
+      expect.stringMatching(/^t\.ts::f@\d+$/),
+      expect.stringMatching(/^t\.ts::f@\d+$/),
+      expect.stringMatching(/^t\.ts::f@\d+$/),
+    ]);
   });
 
   it("is terminal only with a default and no way out", () => {
@@ -381,15 +417,5 @@ describe("labels", () => {
       [["continue"], loop.id, false],
     ]);
     expect(stepAt(flow, 1, "step").statements).toBe(1);
-  });
-});
-
-describe("textOf", () => {
-  it("collapses whitespace and cuts long text with an ellipsis", () => {
-    expect(textOf("a  \n\t b", 0, 7)).toBe("a b");
-    const long = textOf("x".repeat(100), 0, 100);
-    expect(long).toHaveLength(60);
-    expect(long.endsWith("…")).toBe(true);
-    expect(textOf("x".repeat(60), 0, 60)).toBe("x".repeat(60));
   });
 });

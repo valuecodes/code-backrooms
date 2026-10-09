@@ -14,6 +14,7 @@ import {
   isTryStatement,
 } from "@babel/types";
 import type {
+  BlockStatement,
   BreakStatement,
   ContinueStatement,
   Node,
@@ -29,13 +30,13 @@ import type {
   FlowStep,
   ReturnNode,
   SequenceNode,
+  TryNode,
 } from "@repo/code-graph";
-import { isTerminal } from "@repo/code-graph/flow";
 import { flowNodeId } from "@repo/code-graph/ids";
 
 import { branchOf, loopOf, switchOf } from "./flow-composites";
 import { isLoop, nested, sequenceNode } from "./flow-context";
-import type { FlowContext, Run } from "./flow-context";
+import type { Built, FlowContext, Run } from "./flow-context";
 import {
   isSkipped,
   leafOf,
@@ -81,6 +82,9 @@ const jumpOf = (
   if (target === undefined) {
     return null;
   }
+  if (isBreak) {
+    context.broken.add(target.id);
+  }
   return isBreak
     ? {
         id: flowNodeId(context.functionId, span.start, "break"),
@@ -97,27 +101,43 @@ const jumpOf = (
 };
 
 /**
- * `try` flattens into its parts in order, each a run of its own so a
- * finalizer after a `return` is kept. Control runs past it unless the
- * finalizer is terminal, or the block is and the handler (if any) is too.
+ * `try`, `catch` and `finally` as three sequences owned by the statement.
+ * It ends when the finalizer does, or when the block and the handler (if
+ * any) both do.
  */
-const tryOf = (node: TryStatement, context: FlowContext): Run => {
+const tryOf = (node: TryStatement, context: FlowContext): Built => {
+  const span = spanOf(node);
   const inner = nested(context);
-  const block = context.run(node.block.body, inner);
+  const part = (tag: string, block: BlockStatement) => {
+    const run = context.run(block.body, inner);
+    return {
+      sequence: sequenceNode(
+        flowNodeId(context.functionId, span.start, "sequence", tag),
+        spanOf(block),
+        run.steps
+      ),
+      terminal: run.terminal,
+    };
+  };
+  const block = part("try", node.block);
   const handler =
     node.handler === null || node.handler === undefined
       ? null
-      : context.run(node.handler.body.body, inner);
+      : part("catch", node.handler.body);
   const finalizer =
     node.finalizer === null || node.finalizer === undefined
       ? null
-      : context.run(node.finalizer.body, inner);
+      : part("finally", node.finalizer);
+  const tryNode: TryNode = {
+    id: flowNodeId(context.functionId, span.start, "try"),
+    kind: "try",
+    span,
+    block: block.sequence,
+    handler: handler?.sequence ?? null,
+    finalizer: finalizer?.sequence ?? null,
+  };
   return {
-    steps: [
-      ...block.steps,
-      ...(handler?.steps ?? []),
-      ...(finalizer?.steps ?? []),
-    ],
+    node: tryNode,
     terminal:
       finalizer?.terminal === true ||
       (block.terminal && (handler === null || handler.terminal)),
@@ -139,11 +159,18 @@ const flush = (state: RunState, context: FlowContext): void => {
   state.pending = [];
 };
 
-const push = (state: RunState, context: FlowContext, step: FlowStep): void => {
+const push = (state: RunState, context: FlowContext, built: Built): void => {
   flush(state, context);
-  state.steps.push(step);
-  state.terminal = isTerminal(step);
+  state.steps.push(built.node);
+  state.terminal = built.terminal;
 };
+
+/** A leaf ends the flow only when it is a jump. */
+const leaf = (node: FlowStep): Built => ({
+  node,
+  terminal:
+    node.kind === "return" || node.kind === "break" || node.kind === "continue",
+});
 
 const append = (state: RunState, context: FlowContext, run: Run): void => {
   flush(state, context);
@@ -160,7 +187,7 @@ const take = (
   if (isBlockStatement(statement)) {
     append(state, context, context.run(statement.body, nested(context)));
   } else if (isTryStatement(statement)) {
-    append(state, context, tryOf(statement, context));
+    push(state, context, tryOf(statement, context));
   } else if (isIfStatement(statement)) {
     push(state, context, branchOf(statement, context));
   } else if (isSwitchStatement(statement)) {
@@ -178,16 +205,16 @@ const take = (
       append(state, context, context.run([body], nested(context)));
     }
   } else if (isReturnStatement(statement) || isThrowStatement(statement)) {
-    push(state, context, returnOf(statement, context));
+    push(state, context, leaf(returnOf(statement, context)));
   } else {
-    const leaf =
+    const step =
       isBreakStatement(statement) || isContinueStatement(statement)
         ? jumpOf(statement, context)
         : leafOf(statement, context);
-    if (leaf === null) {
+    if (step === null) {
       state.pending.push(statement);
     } else {
-      push(state, context, leaf);
+      push(state, context, leaf(step));
     }
   }
 };
@@ -219,7 +246,11 @@ type FlowInput = {
   readonly byNode: ReadonlyMap<Node, unknown>;
 };
 
-/** The body of one named function as a flow; an expression body is a return. */
+/**
+ * The body of one named function as a flow; an expression body is a return.
+ * Calls in parameter defaults (`f(x = g())`) run first, so they open the
+ * flow as one call step over the parameter list.
+ */
 const buildFlow = ({
   functionId,
   node,
@@ -233,22 +264,41 @@ const buildFlow = ({
     sites,
     byNode,
     targets: [],
+    broken: new Set(),
     depth: 0,
     run: runOf,
   };
-  const id = flowNodeId(functionId, spanOf(node).start, "sequence", "body");
+  const whole = spanOf(node);
   const { body } = node;
+  const bodySpan = spanOf(body);
+  const id = flowNodeId(functionId, whole.start, "sequence", "body");
+  const params = { ...whole, end: bodySpan.start };
+  const paramSites = resolvedIds(sitesWithin(sites, params));
+  const head: FlowStep[] =
+    paramSites.length === 0
+      ? []
+      : [
+          {
+            id: flowNodeId(functionId, whole.start, "call"),
+            kind: "call",
+            span: params,
+            callSiteIds: paramSites,
+          },
+        ];
   if (isBlockStatement(body)) {
-    return sequenceNode(id, spanOf(body), runOf(body.body, context).steps);
+    return sequenceNode(id, bodySpan, [
+      ...head,
+      ...runOf(body.body, context).steps,
+    ]);
   }
-  const span = spanOf(body);
-  return sequenceNode(id, span, [
+  return sequenceNode(id, bodySpan, [
+    ...head,
     {
-      id: flowNodeId(functionId, span.start, "return"),
+      id: flowNodeId(functionId, bodySpan.start, "return"),
       kind: "return",
-      span,
+      span: bodySpan,
       throws: false,
-      callSiteIds: resolvedIds(sitesWithin(sites, span)),
+      callSiteIds: resolvedIds(sitesWithin(sites, bodySpan)),
     },
   ]);
 };

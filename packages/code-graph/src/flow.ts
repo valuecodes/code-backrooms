@@ -18,6 +18,11 @@ const childrenOf = (node: FlowNode): readonly FlowNode[] => {
     case "loop": {
       return [node.body];
     }
+    case "try": {
+      return [node.block, node.handler, node.finalizer].filter(
+        (part) => part !== null
+      );
+    }
     case "step":
     case "call":
     case "await":
@@ -44,21 +49,17 @@ const walkFlow = (
 };
 
 /** Whether a `break` anywhere under `node` leaves `targetId`. */
-const breaksOutOf = (node: FlowNode, targetId: string): boolean => {
-  let found = false;
-  walkFlow(node, (current) => {
-    if (current.kind === "break" && current.targetId === targetId) {
-      found = true;
-    }
-  });
-  return found;
-};
+const breaksOutOf = (node: FlowNode, targetId: string): boolean =>
+  node.kind === "break"
+    ? node.targetId === targetId
+    : childrenOf(node).some((child) => breaksOutOf(child, targetId));
 
 /**
  * Whether control never runs past the node: a jump, a branch whose lanes
  * both are, a switch that covers `default`, ends every case and is never
- * broken out of, a sequence by its last step. Loops never are (their
- * condition may fail at once), nor plain steps, calls and awaits.
+ * broken out of, a try whose finalizer ends or whose block and handler both
+ * end, a sequence by its last step. Loops never are (their condition may
+ * fail at once), nor plain steps, calls and awaits.
  */
 const isTerminal = (node: FlowNode): boolean => {
   switch (node.kind) {
@@ -69,6 +70,13 @@ const isTerminal = (node: FlowNode): boolean => {
     }
     case "branch": {
       return isTerminal(node.consequent) && isTerminal(node.alternate);
+    }
+    case "try": {
+      return (
+        (node.finalizer !== null && isTerminal(node.finalizer)) ||
+        (isTerminal(node.block) &&
+          (node.handler === null || isTerminal(node.handler)))
+      );
     }
     case "switch": {
       return (
@@ -108,7 +116,8 @@ const countStatements = (node: FlowNode): number => {
     }
     case "branch":
     case "switch":
-    case "loop": {
+    case "loop":
+    case "try": {
       return 1 + inner;
     }
     case "call":

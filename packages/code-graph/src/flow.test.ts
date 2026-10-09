@@ -116,6 +116,23 @@ describe("isTerminal", () => {
     expect(isTerminal(loop(seq([ret()])))).toBe(false);
   });
 
+  it("ends a try by its finalizer, or by both its block and handler", () => {
+    const tryNode = (
+      block: SequenceNode,
+      handler: SequenceNode | null,
+      finalizer: SequenceNode | null
+    ): FlowNode => ({ id: id(), kind: "try", span, block, handler, finalizer });
+    expect(isTerminal(tryNode(seq([ret()]), null, null))).toBe(true);
+    expect(isTerminal(tryNode(seq([ret()]), seq([call()]), null))).toBe(false);
+    expect(isTerminal(tryNode(seq([ret()]), seq([ret()]), null))).toBe(true);
+    expect(isTerminal(tryNode(seq([call()]), seq([ret()]), null))).toBe(false);
+    expect(isTerminal(tryNode(seq([ret()]), null, seq([call()])))).toBe(true);
+    expect(isTerminal(tryNode(seq([call()]), null, seq([ret()])))).toBe(true);
+    expect(countStatements(tryNode(seq([step(2)]), seq([ret()]), null))).toBe(
+      4
+    );
+  });
+
   it("judges a switch by default coverage, case endings and breaks", () => {
     const covered = sw("s", [
       kase(["case 1"], seq([ret()])),
