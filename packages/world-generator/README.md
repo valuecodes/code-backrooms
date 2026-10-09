@@ -48,4 +48,8 @@ frame, a trigger strip in front of it, an arrival point inside its target
 and a return point just inside itself. `createNavigator` turns room changes
 and portal entries into a stack of frames and teleports: a `call` door or
 portal pushes, a `return` portal pops (or lands at `to`, the hub, when the
-stack is empty), entering a hub clears, and `jump` only teleports.
+stack is empty), entering a hub clears, and `jump` only teleports. A `jump`
+portal leads to a room of the same cluster (`validateGraph` and
+`validateCluster` check it, and count it as a way into that room); it lands
+in the room's centre facing the way on: its return portal, else its last
+doorway.

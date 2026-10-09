@@ -6,10 +6,12 @@ import {
   flowNodeId,
   functionId,
   isFunctionId,
+  jumpPortalId,
   moduleId,
   parseFlowNodeId,
   parsePortalId,
   returnPortalId,
+  taggedFlowNodeId,
   uniqueNames,
 } from "./ids";
 
@@ -50,6 +52,18 @@ describe("portal ids", () => {
       kind: "return",
       roomId: "src/a@b.ts::Svc.load@57:return",
     });
+  });
+
+  it("round-trips jump portals and tags a composite's rooms", () => {
+    const jump = jumpPortalId("m.ts::f@80:continue");
+    expect(jump).toBe("jump:m.ts::f@80:continue");
+    expect(parsePortalId(jump)).toEqual({
+      kind: "jump",
+      roomId: "m.ts::f@80:continue",
+    });
+    expect(taggedFlowNodeId("m.ts::f@12:loop", "again")).toBe(
+      "m.ts::f@12:loop:again"
+    );
   });
 
   it("rejects ids that are not portals", () => {

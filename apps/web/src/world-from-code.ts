@@ -124,6 +124,11 @@ const promptOf = (
   if (subject.kind === "call") {
     return `→ ${subject.callee.qualifiedName}()`;
   }
+  // A jump reads like a door within the function: `→ again?`, `→ end for`.
+  if (subject.kind === "jump") {
+    const there = subjectOf(codeGraph, subject.targetRoomId);
+    return `→ ${there?.kind === "flow" ? there.text : subject.targetRoomId}`;
+  }
   const top = frames.at(-1);
   return `return to ${top === undefined ? subject.fn.moduleId : labelOf(codeGraph, top.callerRoomId)}`;
 };

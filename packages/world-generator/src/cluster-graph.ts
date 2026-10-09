@@ -87,9 +87,10 @@ const clusterRects = (
 
 /**
  * A cluster's internal contract: rooms that tile its box, an entry room
- * across the top, doors with shared edges reaching every room, ports on the
- * boundary with exactly one entry port, and portals that are either placed
- * (wall and position) or not.
+ * across the top, doors with shared edges and jump portals reaching every
+ * room, ports on the boundary with exactly one entry port, and portals that
+ * are either placed (wall and position) or not, a jump's leading to a room
+ * of the same cluster.
  */
 const validateCluster = (
   room: GraphRoom,
@@ -139,6 +140,19 @@ const validateCluster = (
     }
     adjacency.get(door.from)?.push(door.to);
     adjacency.get(door.to)?.push(door.from);
+  }
+  // A jump portal is a way in too: a merge room may be reached only by a
+  // `break` nested in a case.
+  for (const portal of cluster.portals) {
+    if (portal.kind !== "jump") {
+      continue;
+    }
+    if (portal.target === undefined || !rects.has(portal.target)) {
+      throw new Error(
+        `Cluster jump portal "${portal.id}" must lead to a room of "${room.id}"`
+      );
+    }
+    adjacency.get(portal.roomId)?.push(portal.target);
   }
   const seen = new Set([cluster.entryRoomId]);
   const queue = [cluster.entryRoomId];

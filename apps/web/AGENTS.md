@@ -43,7 +43,7 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   six cases does too. A call inside a lane offers one wall for its door, so when the
   layout cannot place that door the call becomes a portal and the world is
   laid out again (`generateCodeWorld`).
-- Milestone 7 (current): loops. A loop is one rectangular ring: the header
+- Milestone 7: loops. A loop is one rectangular ring: the header
   room across the top, the body down the west side (ochre walls) beside a
   corridor back (deeper ochre), and at the bottom an `again?` room (a
   do-while's `while (…)`) with two doors, `→ repeat` up the corridor into
@@ -52,6 +52,14 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   loop whose body ends in a return or a jump stays collapsed. Lane prompts
   only show walking with the flow; the way back names the room
   (`→ again?`). See `?code=loops`.
+- Milestone 8 (current): jumps. A `break` or `continue` room has a jump
+  portal on its far wall: `continue` leads to the loop's `again?` room,
+  `break` to `end for` / `end while`, or to `end switch` from a `break`
+  nested in a case. The prompt reads like a door (`→ again?`) and the stack
+  is left alone. A loop whose body ends in a jump now opens, as does a
+  switch with a nested `break`; a switch with a case that falls through or
+  more than six cases, a loop whose body only returns, and `try` stay one
+  collapsed room. See `?code=loops` and `?code=switches`.
 
 ---
 

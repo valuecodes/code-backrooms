@@ -13,11 +13,16 @@ import {
   MIN_GAP,
 } from "@repo/world-generator/config";
 
-import type { FlowStep, FunctionNode } from "./code-graph";
-import { countStatements, isTerminal } from "./flow";
+import type {
+  BreakNode,
+  ContinueNode,
+  FlowStep,
+  FunctionNode,
+} from "./code-graph";
+import { countStatements, escapingJump, hasReturn, isTerminal } from "./flow";
 import { flowNodeText, resolvedSites, siteIdsUnder } from "./flow-text";
 import type { SiteIndex } from "./flow-text";
-import { flowNodeId } from "./ids";
+import { flowNodeId, parseFlowNodeId, taggedFlowNodeId } from "./ids";
 
 /** A function called from a room, with the first site that calls it there. */
 type FlowCallee = {
@@ -41,6 +46,11 @@ type FlowRoomSpec = {
   readonly floor: number;
   /** Control never runs past the room: a return, or a collapsed node that ends. */
   readonly terminal: boolean;
+  /**
+   * The room a jump portal on this room leads to: a `break` or `continue`,
+   * or a collapsed node that ends by jumping out of itself.
+   */
+  readonly jumpTo?: string;
 };
 
 /**
@@ -157,6 +167,39 @@ const roleOf = (node: FlowStep): FlowRole => {
 };
 
 /**
+ * The room a jump lands in: a loop's `again?` test for `continue`, its end
+ * room for `break`, a switch's merge room for `break`. Null for targets
+ * this grammar does not name.
+ */
+const jumpTarget = (jump: BreakNode | ContinueNode): string | null => {
+  const kind = parseFlowNodeId(jump.targetId)?.kind;
+  if (kind === "loop") {
+    return taggedFlowNodeId(
+      jump.targetId,
+      jump.kind === "continue" ? "again" : "end"
+    );
+  }
+  return kind === "switch" && jump.kind === "break"
+    ? taggedFlowNodeId(jump.targetId, "merge")
+    : null;
+};
+
+/**
+ * Where a room for `node` jumps to: a jump's target, or for a collapsed
+ * node that ends without returning, the target of its first jump out.
+ */
+const jumpOf = (node: FlowStep, terminal: boolean): string | null => {
+  if (node.kind === "break" || node.kind === "continue") {
+    return jumpTarget(node);
+  }
+  if (!terminal || hasReturn(node)) {
+    return null;
+  }
+  const jump = escapingJump(node);
+  return jump === null ? null : jumpTarget(jump);
+};
+
+/**
  * One room for a node that is not expanded: a leaf, or a composite kept
  * whole (`collapsed`) carrying every call inside it.
  */
@@ -169,6 +212,8 @@ const specOf = (
   const ids = siteIdsUnder(node);
   const callees = calleesOf(ids, sites);
   const statements = countStatements(node);
+  const terminal = isTerminal(node);
+  const jumpTo = jumpOf(node, terminal);
   return {
     kind: "room",
     id: node.id,
@@ -179,7 +224,8 @@ const specOf = (
     callees,
     depth: depthOf(role, statements, callees.length, entry),
     floor: depthOf(role, statements, 0, entry),
-    terminal: isTerminal(node),
+    terminal,
+    ...(jumpTo === null ? {} : { jumpTo }),
   };
 };
 

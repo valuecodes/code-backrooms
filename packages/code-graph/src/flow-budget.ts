@@ -59,6 +59,8 @@ const merge = (
     depth: depthOf("collapsed", statements, callees.length, entry),
     floor: depthOf("collapsed", statements, 0, entry),
     terminal: b.terminal,
+    // A pair ending in a room that jumps out still jumps out.
+    ...(b.jumpTo === undefined ? {} : { jumpTo: b.jumpTo }),
   };
 };
 
@@ -239,4 +241,4 @@ const foldToBudget = (
   }
 };
 
-export { foldToBudget };
+export { foldToBudget, replaceComposite };

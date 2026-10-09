@@ -1,6 +1,9 @@
 import { buildCodeGraph } from "@repo/parser";
 import type { RoomData } from "@repo/types";
+import { roomBounds } from "@repo/world-generator/geometry";
 import { checkLayout } from "@repo/world-generator/layout-checks";
+import { containsPoint } from "@repo/world-generator/locate";
+import { createNavigator } from "@repo/world-generator/navigation";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -11,7 +14,7 @@ import {
 } from "./world-from-code";
 
 /** Parses an example or fails the test with the parser's message. */
-const graphOf = (name: "loops") => {
+const graphOf = (name: "loops" | "switches") => {
   const { codeGraph, error } = codeGraphOf(name);
   if (codeGraph === null) {
     throw new Error(`${name}: ${error}`);
@@ -98,6 +101,89 @@ describe("loops", () => {
     expect(prompt(test, end)).toBe("→ exit");
     expect(prompt(back, test)).toBe("→ again?");
     expect(prompt(end, test)).toBe("→ again?");
+  });
+
+  it("jumps from continue to the loop's test room and from break to its end", () => {
+    const codeGraph = graphOf("loops");
+    const generated = worldFromCode(codeGraph, 1);
+    const byId = new Map(
+      generated.layout.rooms.map((room) => [room.id, room] as const)
+    );
+    const jumps = generated.built.portals.filter(
+      (built) => built.portal.kind === "jump"
+    );
+    expect(
+      jumps.map(({ portal }) => [
+        describeRoom(codeGraph, portal.from),
+        describeRoom(codeGraph, portal.to),
+        portal.label,
+      ])
+    ).toEqual([
+      [
+        "loops.ts · main() · continue",
+        "loops.ts · main() · again?",
+        "continue",
+      ],
+      ["loops.ts · main() · break", "loops.ts · main() · end while", "break"],
+    ]);
+    expect(
+      jumps.map(({ portal }) =>
+        promptOf(codeGraph, [], { kind: "portal", portalId: portal.id })
+      )
+    ).toEqual(["→ again?", "→ end while"]);
+    // Each lands inside its target, facing the way on: from `again?` the
+    // exit door into `end for`, from `end while` the door to the do-while.
+    const onward = jumps.map(({ portal, arrival }) => {
+      const target = byId.get(portal.to);
+      expect(
+        target !== undefined &&
+          containsPoint(roomBounds(target), arrival.position)
+      ).toBe(true);
+      return generated.layout.rooms
+        .filter(
+          (room) =>
+            room.cluster === "loops.ts::main" &&
+            room.id !== portal.to &&
+            containsPoint(roomBounds(room), arrival.facing)
+        )
+        .map((room) => room.role);
+    });
+    expect(onward).toEqual([["loop-end"], ["loop-head"]]);
+    // A jump stays in the function: the stack is untouched.
+    const navigator = createNavigator(generated);
+    const [first] = jumps;
+    const entered = navigator.step(navigator.initial, {
+      type: "room",
+      roomId: first?.portal.from ?? null,
+    }).state;
+    const jumped = navigator.step(entered, {
+      type: "portal",
+      portalId: first?.portal.id ?? "",
+    });
+    expect(jumped.teleport).toEqual(first?.arrival);
+    expect(jumped.state.frames).toEqual(entered.frames);
+    expect(jumped.state.roomId).toBe("loops.ts::main");
+  });
+
+  it("jumps from a break nested in a case to the end switch room", () => {
+    const codeGraph = graphOf("switches");
+    const world = worldFromCode(codeGraph, 1);
+    const jumps = (world.graph.portals ?? []).filter(
+      (portal) => portal.kind === "jump"
+    );
+    expect(
+      jumps.map((portal) => [
+        describeRoom(codeGraph, portal.from),
+        describeRoom(codeGraph, portal.to),
+        promptOf(codeGraph, [], { kind: "portal", portalId: portal.id }),
+      ])
+    ).toEqual([
+      [
+        "switches.ts · route() · break",
+        "switches.ts · route() · end switch",
+        "→ end switch",
+      ],
+    ]);
   });
 
   it("keeps a loop whose body ends in a return collapsed, and lays it out", () => {

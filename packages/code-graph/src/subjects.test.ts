@@ -94,6 +94,8 @@ describe("portalSubject", () => {
     expect(portalSubject(graph, "portal:m.ts::nobody@1")).toBeNull();
     expect(portalSubject(graph, "return:m.ts::nobody")).toBeNull();
     expect(portalSubject(graph, "return:m.ts::nobody@3:step")).toBeNull();
+    expect(portalSubject(graph, "jump:m.ts::main@3:break")).toBeNull();
+    expect(portalSubject(graph, "jump:hub")).toBeNull();
   });
 });
 
