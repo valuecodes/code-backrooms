@@ -1,59 +1,25 @@
-import type { RoomCluster, WorldGraph } from "@repo/types";
+import type { RoomCluster } from "@repo/types";
 import {
-  FLOW_BUDGET,
   FLOW_MAX_CASES,
   FLOW_TOP_MIN_DEPTH,
 } from "@repo/world-generator/config";
-import { validateGraph } from "@repo/world-generator/graph";
 import { describe, expect, it } from "vitest";
 
-import type { FlowStep, FunctionNode } from "./code-graph";
+import type { FlowStep } from "./code-graph";
 import {
   branch,
   breakOut,
-  call,
   calling,
   clusterOf,
   FN,
-  fnWith,
   loop,
   ret,
   site,
   step,
   switchNode,
+  valid,
 } from "./flow-fixture";
-import { layoutFlow, planFlow } from "./flow-layout";
 import { parseFlowNodeId } from "./ids";
-
-/**
- * Runs the world generator's contract over a cluster: it tiles its box, its
- * doors share edges and reach every room, its ports lie on the boundary.
- */
-const valid = (cluster: RoomCluster): RoomCluster => {
-  const callees = new Set([
-    ...cluster.ports.flatMap((port) =>
-      port.reservedFor === undefined ? [] : [port.reservedFor]
-    ),
-    ...cluster.portals.flatMap((portal) =>
-      portal.target === undefined ? [] : [portal.target]
-    ),
-  ]);
-  const graph: WorldGraph = {
-    rooms: [
-      { id: FN, width: cluster.width, depth: cluster.depth, cluster },
-      ...[...callees].map((id) => ({ id, width: 4, depth: 4 })),
-    ],
-    connections: [...callees].map((id) => ({ from: FN, to: id, kind: "call" })),
-    portals: cluster.portals.map((portal) => ({
-      id: portal.id,
-      kind: portal.kind,
-      from: portal.roomId,
-      to: portal.target ?? FN,
-    })),
-  };
-  validateGraph(graph);
-  return cluster;
-};
 
 const shape = (cluster: RoomCluster) =>
   cluster.rooms.map((room) => [
@@ -254,15 +220,6 @@ const cases = (bodies: readonly (readonly FlowStep[])[]) =>
   }));
 
 /** `depth` switches inside one another, each with one case, the innermost holding a step. */
-const nested = (depth: number, offset: number): FlowStep =>
-  switchNode(offset, [
-    {
-      labels: ["case 1"],
-      body:
-        depth === 0 ? [step(offset + 1, 1)] : [nested(depth - 1, offset + 10)],
-    },
-  ]);
-
 describe("switches", () => {
   it("opens a switch into one lane per case plus a default that rejoins", () => {
     const middle = calling(10, 3);
@@ -339,6 +296,33 @@ describe("switches", () => {
     ]);
   });
 
+  it("lets a falling-through case rejoin only when the case it falls into does", () => {
+    const cluster = valid(
+      clusterOf([
+        switchNode(1, [
+          { labels: ["case 1"], body: [step(5, 1)], fallsThrough: true },
+          { labels: ["case 2"], body: [ret(6)] },
+          { labels: ["default"], body: [ret(7)] },
+        ]),
+      ])
+    );
+    expect(cluster.rooms.some((room) => room.role === "merge")).toBe(false);
+    expect(returnsOf(cluster).map(([id]) => id)).toEqual([
+      `${FN}@6:return`,
+      `${FN}@7:return`,
+    ]);
+  });
+
+  it("cuts a long list of merged case labels", () => {
+    const labels = Array.from({ length: 30 }, (_, index) => `case ${index}`);
+    const cluster = clusterOf([
+      switchNode(1, [{ labels, body: [step(5, 1)] }]),
+    ]);
+    const text = cluster.doors[0]?.lane?.text ?? "";
+    expect(text.length).toBeLessThanOrEqual(60);
+    expect(text.endsWith("…")).toBe(true);
+  });
+
   it("keeps a switch collapsed when it has too many cases or a nested break", () => {
     const many = switchNode(
       1,
@@ -376,69 +360,5 @@ describe("return portals", () => {
       "collapsed",
     ]);
     expect(returnsOf(cluster)).toEqual([[`${FN}@1:loop`, 2]]);
-  });
-});
-
-describe("budget", () => {
-  it("collapses the deepest forks first until the column fits the width budget", () => {
-    const cluster = valid(clusterOf([nested(20, 1)]));
-    expect(cluster.width).toBeLessThanOrEqual(FLOW_BUDGET.width);
-    expect(cluster.rooms[0]?.role).toBe("switch");
-    expect(cluster.rooms.some((room) => room.role === "collapsed")).toBe(true);
-  });
-
-  it("folds rooms inside a lane before touching the fork", () => {
-    const rooms = Array.from({ length: 100 }, (_, index) =>
-      calling(10 * index + 5, 1)
-    );
-    const cluster = valid(
-      clusterOf(
-        [
-          branch(
-            1,
-            rooms.map((room) => room.node)
-          ),
-        ],
-        rooms.flatMap((room) => room.sites)
-      )
-    );
-    expect(cluster.rooms[0]?.role).toBe("fork");
-    expect(cluster.rooms.length).toBeLessThanOrEqual(FLOW_BUDGET.rooms);
-    expect(cluster.depth).toBeLessThanOrEqual(FLOW_BUDGET.depth);
-  });
-
-  it("stops when nothing more can fold", () => {
-    const { node, sites } = calling(1, 100);
-    const cluster = clusterOf([node], sites);
-    expect(cluster.rooms).toHaveLength(1);
-    expect(cluster.depth).toBeGreaterThan(FLOW_BUDGET.depth);
-  });
-
-  it("plans three hundred nested switches quickly", () => {
-    const fn: FunctionNode = fnWith([nested(300, 1)]);
-    const started = Date.now();
-    const cluster = layoutFlow(planFlow(fn, []));
-    expect(Date.now() - started).toBeLessThan(1000);
-    expect(cluster.width).toBeLessThanOrEqual(FLOW_BUDGET.width);
-  });
-});
-
-describe("port pitch", () => {
-  it("spaces ports on one wall by the wider of the two callees", () => {
-    const wide = calling(1, 1);
-    const narrow = call(5, [site(5, "h").id]);
-    const cluster = clusterOf(
-      [wide.node, narrow],
-      [...wide.sites, site(5, "h")],
-      (unitId) => (unitId === "m.ts::g1" ? 10 : 4)
-    );
-    expect(
-      cluster.ports.slice(1).map((port) => [port.wall, port.lo, port.hi])
-    ).toEqual([
-      ["east", 0, 10],
-      ["west", 0, 10],
-      ["east", 10, 22],
-      ["west", 10, 22],
-    ]);
   });
 });

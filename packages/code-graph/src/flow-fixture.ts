@@ -2,6 +2,9 @@
 // whose nodes are named by offset, with call sites to resolved callees
 // `m.ts::g`, `m.ts::g1`, ... Spans are placeholders; only ids matter.
 
+import type { RoomCluster, WorldGraph } from "@repo/types";
+import { validateGraph } from "@repo/world-generator/graph";
+
 import type {
   BranchNode,
   CallSite,
@@ -175,6 +178,36 @@ const clusterOf = (
   widthOf?: (unitId: string) => number
 ) => layoutFlow(planFlow(fnWith(steps), sites), widthOf);
 
+/**
+ * Runs the world generator's contract over a cluster: it tiles its box, its
+ * doors share edges and reach every room, its ports lie on the boundary.
+ */
+const valid = (cluster: RoomCluster): RoomCluster => {
+  const callees = new Set([
+    ...cluster.ports.flatMap((port) =>
+      port.reservedFor === undefined ? [] : [port.reservedFor]
+    ),
+    ...cluster.portals.flatMap((portal) =>
+      portal.target === undefined ? [] : [portal.target]
+    ),
+  ]);
+  const graph: WorldGraph = {
+    rooms: [
+      { id: FN, width: cluster.width, depth: cluster.depth, cluster },
+      ...[...callees].map((id) => ({ id, width: 4, depth: 4 })),
+    ],
+    connections: [...callees].map((id) => ({ from: FN, to: id, kind: "call" })),
+    portals: cluster.portals.map((portal) => ({
+      id: portal.id,
+      kind: portal.kind,
+      from: portal.roomId,
+      to: portal.target ?? FN,
+    })),
+  };
+  validateGraph(graph);
+  return cluster;
+};
+
 export {
   awaitNode,
   branch,
@@ -189,4 +222,5 @@ export {
   site,
   step,
   switchNode,
+  valid,
 };

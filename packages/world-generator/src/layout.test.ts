@@ -5,7 +5,7 @@ import { candidateBatches } from "./candidates";
 import { clusterGraph } from "./cluster-world";
 import { fit, NONE } from "./fit";
 import { generateGraph } from "./graph";
-import { generateLayout } from "./layout";
+import { generateLayout, LayoutError } from "./layout";
 import { checkLayout } from "./layout-checks";
 import { presets } from "./presets";
 import { createRng } from "./random";
@@ -165,6 +165,16 @@ describe("generateLayout", () => {
     expect(() => generateLayout(graph, 1)).toThrow(
       /no placement for tiny -> n/
     );
+    let caught: unknown = null;
+    try {
+      generateLayout(graph, 1);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(LayoutError);
+    expect(
+      caught instanceof LayoutError ? caught.connection : null
+    ).toMatchObject({ from: "tiny" });
   });
 });
 

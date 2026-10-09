@@ -2,10 +2,9 @@ import type { CodeGraph } from "@repo/code-graph";
 import { laneText } from "@repo/code-graph/flow-text";
 import { portalSubject, roomSubject } from "@repo/code-graph/subjects";
 import type { RoomSubject } from "@repo/code-graph/subjects";
-import { toWorldGraph } from "@repo/code-graph/world-graph";
+import { generateCodeWorld } from "@repo/code-graph/world-graph";
 import { buildCodeGraph } from "@repo/parser";
 import type { GeneratedWorld } from "@repo/types";
-import { generateWorld } from "@repo/world-generator";
 import type { Target } from "@repo/world-generator/interaction";
 import type { Frame } from "@repo/world-generator/navigation";
 
@@ -30,9 +29,9 @@ const codeGraphOf = (name: ExampleName): CodeResult => {
   }
 };
 
-/** Lays the code graph out; the seed only changes the placement. */
+/** Lays the code graph out; a call door that does not fit becomes a portal. */
 const worldFromCode = (codeGraph: CodeGraph, seed: number): GeneratedWorld =>
-  generateWorld({ seed, graph: toWorldGraph(codeGraph) });
+  generateCodeWorld(codeGraph, seed);
 
 const subjectOf = (
   codeGraph: CodeGraph | null,
@@ -90,15 +89,20 @@ const doorPrompt = (codeGraph: CodeGraph | null, target: Target): string => {
   if (target.kind !== "door") {
     return "";
   }
-  if (target.lane !== undefined) {
-    return `→ ${laneText(target.lane)}`;
-  }
   const here = subjectOf(codeGraph, target.roomId);
   const there = subjectOf(codeGraph, target.targetRoomId);
   const withinFunction =
     here?.kind === "flow" &&
     there?.kind === "flow" &&
     here.fn.id === there.fn.id;
+  // A fork's door carries its lane on both sides; only the way in is the lane.
+  const intoLane =
+    withinFunction &&
+    target.lane !== undefined &&
+    there.ancestors.some((ancestor) => ancestor.id === here.node.id);
+  if (intoLane) {
+    return `→ ${laneText(target.lane)}`;
+  }
   return withinFunction
     ? `→ ${there.text}`
     : `→ ${labelOf(codeGraph, target.targetRoomId)}`;

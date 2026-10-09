@@ -19,8 +19,9 @@ facing), `./random`, `./config`, `./presets` (hand-written graphs: `lobby`,
 Supported graphs: unique ids, dimensions on the 0.5 m grid and at least 2 m,
 undirected connections without duplicates, one connected component. Rooms
 with many connections need long walls; a room that cannot be placed after
-several attempts throws, and a cycle-closing connection that cannot be
-realised is listed in `layout.unresolved`, never dropped.
+several attempts throws a `LayoutError` naming the `connection` it could not
+place, and a cycle-closing connection that cannot be realised is listed in
+`layout.unresolved`, never dropped.
 
 A graph room may carry a `cluster`: its interior laid out in advance as
 rooms in a local frame (x in `[0, width]`, z in `[0, depth]`, the entry room

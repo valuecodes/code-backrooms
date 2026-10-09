@@ -40,7 +40,9 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   its own return portal, and the HUD names forks and merges (`… · if
 (user)`, `… · end if`, `… · false · empty`). Loops and `try` stay one
   collapsed room; a switch with a nested `break` or more than six cases
-  does too.
+  does too. A call inside a lane offers one wall for its door, so when the
+  layout cannot place that door the call becomes a portal and the world is
+  laid out again (`generateCodeWorld`).
 
 ---
 
