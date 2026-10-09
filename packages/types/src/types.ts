@@ -152,8 +152,9 @@ type Portal = {
   /** The room whose wall hosts the portal: a graph room or a cluster room. */
   readonly from: string;
   /**
-   * The graph room it leads to (a unit lands at its entry); may be `from`'s
-   * own. A `jump` leads to a room of the same cluster as `from`.
+   * Where it leads: for `call` and `return`, a graph room (a unit lands at
+   * its entry), possibly `from`'s own; for `jump`, a room of the same
+   * cluster as `from`.
    */
   readonly to: string;
   /** Free text, like GraphRoom.label (the callee's name). */

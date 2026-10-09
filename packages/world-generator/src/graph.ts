@@ -59,8 +59,10 @@ const validateGraph = (graph: WorldGraph): void => {
   }
   // Rooms a portal may sit on: graph rooms and the rooms inside clusters.
   const roomIds = new Set(ids);
-  // The cluster (graph room) each cluster room belongs to, for jumps.
+  // The cluster (graph room) each cluster room belongs to, for jumps, and
+  // every cluster jump portal, which the graph's must match.
   const unitOf = new Map<string, string>();
+  const clusterJumps = new Map<string, string | undefined>();
   const placedPortals = new Map<string, string>();
   for (const room of graph.rooms) {
     if (room.cluster === undefined) {
@@ -78,6 +80,9 @@ const validateGraph = (graph: WorldGraph): void => {
       }
     }
     for (const portal of room.cluster.portals) {
+      if (portal.kind === "jump") {
+        clusterJumps.set(portal.id, portal.target);
+      }
       if (portal.wall !== undefined) {
         if (placedPortals.has(portal.id)) {
           throw new Error(
@@ -122,6 +127,16 @@ const validateGraph = (graph: WorldGraph): void => {
     if (!roomIds.has(portal.from) || !known) {
       throw new Error(
         `Portal "${portal.id}" (${portal.from} -> ${portal.to}) references an unknown room`
+      );
+    }
+    // A jump leads where its cluster says, so the cluster's reachability
+    // holds for the world.
+    if (
+      clusterJumps.has(portal.id) !== (portal.kind === "jump") ||
+      (clusterJumps.has(portal.id) && clusterJumps.get(portal.id) !== portal.to)
+    ) {
+      throw new Error(
+        `Portal "${portal.id}" (${portal.kind} to ${portal.to}) does not match its cluster's jump portal`
       );
     }
     const placedOn = placedPortals.get(portal.id);

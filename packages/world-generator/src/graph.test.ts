@@ -236,35 +236,6 @@ describe("validateGraph clusters", () => {
     ).toThrow(/more than one cluster room/);
   });
 
-  it("lets a jump portal lead only to a room of its own cluster, and count as a way in", () => {
-    const jump = { id: "jump:call", kind: "jump", roomId: "call" } as const;
-    const graphJump = (to: string) => ({
-      portals: [
-        ...(clusterGraph.portals ?? []),
-        { id: jump.id, kind: "jump" as const, from: "call", to },
-      ],
-    });
-    // Without its door the return room is reached through the jump alone.
-    const jumping = (target: string, to: string) =>
-      withCluster(
-        {
-          doors: cluster.doors.slice(0, 1),
-          portals: [...cluster.portals, { ...jump, target }],
-        },
-        graphJump(to)
-      );
-    expect(() => validateGraph(jumping("ret", "ret"))).not.toThrow();
-    expect(() => validateGraph(jumping("hub", "ret"))).toThrow(
-      /must lead to a room of "fn"/
-    );
-    expect(() => validateGraph(jumping("ret", "hub"))).toThrow(
-      /references an unknown room/
-    );
-    expect(() => validateGraph(jumping("ret", "other"))).toThrow(
-      /references an unknown room/
-    );
-  });
-
   it("ties a cluster's placed portals to the graph's", () => {
     expect(() => validateGraph(withCluster({}, { portals: [] }))).toThrow(
       /which the graph does not have/

@@ -82,9 +82,12 @@ and never returning, gets that jump portal instead of a return portal; one
 that ends in more than one way (a `break` and a `continue`, a jump and a
 return) gets the loops and switches it leaves collapsed around it, since one
 portal could not show every way out.
-`FlowPlan.jumps` maps each jumping room to its target. Folding can swallow a
-jump into a collapsed room that runs on; a loop or switch whose rooms only
-that jump led into is then collapsed too, so every room keeps a way in.
+`FlowPlan.jumps` maps each jumping room to its target. A collapsed room
+that runs on but holds a jump out (kept collapsed, or folded into budget)
+gets the loop or switch that jump leaves collapsed around it too, so no
+jump hides in a room while its target is open and every room keeps a way
+in. Early returns inside a collapsed room that runs on stay hidden, as
+before.
 `try` stays one collapsed room showing its source: exception edges are
 beyond the MVP.
 
