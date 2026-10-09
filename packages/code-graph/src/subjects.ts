@@ -68,13 +68,24 @@ const planOf = (graph: CodeGraph, fn: FunctionNode): FlowPlan => {
 /**
  * The flow node a room stands for. A fork's merge room and a switch's
  * synthesised default lane carry a tag on the composite's own id, so they
- * resolve to the composite.
+ * resolve to the composite, with the composite among their ancestors.
  */
-const nodeOf = (fn: FunctionNode, roomId: string, ref: FlowNodeRef) =>
-  (ref.kind === "branch" || ref.kind === "switch") &&
-  (ref.tag === "merge" || ref.tag === "default")
-    ? findFlowNode(fn.flow, flowNodeId(ref.functionId, ref.offset, ref.kind))
-    : findFlowNode(fn.flow, roomId);
+const nodeOf = (fn: FunctionNode, roomId: string, ref: FlowNodeRef) => {
+  const tagged =
+    (ref.kind === "branch" || ref.kind === "switch") &&
+    (ref.tag === "merge" || ref.tag === "default");
+  if (!tagged) {
+    return findFlowNode(fn.flow, roomId);
+  }
+  const found = findFlowNode(
+    fn.flow,
+    flowNodeId(ref.functionId, ref.offset, ref.kind)
+  );
+  // The room lies inside the composite, so the composite is its ancestor too.
+  return found === null
+    ? null
+    : { node: found.node, ancestors: [...found.ancestors, found.node] };
+};
 
 /**
  * A flow room: a node of the function's flow, or the empty body's one room.

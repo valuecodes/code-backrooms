@@ -89,7 +89,11 @@ type Measure = {
 const cut = (text: string): string =>
   text.length > LANE_TEXT_MAX ? `${text.slice(0, LANE_TEXT_MAX - 1)}…` : text;
 
-/** A `break` the parser kept is nested in a case; it needs a jump portal to leave. */
+/**
+ * A `break` the parser kept is nested in a case; it needs a jump portal to
+ * leave. A case that falls through needs one into the next lane. Neither
+ * exists yet, so such switches stay collapsed.
+ */
 const hasNestedBreak = (node: SwitchNode): boolean => {
   let found = false;
   walkFlow(node, (current) => {
@@ -105,7 +109,8 @@ const expands = (node: FlowStep): node is BranchNode | SwitchNode =>
   node.kind === "branch" ||
   (node.kind === "switch" &&
     node.cases.length <= FLOW_MAX_CASES &&
-    !hasNestedBreak(node));
+    !hasNestedBreak(node) &&
+    !node.cases.some((item) => item.fallsThrough));
 
 /** The same id with a tag: the merge room and the synthesised default lane. */
 const tagged = (node: BranchNode | SwitchNode, tag: string): string => {
@@ -169,22 +174,6 @@ const laneOf = (
   rejoins,
 });
 
-/**
- * Whether each case runs out of the switch: a case that falls through
- * ends when the case it falls into does, so this is settled from the back.
- * A falling-through case that does not end is drawn as rejoining the merge
- * (a jump portal into the next lane comes later).
- */
-const caseRejoins = (cases: SwitchNode["cases"]): readonly boolean[] => {
-  const rejoins: boolean[] = [];
-  let nextEnds = false;
-  for (const item of [...cases].reverse()) {
-    nextEnds = isTerminal(item.body) || (item.fallsThrough && nextEnds);
-    rejoins.unshift(!nextEnds);
-  }
-  return rejoins;
-};
-
 const lanesOf = (
   node: BranchNode | SwitchNode,
   measure: Measure
@@ -207,8 +196,7 @@ const lanesOf = (
       ),
     ];
   }
-  const rejoins = caseRejoins(node.cases);
-  const lanes = node.cases.map((item, index) => {
+  const lanes = node.cases.map((item) => {
     const isDefault = item.labels.includes("default");
     const label: LaneLabel =
       isDefault && item.labels.length === 1
@@ -221,7 +209,7 @@ const lanesOf = (
       item.body.id,
       label,
       item.body,
-      rejoins[index] ?? true,
+      !isTerminal(item.body),
       measure
     );
   });
