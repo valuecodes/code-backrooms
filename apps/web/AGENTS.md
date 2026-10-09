@@ -13,11 +13,16 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
 - Milestone 2: a seeded, procedurally generated world of 10-20 rooms joined by
   doorways and straight corridors, WASD + mouse-look movement with wall
   collisions.
-- Milestone 3 (current): rooms generated from source code. Bundled example
-  programs are parsed into a `CodeGraph` (`@repo/parser`), turned into a room
-  graph (`@repo/code-graph`) and laid out by the same generator; the HUD names
-  the file and function the player is standing in. The app itself is thin:
+- Milestone 3: rooms generated from source code. Bundled example programs are
+  parsed into a `CodeGraph` (`@repo/parser`), turned into a room graph
+  (`@repo/code-graph`) and laid out by the same generator; the HUD names the
+  file and function the player is standing in. The app itself is thin:
   parsing, generation and rendering all live in `packages/`.
+- Milestone 4 (current): call navigation. Calls are doors (the first caller)
+  or teleport portals (every other caller, recursion), every function room
+  has a return portal, and an exploration stack remembers where each function
+  was entered. The HUD shows the stack as a breadcrumb and names whatever
+  door or portal the player faces.
 
 ---
 
@@ -46,10 +51,12 @@ There are no per-workspace `lint` or `format` scripts: root `pnpm lint` (oxlint)
 src/
   main.tsx            mounts <App/>
   app.tsx             full-screen <Canvas>, seed and current-room state, pointer lock, HUD
-  hud.tsx             "Click to start walking" overlay / crosshair, seed + place readout
+  hud.tsx             "Click to start walking" overlay / crosshair, seed + place readout,
+                      breadcrumb and the prompt for the door or portal ahead
   params.ts           URL query -> { seed, rooms, preset, code }, with clamping
   examples.ts         bundled example programs for ?code=<name>
-  world-from-code.ts  source -> CodeGraph -> WorldGraph -> world, plus the HUD room label
+  use-navigation.ts   the exploration stack as React state, fed by the Player
+  world-from-code.ts  source -> CodeGraph -> WorldGraph -> world, plus the HUD's words
 ```
 
 ### Query parameters
@@ -60,8 +67,16 @@ src/
   `@repo/world-generator/presets` instead: `lobby`, `linear`, `branching`,
   `hub`, `cycle`.
 - `?code=<example>` generates the rooms from a bundled program in
-  `src/examples.ts` (`demo`, `chain`, `pair`, `service`, `external`) and wins
-  over `graph`. Edit a source string there to change the world.
+  `src/examples.ts` (`demo`, `chain`, `pair`, `service`, `external`,
+  `portals`) and wins over `graph`. Edit a source string there to change the
+  world.
+
+### Keys while walking
+
+WASD and the mouse move and look, Shift sprints. Walking into a call door or
+a call portal enters that function; Backspace (or the room's return portal)
+goes back to where it was entered, or to the file hub when nothing was; R
+returns to the world start with an empty stack; N takes the next seed.
 
 ### The pipeline
 
@@ -70,16 +85,20 @@ Code → graph → layout → rendering, each in its own package:
 - `@repo/parser` parses one file with `@babel/parser` into functions and call
   sites (resolved, external or unresolved).
 - `@repo/code-graph` holds the language-independent `CodeGraph` types and the
-  spatial grammar: one room per function, one door per resolved call, one hub
-  room per file.
+  spatial grammar: one room per function, one hub room per file, a door for
+  the first call to each function and a portal for every other call, plus a
+  return portal per function room.
 - `@repo/types` holds the world data shapes for the three layers below.
-- `@repo/world-generator` turns a `WorldGraph` (rooms + connections) into a
-  `WorldLayout` (rooms and corridor-rooms with positions and doors) and then a
-  `BuiltWorld` (wall boxes, lintels, door frames, colliders). It is three-free
-  and fully seeded. Connections it cannot realise are listed in
-  `layout.unresolved`; the app shows them in the HUD.
+- `@repo/world-generator` turns a `WorldGraph` (rooms, connections, portals)
+  into a `WorldLayout` (rooms and corridor-rooms with positions, doors and
+  portals on their walls) and then a `BuiltWorld` (wall boxes, lintels, door
+  frames, portal frames and triggers, colliders). It is three-free and fully
+  seeded. Connections and portals it cannot realise are listed in
+  `layout.unresolved` and `layout.unplacedPortals`; the app shows them in the
+  HUD. Its `navigation` subpath is the exploration stack the app drives.
 - `@repo/renderer` draws a `BuiltWorld` and runs the player, which reports the
-  room it is in through `onRoomChange`.
+  room it is in through `onRoomChange`, portal entries through `onPortal`, and
+  the door or portal ahead through `onNearTarget`; `placement` teleports it.
 
 The example is parsed once at startup (a syntax error is shown in the HUD),
 and the world is built in a `useMemo` keyed on the seed, so it never

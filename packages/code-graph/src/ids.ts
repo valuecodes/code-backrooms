@@ -21,6 +21,35 @@ const callSiteId = (callerId: string, offset: number): string =>
 /** Module ids are paths and never contain `::`; function ids always do. */
 const isFunctionId = (id: string): boolean => id.includes(FUNCTION_SEPARATOR);
 
+const CALL_PORTAL_PREFIX = "portal:";
+const RETURN_PORTAL_PREFIX = "return:";
+
+/** A call portal is named by the call site it stands for: `portal:demo.ts::main@42`. */
+const callPortalId = (callSiteId: string): string =>
+  `${CALL_PORTAL_PREFIX}${callSiteId}`;
+
+/** A function's return portal: `return:demo.ts::main`. */
+const returnPortalId = (functionId: string): string =>
+  `${RETURN_PORTAL_PREFIX}${functionId}`;
+
+type PortalRef =
+  | { readonly kind: "call"; readonly callSiteId: string }
+  | { readonly kind: "return"; readonly functionId: string };
+
+/** What a portal id names, or null for ids that are not portals of this grammar. */
+const parsePortalId = (id: string): PortalRef | null => {
+  if (id.startsWith(CALL_PORTAL_PREFIX)) {
+    return { kind: "call", callSiteId: id.slice(CALL_PORTAL_PREFIX.length) };
+  }
+  if (id.startsWith(RETURN_PORTAL_PREFIX)) {
+    return {
+      kind: "return",
+      functionId: id.slice(RETURN_PORTAL_PREFIX.length),
+    };
+  }
+  return null;
+};
+
 /**
  * Keeps qualified names unique within a module: the first `foo` stays `foo`,
  * the next become `foo~2`, `foo~3`, in the order they are asked for.
@@ -34,4 +63,14 @@ const uniqueNames = (): ((qualifiedName: string) => string) => {
   };
 };
 
-export { callSiteId, functionId, isFunctionId, moduleId, uniqueNames };
+export {
+  callPortalId,
+  callSiteId,
+  functionId,
+  isFunctionId,
+  moduleId,
+  parsePortalId,
+  returnPortalId,
+  uniqueNames,
+};
+export type { PortalRef };

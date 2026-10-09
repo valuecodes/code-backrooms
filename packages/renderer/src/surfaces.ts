@@ -15,9 +15,26 @@ type Surfaces = {
   readonly fixture: MeshStandardMaterial;
   /** Dark wood door frames. */
   readonly frame: MeshStandardMaterial;
+  /** The dark plane filling a call portal: a cold glow. */
+  readonly voidCall: MeshStandardMaterial;
+  /** The dark plane filling a return portal: a warm glow. */
+  readonly voidReturn: MeshStandardMaterial;
+  /** The dark plane filling a jump portal: neutral. */
+  readonly voidJump: MeshStandardMaterial;
   readonly tile: typeof TILE;
   readonly dispose: () => void;
 };
+
+/** A near-black, faintly glowing surface, kept off the wall behind it. */
+const voidMaterial = (emissive: string): MeshStandardMaterial =>
+  new MeshStandardMaterial({
+    color: "#07070a",
+    emissive,
+    emissiveIntensity: 0.9,
+    roughness: 1,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+  });
 
 const createSurfaces = (anisotropy: number): Surfaces => {
   const textures = createSurfaceTextures(anisotropy);
@@ -40,13 +57,28 @@ const createSurfaces = (anisotropy: number): Surfaces => {
     roughness: 0.4,
   });
   const frame = new MeshStandardMaterial({ color: "#4a3620", roughness: 0.7 });
-  const materials = [wall, floor, ceiling, fixture, frame];
+  const voidCall = voidMaterial("#1b2a4a");
+  const voidReturn = voidMaterial("#4a1f12");
+  const voidJump = voidMaterial("#2a2a2a");
+  const materials = [
+    wall,
+    floor,
+    ceiling,
+    fixture,
+    frame,
+    voidCall,
+    voidReturn,
+    voidJump,
+  ];
   return {
     wall,
     floor,
     ceiling,
     fixture,
     frame,
+    voidCall,
+    voidReturn,
+    voidJump,
     tile: TILE,
     dispose: () => {
       for (const material of materials) {

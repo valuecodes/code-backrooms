@@ -1,4 +1,11 @@
-import type { Rect, RoomData, WorldGraph, WorldLayout } from "@repo/types";
+import type {
+  BuiltWorld,
+  Point,
+  Rect,
+  RoomData,
+  WorldGraph,
+  WorldLayout,
+} from "@repo/types";
 
 import {
   CORRIDOR_WIDTH,
@@ -6,11 +13,13 @@ import {
   MAX_CORRIDOR_LENGTH,
   MIN_GAP,
   MIN_SHARED,
+  PORTAL_GAP,
   WALL_THICKNESS,
 } from "./config";
 import { rectGap, rectsOverlap, sharedEdge } from "./fit";
 import { buildWorld, roomBounds } from "./geometry";
 import { connectionKey } from "./graph";
+import { containsPoint } from "./locate";
 
 /** Half-extent of the player's footprint, as the renderer uses it. */
 const PLAYER_RADIUS = 0.3;
@@ -189,14 +198,127 @@ const checkLayout = (graph: WorldGraph, layout: WorldLayout): Failure[] => {
   }
   for (const doorway of built.doorways) {
     const [x, , z] = doorway.center;
-    const foot: Rect = {
-      minX: x - PLAYER_RADIUS,
-      maxX: x + PLAYER_RADIUS,
-      minZ: z - PLAYER_RADIUS,
-      maxZ: z + PLAYER_RADIUS,
-    };
-    if (built.colliders.some((collider) => rectsOverlap(foot, collider))) {
+    if (blocked(built.colliders, { x, z })) {
       failures.push(`doorway at ${x},${z} is blocked by a wall`);
+    }
+  }
+  failures.push(...checkPortals(graph, layout, built));
+  return failures;
+};
+
+const blocked = (colliders: readonly Rect[], point: Point): boolean => {
+  const foot: Rect = {
+    minX: point.x - PLAYER_RADIUS,
+    maxX: point.x + PLAYER_RADIUS,
+    minZ: point.z - PLAYER_RADIUS,
+    maxZ: point.z + PLAYER_RADIUS,
+  };
+  return colliders.some((collider) => rectsOverlap(foot, collider));
+};
+
+const within = (rect: Rect, inner: Rect): boolean =>
+  inner.minX >= rect.minX &&
+  inner.maxX <= rect.maxX &&
+  inner.minZ >= rect.minZ &&
+  inner.maxZ <= rect.maxZ;
+
+/**
+ * Portals: every graph portal placed once or reported, none on a corridor,
+ * clear of corners, doors and each other, with a trigger inside its room
+ * and a walkable landing.
+ */
+const checkPortals = (
+  graph: WorldGraph,
+  layout: WorldLayout,
+  built: BuiltWorld
+): Failure[] => {
+  const failures: Failure[] = [];
+  const expected = new Set((graph.portals ?? []).map((portal) => portal.id));
+  const seen = new Set<string>();
+  for (const room of layout.rooms) {
+    for (const portal of room.portals ?? []) {
+      if (!expected.has(portal.id)) {
+        failures.push(`portal ${portal.id} is not in the graph`);
+      }
+      if (seen.has(portal.id)) {
+        failures.push(`portal ${portal.id} is placed twice`);
+      }
+      seen.add(portal.id);
+      if (room.kind === "corridor") {
+        failures.push(`portal ${portal.id} sits on corridor ${room.id}`);
+      }
+      if (portal.from !== room.id) {
+        failures.push(
+          `portal ${portal.id} sits on ${room.id}, not ${portal.from}`
+        );
+      }
+    }
+  }
+  for (const portal of layout.unplacedPortals) {
+    if (seen.has(portal.id)) {
+      failures.push(`portal ${portal.id} is both placed and unplaced`);
+    }
+    seen.add(portal.id);
+  }
+  for (const id of expected) {
+    if (!seen.has(id)) {
+      failures.push(`portal ${id} was dropped`);
+    }
+  }
+  for (const { room, openings } of built.rooms) {
+    const bounds = roomBounds(room);
+    const portals = room.portals ?? [];
+    for (const [i, portal] of portals.entries()) {
+      const [lo, hi] =
+        portal.wall === "north" || portal.wall === "south"
+          ? [bounds.minX, bounds.maxX]
+          : [bounds.minZ, bounds.maxZ];
+      const clearance = Math.min(
+        portal.along - DOOR_WIDTH / 2 - lo,
+        hi - portal.along - DOOR_WIDTH / 2
+      );
+      if (clearance < WALL_THICKNESS + PORTAL_GAP - 1e-9) {
+        failures.push(
+          `${room.id} ${portal.wall} portal is ${clearance} m from a corner`
+        );
+      }
+      const others = [
+        ...openings.map((opening) => [opening.wall, opening.along] as const),
+        ...portals
+          .slice(i + 1)
+          .map((other) => [other.wall, other.along] as const),
+      ];
+      for (const [wall, along] of others) {
+        if (
+          wall === portal.wall &&
+          Math.abs(along - portal.along) < DOOR_WIDTH + PORTAL_GAP - 1e-9
+        ) {
+          failures.push(
+            `${room.id} ${portal.wall} portal is too close to an opening`
+          );
+        }
+      }
+    }
+  }
+  const rects = new Map(
+    built.rooms.map(({ room }) => [room.id, roomBounds(room)])
+  );
+  for (const portal of built.portals) {
+    const own = rects.get(portal.portal.from);
+    const target = rects.get(portal.portal.to);
+    if (own === undefined || !within(own, portal.trigger)) {
+      failures.push(`portal ${portal.portal.id} trigger leaves its room`);
+    }
+    const landing = portal.arrival.position;
+    if (
+      target === undefined ||
+      !containsPoint(target, landing) ||
+      blocked(built.colliders, landing)
+    ) {
+      failures.push(`portal ${portal.portal.id} lands somewhere unwalkable`);
+    }
+    if (blocked(built.colliders, portal.returnPoint.position)) {
+      failures.push(`portal ${portal.portal.id} return point is in a wall`);
     }
   }
   return failures;

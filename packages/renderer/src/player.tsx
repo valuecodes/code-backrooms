@@ -1,8 +1,14 @@
 import { useFrame, useThree } from "@react-three/fiber";
-import type { BuiltWorld, Point } from "@repo/types";
+import type { BuiltWorld, Placement, Point } from "@repo/types";
 import { moveWithCollisions } from "@repo/world-generator/collision";
+import {
+  inAnyTrigger,
+  nearestTarget,
+  portalToEnter,
+} from "@repo/world-generator/interaction";
+import type { Target } from "@repo/world-generator/interaction";
 import { roomAt, roomRects } from "@repo/world-generator/locate";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { Vector3 } from "three";
 
 import { useMovementKeys } from "./controls";
@@ -15,6 +21,9 @@ import {
   WALK_SPEED,
 } from "./player-config";
 
+/** A teleport target; a new `nonce` makes a repeat of the same place distinct. */
+type Teleport = Placement & { readonly nonce: number };
+
 type PlayerProps = {
   readonly world: BuiltWorld;
   /** False while the pointer is not locked: input is ignored and motion stops. */
@@ -25,6 +34,12 @@ type PlayerProps = {
    * for the start room after the world changes.
    */
   readonly onRoomChange?: (roomId: string | null) => void;
+  /** Applied when it changes: the player is put there, looking at `facing`. */
+  readonly placement?: Teleport | null;
+  /** Called from the render loop once when the player steps into a portal. */
+  readonly onPortal?: (portalId: string) => void;
+  /** Called on change: the door or portal in front of the player, or null. */
+  readonly onNearTarget?: (target: Target | null) => void;
 };
 
 const UP = new Vector3(0, 1, 0);
@@ -37,8 +52,24 @@ const SMOOTHING = 10;
  */
 const PRIORITY = -1;
 
+const targetKey = (target: Target | null): string | null => {
+  if (target === null) {
+    return null;
+  }
+  return target.kind === "portal"
+    ? `portal:${target.portalId}`
+    : `door:${target.roomId}>${target.targetRoomId}`;
+};
+
 /** First-person movement, driven from the render loop without React state. */
-const Player = ({ world, enabled, onRoomChange }: PlayerProps) => {
+const Player = ({
+  world,
+  enabled,
+  onRoomChange,
+  placement,
+  onPortal,
+  onNearTarget,
+}: PlayerProps) => {
   const camera = useThree((state) => state.camera);
   const keys = useMovementKeys();
   const position = useRef<Point>(world.start);
@@ -48,21 +79,41 @@ const Player = ({ world, enabled, onRoomChange }: PlayerProps) => {
     [world]
   );
   const roomId = useRef<string | null>(null);
+  /** False from a teleport until the player has left every portal trigger. */
+  const armed = useRef(true);
+  const nearKey = useRef<string | null>(null);
   const scratch = useRef({
     forward: new Vector3(),
     right: new Vector3(),
     target: new Vector3(),
   });
 
+  /** Puts the player at `to`, looking at its facing point, with no momentum. */
+  const place = useCallback(
+    (to: Placement) => {
+      position.current = to.position;
+      velocity.current.set(0, 0, 0);
+      camera.position.set(to.position.x, EYE_HEIGHT, to.position.z);
+      camera.lookAt(to.facing.x, EYE_HEIGHT, to.facing.z);
+    },
+    [camera]
+  );
+
   useLayoutEffect(() => {
-    position.current = world.start;
-    // A new world is a fresh start: no momentum from the previous one.
-    velocity.current.set(0, 0, 0);
+    place({ position: world.start, facing: world.facing });
     // Forget the room too, so the first frame reports the new start room.
     roomId.current = null;
-    camera.position.set(world.start.x, EYE_HEIGHT, world.start.z);
-    camera.lookAt(world.facing.x, EYE_HEIGHT, world.facing.z);
-  }, [camera, world]);
+    armed.current = true;
+    nearKey.current = null;
+  }, [place, world]);
+
+  useLayoutEffect(() => {
+    if (placement !== null && placement !== undefined) {
+      place(placement);
+      // The landing is outside every trigger; stay disarmed until that is seen.
+      armed.current = false;
+    }
+  }, [place, placement]);
 
   useFrame((_, delta) => {
     // A longer frame is a pause (tab switch, pointer-lock dialog), not motion:
@@ -71,13 +122,13 @@ const Player = ({ world, enabled, onRoomChange }: PlayerProps) => {
     const dt = Math.min(delta, MAX_FRAME_SECONDS);
     const { forward, right, target } = scratch.current;
     target.set(0, 0, 0);
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    if (forward.lengthSq() > 0) {
+      forward.normalize();
+    }
     if (enabled) {
       const held = keys.current;
-      camera.getWorldDirection(forward);
-      forward.y = 0;
-      if (forward.lengthSq() > 0) {
-        forward.normalize();
-      }
       right.crossVectors(forward, UP);
       const ahead = (held.forward ? 1 : 0) - (held.backward ? 1 : 0);
       const side = (held.right ? 1 : 0) - (held.left ? 1 : 0);
@@ -105,9 +156,33 @@ const Player = ({ world, enabled, onRoomChange }: PlayerProps) => {
       roomId.current = current;
       onRoomChange?.(current);
     }
+    if (world.portals.length === 0 && onNearTarget === undefined) {
+      return;
+    }
+    const motion = {
+      position: next,
+      forward: { x: forward.x, z: forward.z },
+      velocity: { x, z },
+    };
+    const hit = portalToEnter(world.portals, motion, armed.current);
+    if (hit !== null) {
+      armed.current = false;
+      onPortal?.(hit.portal.id);
+    } else if (!armed.current && !inAnyTrigger(world.portals, next)) {
+      armed.current = true;
+    }
+    if (onNearTarget !== undefined) {
+      const near = nearestTarget(world, current, motion);
+      const key = targetKey(near);
+      if (key !== nearKey.current) {
+        nearKey.current = key;
+        onNearTarget(near);
+      }
+    }
   }, PRIORITY);
 
   return null;
 };
 
 export { Player };
+export type { Teleport };

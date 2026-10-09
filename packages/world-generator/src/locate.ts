@@ -16,7 +16,7 @@ const roomRects = (rooms: readonly RoomData[]): readonly RoomRect[] =>
     rect: roomBounds(room),
   }));
 
-const contains = (rect: Rect, point: Point): boolean =>
+const containsPoint = (rect: Rect, point: Point): boolean =>
   point.x >= rect.minX &&
   point.x <= rect.maxX &&
   point.z >= rect.minZ &&
@@ -34,12 +34,12 @@ const roomAt = (
 ): RoomRect | null => {
   if (preferredId !== null) {
     const preferred = rects.find((room) => room.id === preferredId);
-    if (preferred !== undefined && contains(preferred.rect, point)) {
+    if (preferred !== undefined && containsPoint(preferred.rect, point)) {
       return preferred;
     }
   }
-  return rects.find((room) => contains(room.rect, point)) ?? null;
+  return rects.find((room) => containsPoint(room.rect, point)) ?? null;
 };
 
-export { roomAt, roomRects };
+export { containsPoint, roomAt, roomRects };
 export type { RoomRect };

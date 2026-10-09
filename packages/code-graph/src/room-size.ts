@@ -23,6 +23,12 @@ const MAX_EXTENT = ROOM_SIZE_CLASSES.large.max;
  */
 const PERIMETER_PER_DOOR = 8;
 
+/**
+ * A portal is a frame on a solid wall, so it needs only its own width plus
+ * clearance, not room for a neighbour alongside.
+ */
+const PERIMETER_PER_PORTAL = 3;
+
 const snap = (value: number): number => Math.round(value / GRID) * GRID;
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -41,20 +47,18 @@ const sizeOf = (width: number): RoomSize => {
 };
 
 /**
- * Grows the smaller side until the perimeter can plausibly host `degree`
- * doors, within MAX_EXTENT. Sizing is a heuristic: whether the doors really
- * fit is decided by the layout.
+ * Grows the smaller side until the perimeter reaches `perimeter`, within
+ * MAX_EXTENT. Sizing is a heuristic: whether the openings really fit is
+ * decided by the layout.
  */
-const growForDoors = (
+const growToPerimeter = (
   width: number,
   depth: number,
-  degree: number,
-  perimeterPerDoor = PERIMETER_PER_DOOR
+  perimeter: number
 ): readonly [number, number] => {
   let w = width;
   let d = depth;
-  const fits = () => Math.floor((2 * (w + d)) / perimeterPerDoor) >= degree;
-  while (!fits() && (w < MAX_EXTENT || d < MAX_EXTENT)) {
+  while (2 * (w + d) < perimeter && (w < MAX_EXTENT || d < MAX_EXTENT)) {
     if (w <= d && w < MAX_EXTENT) {
       w += GRID;
     } else {
@@ -64,19 +68,36 @@ const growForDoors = (
   return [w, d];
 };
 
+/** Grows the footprint until it can plausibly host `degree` doors. */
+const growForDoors = (
+  width: number,
+  depth: number,
+  degree: number,
+  perimeterPerDoor = PERIMETER_PER_DOOR
+): readonly [number, number] =>
+  growToPerimeter(width, depth, degree * perimeterPerDoor);
+
 /**
  * Deterministic room footprint for a function: the size class comes from its
- * length, the exact extent from where in the band it falls, and the degree
- * (distinct neighbours) can only make it larger.
+ * length, the exact extent from where in the band it falls, and the openings
+ * (doors to neighbouring rooms, portals on its walls) can only make it larger.
  */
-const roomDimensions = (lineCount: number, degree: number): RoomDimensions => {
+const roomDimensions = (
+  lineCount: number,
+  doors: number,
+  portals = 0
+): RoomDimensions => {
   const [band, lo, hi] = bandOf(Math.max(1, lineCount));
   const { min, max } = ROOM_SIZE_CLASSES[band];
   const t = clamp((Math.max(1, lineCount) - lo) / (hi - lo), 0, 1);
   const width = snap(min + t * (max - min));
   const depth = snap(Math.max(min, 0.75 * width));
-  const [w, d] = growForDoors(width, depth, degree);
-  // The class follows the band, unless doors grew the room past it.
+  const [w, d] = growToPerimeter(
+    width,
+    depth,
+    doors * PERIMETER_PER_DOOR + portals * PERIMETER_PER_PORTAL
+  );
+  // The class follows the band, unless openings grew the room past it.
   return { width: w, depth: d, size: w > max ? sizeOf(w) : band };
 };
 

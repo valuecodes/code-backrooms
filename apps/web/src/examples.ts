@@ -104,7 +104,41 @@ function tick() {
 `,
 };
 
-const examples = { demo, chain, pair, service, external } as const;
+/**
+ * Three callers of one function (one door, two portals) and a recursive
+ * function (a portal back into its own room).
+ */
+const portals: SourceFile = {
+  path: "portals.ts",
+  source: `function main() {
+  const a = load("a");
+  const b = render(a);
+  countdown(3);
+  return format(b);
+}
+
+function load(key: string) {
+  return format(key);
+}
+
+function render(value: string) {
+  return format(value);
+}
+
+function format(value: string) {
+  return value.trim();
+}
+
+function countdown(n: number): number {
+  if (n === 0) {
+    return 0;
+  }
+  return countdown(n - 1);
+}
+`,
+};
+
+const examples = { demo, chain, pair, service, external, portals } as const;
 
 type ExampleName = keyof typeof examples;
 

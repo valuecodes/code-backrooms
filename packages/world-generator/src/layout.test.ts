@@ -169,6 +169,7 @@ describe("presets", () => {
     for (let seed = 1; seed <= 20; seed += 1) {
       const layout = generateLayout(graph, seed);
       expect(checkLayout(graph, layout)).toEqual([]);
+      expect(layout.unplacedPortals).toEqual([]);
       expect(layout.rooms.filter((room) => room.kind === "room")).toHaveLength(
         graph.rooms.length
       );

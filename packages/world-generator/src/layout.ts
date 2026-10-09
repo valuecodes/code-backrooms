@@ -22,6 +22,7 @@ import { fit, NONE, sharedEdge, snap } from "./fit";
 import type { Placed } from "./fit";
 import { OPPOSITE } from "./geometry";
 import { adjacencyOf, connectionKey, validateGraph } from "./graph";
+import { placePortals } from "./portals";
 import { createRng, shuffle } from "./random";
 import type { Rng } from "./random";
 
@@ -43,7 +44,9 @@ type Failure = {
   readonly to: string;
 };
 
-type Attempt = { readonly ok: true; readonly layout: WorldLayout } | Failure;
+type Attempt =
+  | { readonly ok: true; readonly layout: Omit<WorldLayout, "unplacedPortals"> }
+  | Failure;
 
 const WALLS: readonly WallSide[] = ["north", "south", "east", "west"];
 
@@ -336,18 +339,36 @@ const attempt = (graph: WorldGraph, start: string, rng: Rng): Attempt => {
  * Places every room of a validated graph on the plane. Deterministic for a
  * given graph and seed. Retries with a bumped seed when the greedy search
  * paints itself into a corner, then throws naming the connection it could
- * not place.
+ * not place. Portals go onto free wall space afterwards; when a packing
+ * leaves some without a wall, later attempts are tried and the best one is
+ * returned with its `unplacedPortals`, never an error.
  */
 const generateLayout = (graph: WorldGraph, seed: number): WorldLayout => {
   validateGraph(graph);
   const start = graph.start ?? graph.rooms[0]?.id ?? "";
   let failure: Failure | null = null;
+  let best: WorldLayout | null = null;
   for (let tries = 0; tries < MAX_LAYOUT_ATTEMPTS; tries += 1) {
     const result = attempt(graph, start, createRng(seed + tries * 1_000_003));
-    if (result.ok) {
-      return result.layout;
+    if (!result.ok) {
+      failure = result;
+      continue;
     }
-    failure = result;
+    const placed = placePortals(result.layout.rooms, graph.portals ?? []);
+    const layout: WorldLayout = {
+      ...result.layout,
+      rooms: placed.rooms,
+      unplacedPortals: placed.unplaced,
+    };
+    if (placed.unplaced.length === 0) {
+      return layout;
+    }
+    if (best === null || placed.unplaced.length < best.unplacedPortals.length) {
+      best = layout;
+    }
+  }
+  if (best !== null) {
+    return best;
   }
   const edge = failure === null ? "?" : `${failure.from} -> ${failure.to}`;
   throw new Error(

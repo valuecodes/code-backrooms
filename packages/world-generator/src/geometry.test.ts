@@ -1,7 +1,14 @@
-import type { RoomData, WallSegment, WorldData } from "@repo/types";
+import type { PortalData, RoomData, WallSegment, WorldData } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
-import { DOOR_HEIGHT, DOOR_WIDTH, WALL_HEIGHT, WALL_THICKNESS } from "./config";
+import {
+  ARRIVAL_INSET,
+  DOOR_HEIGHT,
+  DOOR_WIDTH,
+  PORTAL_TRIGGER_DEPTH,
+  WALL_HEIGHT,
+  WALL_THICKNESS,
+} from "./config";
 import { buildWorld, doorOpening, wallSegments } from "./geometry";
 
 const lobby: RoomData = {
@@ -194,5 +201,99 @@ describe("buildWorld", () => {
   it("rejects a door to an unknown room", () => {
     const dangling: WorldData = { startRoomId: "lobby", rooms: [lobby] };
     expect(() => buildWorld(dangling)).toThrow(/unknown room/);
+  });
+});
+
+describe("buildWorld portals", () => {
+  const call: PortalData = {
+    id: "portal:call",
+    kind: "call",
+    from: "lobby",
+    to: "annex",
+    wall: "north",
+    along: 0,
+  };
+  const back: PortalData = {
+    id: "return:annex",
+    kind: "return",
+    from: "annex",
+    to: "lobby",
+    wall: "east",
+    along: 1,
+  };
+  const world = buildWorld({
+    startRoomId: "lobby",
+    rooms: [
+      { ...lobby, portals: [call] },
+      { ...annex, portals: [back] },
+    ],
+  });
+  const [callBuilt, backBuilt] = world.portals;
+
+  it("puts the frame on the wall's inner face with a trigger strip in front", () => {
+    expect(callBuilt?.frame).toEqual({
+      center: [0, 0, -4 + WALL_THICKNESS / 2],
+      axis: "x",
+      width: DOOR_WIDTH,
+      depth: WALL_THICKNESS,
+    });
+    expect(callBuilt?.normal).toEqual({ x: 0, z: 1 });
+    expect(callBuilt?.trigger).toEqual({
+      minX: -DOOR_WIDTH / 2,
+      maxX: DOOR_WIDTH / 2,
+      minZ: -4 + WALL_THICKNESS,
+      maxZ: -4 + WALL_THICKNESS + PORTAL_TRIGGER_DEPTH,
+    });
+    expect(callBuilt?.returnPoint).toEqual({
+      position: { x: 0, z: -4 + ARRIVAL_INSET },
+      facing: { x: 0, z: -4 + ARRIVAL_INSET + 1 },
+    });
+  });
+
+  it("lands a call just inside the callee's return portal, and a return at the hub entry", () => {
+    // The annex's east wall is at x = 13; its return portal is at z = 1.
+    expect(callBuilt?.arrival).toEqual({
+      position: { x: 13 - ARRIVAL_INSET, z: 1 },
+      facing: { x: 13 - ARRIVAL_INSET - 1, z: 1 },
+    });
+    // The lobby has no return portal: its entry is the centre facing its door.
+    expect(backBuilt?.arrival).toEqual({
+      position: { x: 0, z: 0 },
+      facing: { x: 5, z: 1 },
+    });
+  });
+
+  it("lands recursion inside the room's own return portal", () => {
+    const self: PortalData = { ...call, id: "portal:self", to: "lobby" };
+    const exit: PortalData = { ...back, id: "return:lobby", from: "lobby" };
+    const recursive = buildWorld({
+      startRoomId: "lobby",
+      rooms: [{ ...lobby, portals: [exit, self] }, annex],
+    });
+    expect(recursive.portals[1]?.arrival).toEqual(
+      recursive.portals[0]?.returnPoint
+    );
+    // A start room with a return portal starts the player inside it.
+    expect(recursive.start).toEqual(recursive.portals[0]?.returnPoint.position);
+  });
+
+  it("leaves the wall behind a portal solid", () => {
+    const plain = buildWorld(worldData);
+    expect(world.colliders).toHaveLength(plain.colliders.length);
+    const north = world.rooms[0]?.segments.filter(
+      (segment) =>
+        Math.abs(segment.center[2] - (-4 + WALL_THICKNESS / 2)) < 1e-9
+    );
+    expect(north).toHaveLength(1);
+    expect(world.doorways).toHaveLength(1);
+  });
+
+  it("rejects a portal to an unknown room", () => {
+    expect(() =>
+      buildWorld({
+        startRoomId: "lobby",
+        rooms: [{ ...lobby, portals: [{ ...call, to: "nowhere" }] }, annex],
+      })
+    ).toThrow(/unknown room "nowhere"/);
   });
 });

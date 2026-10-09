@@ -5,6 +5,7 @@ import { useEffect, useMemo } from "react";
 import { DoorFrames } from "./door-frames";
 import { fixturePositions } from "./fixtures";
 import { LightPool } from "./lights";
+import { Portals } from "./portals";
 import { Room } from "./room";
 import { createSurfaces, SurfacesContext } from "./surfaces";
 
@@ -42,6 +43,7 @@ const World = ({ world }: WorldProps) => {
         <Room key={built.room.id} built={built} />
       ))}
       <DoorFrames doorways={world.doorways} />
+      <Portals portals={world.portals} />
       <LightPool fixtures={fixtures} />
     </SurfacesContext>
   );
