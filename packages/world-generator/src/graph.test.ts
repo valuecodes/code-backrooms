@@ -116,6 +116,38 @@ describe("validateGraph clusters", () => {
     ).toThrow(/do not fill/);
   });
 
+  it("rejects rooms that leave a hole in the box", () => {
+    expect(() =>
+      validateGraph(
+        withCluster({
+          rooms: roomsWith("call", {
+            rect: { minX: 0, maxX: 4, minZ: 4.5, maxZ: 7 },
+          }),
+        })
+      )
+    ).toThrow(/do not fill/);
+  });
+
+  it("rejects a placed portal off the lattice or too near a corner", () => {
+    for (const along of [0.3, 0.5, 3.6, Number.NaN]) {
+      expect(() =>
+        validateGraph(
+          withCluster({
+            portals: [
+              {
+                id: "return:fn",
+                kind: "return",
+                roomId: "ret",
+                wall: "south",
+                along,
+              },
+            ],
+          })
+        )
+      ).toThrow(/off the lattice or too near/);
+    }
+  });
+
   it("rejects duplicate ids, including across clusters and graph rooms", () => {
     expect(() =>
       validateGraph(withCluster({ rooms: roomsWith("call", { id: "hub" }) }))
@@ -177,6 +209,31 @@ describe("validateGraph clusters", () => {
     expect(() =>
       validateGraph(withCluster({ doors: cluster.doors.slice(0, 1) }))
     ).toThrow(/not reachable from the entry/);
+  });
+
+  it("rejects a portal placed by two cluster rooms", () => {
+    expect(() =>
+      validateGraph(
+        withCluster({
+          portals: [
+            {
+              id: "return:fn",
+              kind: "return",
+              roomId: "ret",
+              wall: "south",
+              along: 2,
+            },
+            {
+              id: "return:fn",
+              kind: "return",
+              roomId: "call",
+              wall: "west",
+              along: 5.5,
+            },
+          ],
+        })
+      )
+    ).toThrow(/more than one cluster room/);
   });
 
   it("ties a cluster's placed portals to the graph's", () => {

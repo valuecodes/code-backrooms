@@ -73,9 +73,9 @@ const caseBody = (
 };
 
 /**
- * A switch ends when it covers `default`, every case ends, none falls
- * through and no `break` inside its cases leaves it (`context.broken`
- * collects those as the bodies are built).
+ * A switch ends when it covers `default`, every case ends (a case that
+ * falls through ends when the next one does) and no `break` inside its
+ * cases leaves it (`context.broken` collects those as the bodies are built).
  */
 const switchOf = (
   node: SwitchStatement,
@@ -90,7 +90,12 @@ const switchOf = (
   // The calls in the case tests count as the switch's own, like the discriminant's.
   const testSites: string[] = [];
   let hasDefault = false;
-  let ends = true;
+  // Whether each case ends, in order; a case that falls through ends when
+  // the next one does, so this is settled from the back once all are built.
+  const caseEnds: {
+    readonly terminal: boolean;
+    readonly fallsThrough: boolean;
+  }[] = [];
   // Empty cases merge into the next one with a body, keeping their labels.
   let labels: string[] = [];
   let first: SourceSpan | null = null;
@@ -112,7 +117,7 @@ const switchOf = (
     const { statements, broke } = caseBody(item.consequent, label);
     const run: Run = context.run(statements, inner);
     const fallsThrough = !broke && !last && !run.terminal;
-    ends &&= run.terminal && !fallsThrough;
+    caseEnds.push({ terminal: run.terminal, fallsThrough });
     cases.push({
       id: flowNodeId(context.functionId, caseSpan.start, "case"),
       span: {
@@ -140,13 +145,22 @@ const switchOf = (
     callSiteIds: [...headSites(context, discriminant), ...testSites],
     cases,
   };
+  let ends = true;
+  let nextEnds = false;
+  for (const item of caseEnds.reverse()) {
+    nextEnds = item.terminal || (item.fallsThrough && nextEnds);
+    ends &&= nextEnds;
+  }
   return {
     node: node_,
     terminal: hasDefault && ends && !context.broken.has(id),
   };
 };
 
-/** Loops never end the flow: their condition may fail at once. */
+/**
+ * A do-while runs its body once, so it ends when the body does and no
+ * `break` or `continue` targets it; any other loop may not run at all.
+ */
 const loopOf = (
   node: Loop,
   context: FlowContext,
@@ -162,6 +176,10 @@ const loopOf = (
     loopKind === "do-while"
       ? textOf(context.source, body.end, end)
       : textOf(context.source, span.start, body.start);
+  const run = context.run(
+    [node.body],
+    nested(context, { id, kind: "loop", label })
+  );
   const loop: LoopNode = {
     id,
     kind: "loop",
@@ -172,11 +190,17 @@ const loopOf = (
     body: sequenceNode(
       flowNodeId(context.functionId, span.start, "sequence", "loop"),
       body,
-      context.run([node.body], nested(context, { id, kind: "loop", label }))
-        .steps
+      run.steps
     ),
   };
-  return { node: loop, terminal: false };
+  return {
+    node: loop,
+    terminal:
+      loopKind === "do-while" &&
+      run.terminal &&
+      !context.broken.has(id) &&
+      !context.continued.has(id),
+  };
 };
 
 export { branchOf, loopOf, switchOf };

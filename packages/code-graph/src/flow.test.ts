@@ -112,8 +112,30 @@ describe("isTerminal", () => {
     expect(isTerminal(branch(seq([call()]), seq([ret()])))).toBe(false);
   });
 
-  it("never treats a loop as terminal", () => {
+  it("treats only a do-while with an ending body as terminal", () => {
     expect(isTerminal(loop(seq([ret()])))).toBe(false);
+    const doWhile = (body: SequenceNode): FlowNode => ({
+      ...loop(body),
+      loopKind: "do-while",
+    });
+    expect(isTerminal(doWhile(seq([ret()])))).toBe(true);
+    expect(isTerminal(doWhile(seq([call()])))).toBe(false);
+    const node = doWhile(seq([branch(seq([brk("loop")]), seq([ret()]))]));
+    expect(isTerminal({ ...node, id: "loop" })).toBe(false);
+  });
+
+  it("lets a case end through the terminal case it falls into", () => {
+    const falling = sw("s", [
+      kase(["case 1"], seq([call()]), true),
+      kase(["default"], seq([ret()])),
+    ]);
+    expect(isTerminal(falling)).toBe(true);
+    const open = sw("s", [
+      kase(["case 1"], seq([call()]), true),
+      kase(["case 2"], seq([call()])),
+      kase(["default"], seq([ret()])),
+    ]);
+    expect(isTerminal(open)).toBe(false);
   });
 
   it("ends a try by its finalizer, or by both its block and handler", () => {
@@ -146,6 +168,7 @@ describe("isTerminal", () => {
     expect(isTerminal(noDefault)).toBe(false);
     const falling = sw("s", [
       kase(["case 1"], seq([call()]), true),
+      kase(["case 2"], seq([call()])),
       kase(["default"], seq([ret()])),
     ]);
     expect(isTerminal(falling)).toBe(false);

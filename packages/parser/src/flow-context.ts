@@ -59,6 +59,8 @@ type FlowContext = {
   readonly targets: readonly Target[];
   /** Ids of the loops and switches a `break` leaves; shared by every level. */
   readonly broken: Set<string>;
+  /** Ids of the loops a `continue` restarts. */
+  readonly continued: Set<string>;
   readonly depth: number;
   /** The statement walker, for composites to build their bodies with. */
   readonly run: (statements: readonly Statement[], context: FlowContext) => Run;
