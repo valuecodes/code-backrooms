@@ -6,7 +6,9 @@ import type { ClusterPortal, Port } from "@repo/types";
 import {
   FLOW_CALL_DEPTH,
   FLOW_PORTAL_PITCH,
+  GRID,
   MIN_GAP,
+  MIN_SHARED,
 } from "@repo/world-generator/config";
 
 import type { FlowCallee, FlowRoomSpec } from "./flow-measure";
@@ -49,7 +51,19 @@ type Hang = {
 type Span = {
   readonly lo: number;
   readonly hi: number;
+  /** How much further down the door may sit than for a plain column. */
+  readonly reach: number;
 };
+
+/**
+ * A callee placed against a port may overlap it by only MIN_SHARED, so it
+ * can reach `width - MIN_SHARED` past the port's end, and the door is
+ * centred on the overlap: up to `width / 2 - MIN_SHARED` past the port's
+ * end. That is nothing for a plain 4 m column; a wider callee (a fork, a
+ * loop) pushes the portals below the port down by the difference.
+ */
+const doorReach = (calleeWidth: number): number =>
+  Math.max(0, Math.ceil((calleeWidth / 2 - MIN_SHARED) / GRID) * GRID);
 
 type Hung = {
   readonly depth: number;
@@ -134,10 +148,11 @@ const hangCallees = (
       below > 0
         ? lo + FLOW_CALL_DEPTH
         : Math.max(lo + FLOW_CALL_DEPTH, tracker.lastHi + pitch);
-    spans.set(wall, { lo, hi });
+    const reach = below > 0 ? doorReach(widthOf(callee.unitId)) : 0;
+    spans.set(wall, { lo, hi, reach });
     depth = Math.max(
       depth,
-      hi - z + (below > 0 ? below * FLOW_PORTAL_PITCH + PORTAL_TAIL : 0)
+      hi - z + (below > 0 ? reach + below * FLOW_PORTAL_PITCH + PORTAL_TAIL : 0)
     );
   }
   for (const wall of SIDES) {
@@ -174,7 +189,7 @@ const hangCallees = (
     const along =
       span === undefined
         ? z + PORTAL_TAIL + FLOW_PORTAL_PITCH * placedOn[wall]
-        : span.hi + FLOW_PORTAL_PITCH * (placedOn[wall] + 1);
+        : span.hi + span.reach + FLOW_PORTAL_PITCH * (placedOn[wall] + 1);
     placedOn[wall] += 1;
     portals.push({
       id: callPortalId(callee.siteId),
