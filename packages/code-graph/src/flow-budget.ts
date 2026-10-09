@@ -61,6 +61,7 @@ const merge = (
     terminal: b.terminal,
     // A pair ending in a room that jumps out still jumps out.
     ...(b.jumpTo === undefined ? {} : { jumpTo: b.jumpTo }),
+    ...(b.escapes === undefined ? {} : { escapes: b.escapes }),
   };
 };
 

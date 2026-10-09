@@ -19,7 +19,7 @@ import type {
   FlowStep,
   FunctionNode,
 } from "./code-graph";
-import { countStatements, escapingJump, hasReturn, isTerminal } from "./flow";
+import { countStatements, escapingJumps, hasReturn, isTerminal } from "./flow";
 import { flowNodeText, resolvedSites, siteIdsUnder } from "./flow-text";
 import type { SiteIndex } from "./flow-text";
 import { flowNodeId, parseFlowNodeId, taggedFlowNodeId } from "./ids";
@@ -48,9 +48,16 @@ type FlowRoomSpec = {
   readonly terminal: boolean;
   /**
    * The room a jump portal on this room leads to: a `break` or `continue`,
-   * or a collapsed node that ends by jumping out of itself.
+   * or a collapsed node that ends by jumping out of itself, always to the
+   * same room.
    */
   readonly jumpTo?: string;
+  /**
+   * For a collapsed node that ends in more than one way (jumps to different
+   * rooms, or a jump and a return): the loops and switches its jumps leave.
+   * One portal cannot show those ways, so they are collapsed too.
+   */
+  readonly escapes?: readonly string[];
 };
 
 /**
@@ -184,19 +191,35 @@ const jumpTarget = (jump: BreakNode | ContinueNode): string | null => {
     : null;
 };
 
+type Exits = Pick<FlowRoomSpec, "jumpTo" | "escapes">;
+
 /**
  * Where a room for `node` jumps to: a jump's target, or for a collapsed
- * node that ends without returning, the target of its first jump out.
+ * node that ends, the room all its jumps out lead to. A node that also
+ * returns or jumps to several rooms names the composites it leaves instead.
  */
-const jumpOf = (node: FlowStep, terminal: boolean): string | null => {
+const exitsOf = (node: FlowStep, terminal: boolean): Exits => {
   if (node.kind === "break" || node.kind === "continue") {
-    return jumpTarget(node);
+    const target = jumpTarget(node);
+    return target === null ? {} : { jumpTo: target };
   }
-  if (!terminal || hasReturn(node)) {
-    return null;
+  if (!terminal) {
+    return {};
   }
-  const jump = escapingJump(node);
-  return jump === null ? null : jumpTarget(jump);
+  const jumps = escapingJumps(node);
+  const targets = new Set(jumps.map(jumpTarget));
+  const [only] = targets;
+  if (
+    targets.size === 1 &&
+    only !== null &&
+    only !== undefined &&
+    !hasReturn(node)
+  ) {
+    return { jumpTo: only };
+  }
+  return jumps.length === 0
+    ? {}
+    : { escapes: [...new Set(jumps.map((jump) => jump.targetId))] };
 };
 
 /**
@@ -213,7 +236,6 @@ const specOf = (
   const callees = calleesOf(ids, sites);
   const statements = countStatements(node);
   const terminal = isTerminal(node);
-  const jumpTo = jumpOf(node, terminal);
   return {
     kind: "room",
     id: node.id,
@@ -225,7 +247,7 @@ const specOf = (
     depth: depthOf(role, statements, callees.length, entry),
     floor: depthOf(role, statements, 0, entry),
     terminal,
-    ...(jumpTo === null ? {} : { jumpTo }),
+    ...exitsOf(node, terminal),
   };
 };
 

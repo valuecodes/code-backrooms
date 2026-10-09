@@ -168,6 +168,26 @@ describe("jump portals", () => {
     expect(planFlow(fnWith(steps), []).jumps.size).toBe(0);
   });
 
+  it("collapses a loop that a collapsed room leaves in more than one way", () => {
+    // A falling-through case keeps the switch collapsed; it ends by leaving
+    // the loop through a break and a continue, or a break and a return,
+    // and one portal cannot show both.
+    for (const other of [continueOut(12, LOOP), ret(12)]) {
+      const mixed = switchNode(2, [
+        { labels: ["case 1"], body: [step(10, 1)], fallsThrough: true },
+        { labels: ["case 2"], body: [breakOut(11, LOOP)] },
+        { labels: ["default"], body: [other] },
+      ]);
+      const cluster = valid(
+        clusterOf([step(0, 1), loop(1, [mixed]), step(30, 1)])
+      );
+      expect(rolesOf(cluster)).toEqual(["step", "collapsed", "step"]);
+      expect(
+        cluster.portals.filter((portal) => portal.kind === "jump")
+      ).toEqual([]);
+    }
+  });
+
   it("keeps the jump's target in the plan for the HUD", () => {
     const { jumps } = planFlow(
       fnWith([step(0, 1), loop(1, [branch(2, [breakOut(3, LOOP)])])]),

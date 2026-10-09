@@ -77,8 +77,11 @@ Jumps are portals within the cluster. A `jump` room (`break`, `continue`)
 has a `jump` portal on its south wall, `jump:<room id>`, leading to a room
 of the same cluster: `continue` to the loop's `again?` test, `break` to the
 loop's end room or the switch's merge room; the stack is left alone. A
-collapsed room that ends by jumping out of itself (and holds no `return`)
-gets the jump portal of its first jump out instead of a return portal.
+collapsed room that ends by jumping out of itself, always to the same room
+and never returning, gets that jump portal instead of a return portal; one
+that ends in more than one way (a `break` and a `continue`, a jump and a
+return) gets the loops and switches it leaves collapsed around it, since one
+portal could not show every way out.
 `FlowPlan.jumps` maps each jumping room to its target. Folding can swallow a
 jump into a collapsed room that runs on; a loop or switch whose rooms only
 that jump led into is then collapsed too, so every room keeps a way in.

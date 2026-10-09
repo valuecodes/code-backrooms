@@ -151,17 +151,23 @@ const roomEntry = ({ room, openings }: BuiltRoom): Placement => {
 /**
  * Where a jump lands in a room of its own cluster: the centre, facing the
  * way on, which is the room's return portal when it ends the function and
- * otherwise its last doorway (doors are declared in flow order, so that is
- * the one onward: past a merge or end room, `→ exit` from a loop's test).
+ * otherwise its last doorway within the cluster (cluster doors are declared
+ * in flow order, so that is the one onward: past a merge or end room,
+ * `→ exit` from a loop's test; doors to callees come after them).
  */
-const jumpArrival = ({ room, openings }: BuiltRoom): Placement => {
+const jumpArrival = (
+  { room, openings }: BuiltRoom,
+  byId: ReadonlyMap<string, RoomData>
+): Placement => {
   const exit = room.portals?.find((portal) => portal.kind === "return");
-  return centreFacing(
-    room,
-    exit === undefined
-      ? openings.at(-1)
-      : pointInside(room, exit.wall, exit.along, 0)
-  );
+  if (exit !== undefined) {
+    return centreFacing(room, pointInside(room, exit.wall, exit.along, 0));
+  }
+  const onward = openings.filter((_, index) => {
+    const target = byId.get(room.doors[index]?.targetRoomId ?? "");
+    return target !== undefined && target.cluster === room.cluster;
+  });
+  return centreFacing(room, onward.at(-1) ?? openings.at(-1));
 };
 
 /**
@@ -277,7 +283,7 @@ const buildWorld = (data: WorldData): BuiltWorld => {
     }
   }
   const jumpEntryOf = new Map(
-    rooms.map((built) => [built.room.id, jumpArrival(built)])
+    rooms.map((built) => [built.room.id, jumpArrival(built, byId)])
   );
   const portals = rooms.flatMap((built) =>
     (built.room.portals ?? []).map((portal) =>
