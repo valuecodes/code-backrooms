@@ -19,10 +19,12 @@ stable ids), call sites with a resolution status, and call/containment edges.
 `./world-graph` is the grammar for this milestone: one room per function, one
 hub room per module that opens onto the module's root functions, and calls as
 doors or portals. Per module, a breadth-first walk of the call graph from the
-roots makes each function's first discovered call a physical door (`kind:
-"call"` on the connection, at most five out of one room); every other resolved
-call, recursion and extra callers of a shared function included, becomes a
-`call` portal in the caller's room, and every function room gets a `return`
+roots gives each function one physical door (`kind: "call"` on the
+connection) from the caller that first reaches it in that walk, with at most
+five doors out of any room, so a caller past its cap leaves a callee for a
+later caller's door; every other resolved call, recursion and extra callers
+of a shared function included, becomes a `call` portal in the caller's room,
+and every function room gets a `return`
 portal that leads back to the module hub when nothing is on the navigation
 stack. The physical graph is therefore a tree and always lays out. Functions
 a directed walk from the roots cannot reach (mutual recursion with no outside
