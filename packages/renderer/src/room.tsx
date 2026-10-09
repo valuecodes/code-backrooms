@@ -3,6 +3,7 @@ import { WALL_HEIGHT } from "@repo/world-generator/config";
 import { useEffect, useMemo } from "react";
 
 import { FIXTURE_DROP, fixturePositions } from "./fixtures";
+import { frameTint, wallTint } from "./lane-tint";
 import { mergeBoxes } from "./merge";
 import { useSurfaces } from "./surfaces";
 import { tiledPlane } from "./tiled-geometry";
@@ -23,8 +24,19 @@ const Room = ({ built }: RoomProps) => {
   const { room } = built;
   const [x, y, z] = room.position;
   const top = y + WALL_HEIGHT;
+  // Walls take their lane's wash, lintels the full colour of their door's lane.
   const walls = useMemo(
-    () => mergeBoxes(built.segments, surfaces.tile.wallpaper),
+    () =>
+      mergeBoxes(
+        built.segments.map((segment) => ({
+          ...segment,
+          color:
+            segment.kind === "lintel"
+              ? frameTint(segment.lane)
+              : wallTint(segment.lane),
+        })),
+        surfaces.tile.wallpaper
+      ),
     [built.segments, surfaces.tile.wallpaper]
   );
   const floor = useMemo(

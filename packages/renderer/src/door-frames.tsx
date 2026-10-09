@@ -2,6 +2,7 @@ import type { Doorway } from "@repo/types";
 import { DOOR_HEIGHT } from "@repo/world-generator/config";
 import { useEffect, useMemo } from "react";
 
+import { frameTint } from "./lane-tint";
 import { mergeBoxes } from "./merge";
 import type { Box } from "./merge";
 import { useSurfaces } from "./surfaces";
@@ -19,12 +20,13 @@ const PROUD = 0.02;
  */
 const REVEAL = 0.01;
 
-/** Head and two jambs of a dark wooden frame around one doorway. */
+/** Head and two jambs of a dark wooden frame around one doorway, tinted by its lane. */
 const frameBoxes = (doorway: Doorway): Box[] => {
   const [x, y, z] = doorway.center;
   const alongX = doorway.axis === "x";
   const depth = doorway.depth + PROUD * 2;
   const offset = doorway.width / 2 + TRIM / 2 - REVEAL;
+  const color = frameTint(doorway.lane);
   const headSize = alongX
     ? ([doorway.width + TRIM * 2, TRIM, depth] as const)
     : ([depth, TRIM, doorway.width + TRIM * 2] as const);
@@ -36,14 +38,17 @@ const frameBoxes = (doorway: Doorway): Box[] => {
     {
       center: [x, y + DOOR_HEIGHT + TRIM / 2 - REVEAL, z],
       size: headSize,
+      color,
     },
     {
       center: alongX ? [x - offset, jambY, z] : [x, jambY, z - offset],
       size: jambSize,
+      color,
     },
     {
       center: alongX ? [x + offset, jambY, z] : [x, jambY, z + offset],
       size: jambSize,
+      color,
     },
   ];
 };
