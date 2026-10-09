@@ -188,6 +188,23 @@ describe("jump portals", () => {
     }
   });
 
+  it("collapses a loop whose break hides in a collapsed room that runs on", () => {
+    // The body runs out of its end, but the break inside the collapsed
+    // switch would have no portal: the ring would hide a way out.
+    const hiding = switchNode(2, [
+      {
+        labels: ["case 1"],
+        body: [branch(10, [breakOut(11, LOOP)])],
+        fallsThrough: true,
+      },
+      { labels: ["case 2"], body: [step(12, 1)] },
+    ]);
+    const cluster = valid(
+      clusterOf([step(0, 1), loop(1, [hiding, step(20, 1)]), step(30, 1)])
+    );
+    expect(rolesOf(cluster)).toEqual(["step", "collapsed", "step"]);
+  });
+
   it("keeps the jump's target in the plan for the HUD", () => {
     const { jumps } = planFlow(
       fnWith([step(0, 1), loop(1, [branch(2, [breakOut(3, LOOP)])])]),

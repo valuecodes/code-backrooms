@@ -47,11 +47,11 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   room across the top, the body down the west side (ochre walls) beside a
   corridor back (deeper ochre), and at the bottom an `again?` room (a
   do-while's `while (…)`) with two doors, `→ repeat` up the corridor into
-  the header again and `→ exit` into `end for` / `end while`. A `break` or
-  `continue` inside the body is a dead-end room until jump portals land; a
-  loop whose body ends in a return or a jump stays collapsed. Lane prompts
-  only show walking with the flow; the way back names the room
-  (`→ again?`). See `?code=loops`.
+  the header again and `→ exit` into `end for` / `end while`. Until
+  Milestone 8, a `break` or `continue` inside the body was a dead-end room
+  and a loop whose body ended in a jump stayed collapsed. Lane prompts only
+  show walking with the flow; the way back names the room (`→ again?`).
+  See `?code=loops`.
 - Milestone 8 (current): jumps. A `break` or `continue` room has a jump
   portal on its far wall: `continue` leads to the loop's `again?` room,
   `break` to `end for` / `end while`, or to `end switch` from a `break`

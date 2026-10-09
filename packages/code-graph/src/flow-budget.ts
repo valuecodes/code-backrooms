@@ -40,6 +40,15 @@ const distinctCallees = (
   });
 };
 
+/** The composites either room of a folded pair leaves by a hidden jump. */
+const escapesOf = (
+  a: FlowRoomSpec,
+  b: FlowRoomSpec
+): Pick<FlowRoomSpec, "escapes"> => {
+  const escapes = [...new Set([...(a.escapes ?? []), ...(b.escapes ?? [])])];
+  return escapes.length === 0 ? {} : { escapes };
+};
+
 const merge = (
   a: FlowRoomSpec,
   b: FlowRoomSpec,
@@ -59,9 +68,10 @@ const merge = (
     depth: depthOf("collapsed", statements, callees.length, entry),
     floor: depthOf("collapsed", statements, 0, entry),
     terminal: b.terminal,
-    // A pair ending in a room that jumps out still jumps out.
+    // A pair ending in a room that jumps out still jumps out, and keeps
+    // every jump either room hides.
     ...(b.jumpTo === undefined ? {} : { jumpTo: b.jumpTo }),
-    ...(b.escapes === undefined ? {} : { escapes: b.escapes }),
+    ...escapesOf(a, b),
   };
 };
 

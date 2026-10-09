@@ -53,9 +53,9 @@ type FlowRoomSpec = {
    */
   readonly jumpTo?: string;
   /**
-   * For a collapsed node that ends in more than one way (jumps to different
-   * rooms, or a jump and a return): the loops and switches its jumps leave.
-   * One portal cannot show those ways, so they are collapsed too.
+   * For a collapsed node left in more than one way (it runs on as well, or
+   * returns, or jumps to different rooms): the loops and switches its jumps
+   * leave. One portal cannot show those ways, so they are collapsed too.
    */
   readonly escapes?: readonly string[];
 };
@@ -195,21 +195,20 @@ type Exits = Pick<FlowRoomSpec, "jumpTo" | "escapes">;
 
 /**
  * Where a room for `node` jumps to: a jump's target, or for a collapsed
- * node that ends, the room all its jumps out lead to. A node that also
- * returns or jumps to several rooms names the composites it leaves instead.
+ * node that ends, the room all its jumps out lead to. A collapsed node that
+ * also runs on, returns or jumps to several rooms names the composites its
+ * jumps leave instead, so no jump hides in it while its target is open.
  */
 const exitsOf = (node: FlowStep, terminal: boolean): Exits => {
   if (node.kind === "break" || node.kind === "continue") {
     const target = jumpTarget(node);
     return target === null ? {} : { jumpTo: target };
   }
-  if (!terminal) {
-    return {};
-  }
   const jumps = escapingJumps(node);
   const targets = new Set(jumps.map(jumpTarget));
   const [only] = targets;
   if (
+    terminal &&
     targets.size === 1 &&
     only !== null &&
     only !== undefined &&
