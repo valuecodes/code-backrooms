@@ -20,16 +20,17 @@ const PALETTE: Record<LaneKind, Rgb> = {
   case: rgb("#8fa3b8"),
   default: rgb("#b0b0b0"),
   loop: rgb("#c9a85c"),
-  back: rgb("#c9a85c"),
+  // Deeper than the body's ochre: the corridor that leads back round.
+  back: rgb("#b08a3e"),
   exit: WHITE,
 };
 
 /** Dark wood: what a frame is without a lane. The frame material is white. */
 const WOOD: Rgb = rgb("#4a3620");
 
-/** A door frame: the lane's full colour, dark wood for no lane. */
+/** A door frame: the lane's full colour, dark wood for no lane or a loop's exit. */
 const frameTint = (lane: LaneLabel | undefined): Rgb =>
-  lane === undefined ? WOOD : PALETTE[lane.kind];
+  lane === undefined || lane.kind === "exit" ? WOOD : PALETTE[lane.kind];
 
 /** A lintel over a door, wallpapered: the lane's full colour, plain for none. */
 const lintelTint = (lane: LaneLabel | undefined): Rgb =>

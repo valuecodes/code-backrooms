@@ -30,7 +30,7 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   side walls of the room that makes them (a door for the first call to a
   function, a portal otherwise), the return portal sits at the end of the
   column, and the HUD line names the room: `demo.ts · main() · getUser(…)`.
-- Milestone 6 (current): forks. An `if` is a fork room that opens into a
+- Milestone 6: forks. An `if` is a fork room that opens into a
   true lane on the left and a false lane on the right, each a column of its
   own, rejoining in an `end if` room; a `switch` is a head room with a door
   per case (plus a default) and an `end switch`. Lanes are tinted (sage for
@@ -43,6 +43,15 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   six cases does too. A call inside a lane offers one wall for its door, so when the
   layout cannot place that door the call becomes a portal and the world is
   laid out again (`generateCodeWorld`).
+- Milestone 7 (current): loops. A loop is one rectangular ring: the header
+  room across the top, the body down the west side (ochre walls) beside a
+  corridor back (deeper ochre), and at the bottom an `again?` room (a
+  do-while's `while (…)`) with two doors, `→ repeat` up the corridor into
+  the header again and `→ exit` into `end for` / `end while`. A `break` or
+  `continue` inside the body is a dead-end room until jump portals land; a
+  loop whose body ends in a return or a jump stays collapsed. Lane prompts
+  only show walking with the flow; the way back names the room
+  (`→ again?`). See `?code=loops`.
 
 ---
 

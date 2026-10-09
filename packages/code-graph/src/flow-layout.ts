@@ -1,6 +1,6 @@
 // A function's interior as a cluster: a column of rooms, flow running along
-// +Z, forks opening into lanes that rejoin, with ports and portals for its
-// calls. Pure and deterministic; the layout rotates and places the result.
+// +Z, forks opening into lanes that rejoin, loops as rings, with ports and
+// portals for its calls. Pure and deterministic; the layout rotates and places the result.
 
 import type { ClusterPortal, ClusterRoom, RoomCluster } from "@repo/types";
 import { FLOW_TOP_MIN_WIDTH } from "@repo/world-generator/config";
@@ -9,9 +9,10 @@ import type { CallSite, FunctionNode } from "./code-graph";
 import { foldToBudget } from "./flow-budget";
 import { newColumn, placeItems } from "./flow-column";
 import type { ColumnRoom } from "./flow-column";
+import { labelsOf, treeWidth } from "./flow-composite";
+import type { FlowTree } from "./flow-composite";
 import { indexSites } from "./flow-text";
-import { labelsOf, measureTree, treeWidth } from "./flow-tree";
-import type { FlowTree } from "./flow-tree";
+import { measureTree } from "./flow-tree";
 import { returnPortalId } from "./ids";
 
 /** A function's interior measured and folded into budget, before placing. */

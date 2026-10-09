@@ -34,8 +34,8 @@ past the node) and `countStatements`.
 `planFlow` measures the body into a tree of rooms and folds it into budget;
 `layoutFlow` places the tree as a column, flow running along +Z, a door
 between neighbours. Plain flow nodes are one room each (a `step` of folded
-statements, a `call`, an `await`, a `return`; a loop or try is one `collapsed`
-room for now). A branch or switch is a fork: a `fork` / `switch` head room
+statements, a `call`, an `await`, a `return`, a `jump` for `break` and
+`continue`; a try is one `collapsed` room for now). A branch or switch is a fork: a `fork` / `switch` head room
 across the column (its label `if (user)` / `switch (status)`, the calls of
 the condition hanging off it), one lane per way through laid side by side
 below it (the true lane west of the false one, cases in source order, a
@@ -55,6 +55,24 @@ a synthesised default `<switch id>:default`, so `parseFlowNodeId` and
 with a `break` nested inside a case or with a case that falls through (no
 jump portals yet), stays collapsed.
 
+A loop is a ring: a `loop-head` room across the column (its header, `for
+(const x of xs)`, or `do` for a do-while, the header's calls hanging off it),
+the body as a lane of its own (lane `{ kind: "loop", text: "body" }`) down
+the west side beside a `loop-back` corridor one lane wide and as deep as the
+body (lane `back`, label `repeat`), a `loop-test` room across below both
+(`again?`, or a do-while's `while (…)` with the header's calls) and a
+`loop-end` room (`end for`, `end while`). The test has two doors: `repeat`
+into the corridor, whose top door leads back into the head, and `exit` into
+the end room. A ring is as wide as its body plus the corridor. Ids: the head
+is the loop node, the test, corridor and end `<loop id>:again`, `:back` and
+`:end`, an empty body its sequence (`body · empty`). A `break` or `continue`
+nested in the body is a dead-end `jump` room until jump portals exist; a loop
+whose body never runs out of its end (it ends in a return, a jump or a fork
+whose lanes all end) stays collapsed. Forks and loops share one quota of 16
+per function, opened in source order. Lane doors are declared from the room
+they lead out of, so the world marks that side `forward` and only a door
+walked with the flow names its lane.
+
 Calls hang off side walls. A room whose wall lies on the cluster boundary
 offers a port there: with both walls free the first callee gets a port on
 the wall used least recently and the second the other wall (a lone callee
@@ -67,8 +85,8 @@ takes `widthOf` and `./world-graph` plans every function before placing
 any. Return portals sit on the south wall of every `return` room, of every
 collapsed room that ends the flow (`try { return } finally { … }`), and of
 the last room when the body falls off its end. Interiors are folded into a
-budget of 32 m wide, 96 m deep and 64 rooms: too wide, the deepest fork
-collapses into one room; too deep or too many rooms, neighbouring rooms fold
+budget of 32 m wide, 96 m deep and 64 rooms: too wide, the deepest fork or
+loop collapses into one room; too deep or too many rooms, neighbouring rooms fold
 into `collapsed` ones first. Depths come from the room's role and
 statements, at least 3 m wherever a call needs wall for a door or a portal,
 4 m for the entry room.

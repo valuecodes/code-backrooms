@@ -121,23 +121,32 @@ const switchNode = (offset: number, cases: readonly CaseSpec[]): FlowStep => ({
   })),
 });
 
+/** A loop whose header reads `while (x)` (`for (x)` for the for kinds). */
 const loop = (
   offset: number,
   body: readonly FlowStep[],
-  loopKind: LoopKind = "while"
+  loopKind: LoopKind = "while",
+  callSiteIds: readonly string[] = []
 ): FlowStep => ({
   id: `${FN}@${offset}:loop`,
   kind: "loop",
   span,
   loopKind,
-  header: "while (x)",
-  callSiteIds: [],
+  header: loopKind.startsWith("for") ? "for (x)" : "while (x)",
+  callSiteIds,
   body: sequence(offset, "loop", body),
 });
 
 const breakOut = (offset: number, targetId: string): FlowStep => ({
   id: `${FN}@${offset}:break`,
   kind: "break",
+  span,
+  targetId,
+});
+
+const continueOut = (offset: number, targetId: string): FlowStep => ({
+  id: `${FN}@${offset}:continue`,
+  kind: "continue",
   span,
   targetId,
 });
@@ -215,6 +224,7 @@ export {
   call,
   calling,
   clusterOf,
+  continueOut,
   FN,
   fnWith,
   loop,

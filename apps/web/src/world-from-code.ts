@@ -82,8 +82,8 @@ const breadcrumbOf = (
 };
 
 /**
- * `→ true` / `→ case "x"` into a lane, `→ await load(…)` within a
- * function, `→ getUser()` into another one.
+ * `→ true` / `→ case "x"` / `→ repeat` / `→ exit` into a lane, `→ await
+ * load(…)` within a function, `→ getUser()` into another one.
  */
 const doorPrompt = (codeGraph: CodeGraph | null, target: Target): string => {
   if (target.kind !== "door") {
@@ -95,12 +95,8 @@ const doorPrompt = (codeGraph: CodeGraph | null, target: Target): string => {
     here?.kind === "flow" &&
     there?.kind === "flow" &&
     here.fn.id === there.fn.id;
-  // A fork's door carries its lane on both sides; only the way in is the lane.
-  const intoLane =
-    withinFunction &&
-    target.lane !== undefined &&
-    there.ancestors.some((ancestor) => ancestor.id === here.node.id);
-  if (intoLane) {
+  // Only a door walked with the flow carries its lane (`→ repeat`).
+  if (withinFunction && target.lane !== undefined) {
     return `→ ${laneText(target.lane)}`;
   }
   return withinFunction

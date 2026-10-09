@@ -26,9 +26,14 @@ type FlowRole =
   | "merge"
   | "switch"
   | "lane"
+  /** A loop's header, at the top of its ring. */
   | "loop-head"
-  | "loop-end"
+  /** Where a loop asks again: one door to repeat, one to exit. */
+  | "loop-test"
+  /** The corridor from the test back up to the head. */
   | "loop-back"
+  /** Where control leaves a loop. */
+  | "loop-end"
   | "collapsed";
 
 type LaneKind =
@@ -168,6 +173,11 @@ type DoorData = {
   readonly wall: WallSide;
   readonly targetRoomId: string;
   readonly lane?: LaneLabel;
+  /**
+   * On the side a lane's door was declared from: walking through goes with
+   * the flow, into the lane. Both sides carry the lane, for tints.
+   */
+  readonly forward?: true;
 };
 
 /** A portal on a wall: `along` is the world coordinate of its centre on the wall's axis. */

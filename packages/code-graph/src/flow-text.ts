@@ -7,6 +7,7 @@ import type {
   CallSite,
   FlowNode,
   FlowStep,
+  LoopNode,
   SwitchNode,
 } from "./code-graph";
 import { countStatements, walkFlow } from "./flow";
@@ -115,6 +116,20 @@ const forkText = (node: BranchNode | SwitchNode): string =>
 const mergeText = (node: BranchNode | SwitchNode): string =>
   node.kind === "branch" ? "end if" : "end switch";
 
+/** A loop's head: its header, or `do` for a do-while (tested at the end). */
+const loopHeadText = (node: LoopNode): string =>
+  node.loopKind === "do-while" ? "do" : node.header;
+
+/** Where a loop asks again: `again?`, or a do-while's `while (…)`. */
+const loopTestText = (node: LoopNode): string =>
+  node.loopKind === "do-while" ? node.header : "again?";
+
+/** Where control leaves a loop: `end for` or `end while`. */
+const loopEndText = (node: LoopNode): string =>
+  node.loopKind === "while" || node.loopKind === "do-while"
+    ? "end while"
+    : "end for";
+
 /** A lane's own words: `true`, `false`, `case "x", case "y"`, `default`. */
 const laneText = (lane: LaneLabel): string => lane.text ?? lane.kind;
 
@@ -128,6 +143,9 @@ export {
   forkText,
   indexSites,
   laneText,
+  loopEndText,
+  loopHeadText,
+  loopTestText,
   mergeText,
   resolvedSites,
   siteIdsUnder,

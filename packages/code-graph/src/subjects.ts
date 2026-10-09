@@ -65,15 +65,26 @@ const planOf = (graph: CodeGraph, fn: FunctionNode): FlowPlan => {
   return plan;
 };
 
+/** Rooms a composite adds, tagged on its own id. */
+const COMPOSITE_TAGS: ReadonlySet<string> = new Set([
+  "merge",
+  "default",
+  "again",
+  "back",
+  "end",
+]);
+
 /**
- * The flow node a room stands for. A fork's merge room and a switch's
- * synthesised default lane carry a tag on the composite's own id, so they
- * resolve to the composite, with the composite among their ancestors.
+ * The flow node a room stands for. A fork's merge room, a switch's
+ * synthesised default lane and a loop's test, back and end rooms carry a
+ * tag on the composite's own id, so they resolve to the composite, with the
+ * composite among their ancestors.
  */
 const nodeOf = (fn: FunctionNode, roomId: string, ref: FlowNodeRef) => {
   const tagged =
-    (ref.kind === "branch" || ref.kind === "switch") &&
-    (ref.tag === "merge" || ref.tag === "default");
+    (ref.kind === "branch" || ref.kind === "switch" || ref.kind === "loop") &&
+    ref.tag !== undefined &&
+    COMPOSITE_TAGS.has(ref.tag);
   if (!tagged) {
     return findFlowNode(fn.flow, roomId);
   }

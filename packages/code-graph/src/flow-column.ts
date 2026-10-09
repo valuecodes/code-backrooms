@@ -1,16 +1,17 @@
 // Places a tree of rooms in a column: rooms stack from the top, a fork puts
 // its head across the column, its lanes side by side below it and its merge
 // room across again, each lane a column of its own. Lanes are stretched to
-// the deepest one so the rooms tile the rectangle.
+// the deepest one so the rooms tile the rectangle. A loop is a ring: head
+// across, body beside a back corridor, test across, end across.
 
 import type { ClusterDoor, ClusterPortal, LaneLabel, Port } from "@repo/types";
-import { GRID } from "@repo/world-generator/config";
+import { FLOW_LANE_WIDTH, GRID } from "@repo/world-generator/config";
 
+import { BACK_LANE, BODY_LANE, EXIT_LANE, laneWidth } from "./flow-composite";
+import type { FlowTree, ForkSpec, LaneSpec, LoopSpec } from "./flow-composite";
 import { hangCallees, newTrackers } from "./flow-hang";
 import type { Trackers } from "./flow-hang";
 import type { FlowRoomSpec } from "./flow-measure";
-import { laneWidth } from "./flow-tree";
-import type { FlowTree, ForkSpec, LaneSpec } from "./flow-tree";
 
 /** A room while the column is built: its rect may still be stretched. */
 type ColumnRoom = {
@@ -159,6 +160,52 @@ const placeFork = (
   return { first: head.id, last: merge.id, bottom: merge.maxZ };
 };
 
+/**
+ * A loop's ring: the head across the column, the body down the west side
+ * beside the back corridor (one lane wide, as deep as the body), the test
+ * across below both with a door into the corridor and one into the end
+ * room, and the corridor's top door back into the head.
+ */
+const placeLoop = (
+  loop: LoopSpec,
+  x0: number,
+  x1: number,
+  z: number,
+  lane: LaneLabel | undefined,
+  state: ColumnState
+): Placed => {
+  const head = placeRoom(loop.head, x0, x1, z, lane, state);
+  const split = x1 - FLOW_LANE_WIDTH;
+  const body = placeItems(loop.body, x0, split, head.maxZ, BODY_LANE, state);
+  if (body.first !== null) {
+    state.doors.push({ from: head.id, to: body.first, lane: BODY_LANE });
+  }
+  // No calls, so the corridor needs no hanging: one room beside the body.
+  const back: ColumnRoom = {
+    id: loop.back.id,
+    role: loop.back.role,
+    label: loop.back.label,
+    lane: BACK_LANE,
+    terminal: false,
+    minX: split,
+    maxX: x1,
+    minZ: head.maxZ,
+    maxZ: body.bottom,
+  };
+  state.rooms.push(back);
+  const test = placeRoom(loop.test, x0, x1, body.bottom, lane, state);
+  if (body.last !== null) {
+    state.doors.push({ from: body.last, to: test.id });
+  }
+  state.doors.push(
+    { from: test.id, to: back.id, lane: BACK_LANE },
+    { from: back.id, to: head.id }
+  );
+  const end = placeRoom(loop.end, x0, x1, test.maxZ, lane, state);
+  state.doors.push({ from: test.id, to: end.id, lane: EXIT_LANE });
+  return { first: head.id, last: end.id, bottom: end.maxZ };
+};
+
 /** Stacks the items from `z` between `x0` and `x1`, a door between neighbours. */
 const placeItems = (
   items: readonly FlowTree[],
@@ -175,12 +222,14 @@ const placeItems = (
     if (last !== null) {
       state.doors.push({
         from: last,
-        to: item.kind === "fork" ? item.head.id : item.id,
+        to: item.kind === "room" ? item.id : item.head.id,
       });
     }
     let placed: Placed;
     if (item.kind === "fork") {
       placed = placeFork(item, x0, x1, bottom, lane, state);
+    } else if (item.kind === "loop") {
+      placed = placeLoop(item, x0, x1, bottom, lane, state);
     } else {
       const room = placeRoom(item, x0, x1, bottom, lane, state);
       placed = {

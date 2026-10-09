@@ -34,8 +34,10 @@ an east wall), every room is emitted with `cluster`, `role`, `label`, the
 `lane` it lies in and, on the entry room, `entry`, and other units attach
 only through its ports, one door per port. A door's `lane` reaches its
 opening, lintel and doorway, a room's `lane` its wall segments, and the
-door target `nearestTarget` reports carries the lane, so a renderer can tint
-lanes and a HUD can name them. Plain graphs are laid out exactly as before: a plain room
+door target `nearestTarget` reports carries the lane when the player walks
+with the flow (the door's side marked `forward`, the room it was declared
+from), so a renderer can tint lanes and a HUD can name the lane on the way
+in and the room on the way back. Plain graphs are laid out exactly as before: a plain room
 simply offers each of its walls as a port.
 
 Portals (`graph.portals`) are directed teleports drawn as a door frame with

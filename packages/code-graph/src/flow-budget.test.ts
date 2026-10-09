@@ -8,6 +8,7 @@ import {
   calling,
   clusterOf,
   fnWith,
+  loop,
   site,
   step,
   switchNode,
@@ -24,6 +25,12 @@ const nested = (depth: number, offset: number): FlowStep =>
       body:
         depth === 0 ? [step(offset + 1, 1)] : [nested(depth - 1, offset + 10)],
     },
+  ]);
+
+/** Rings nested `depth` deep, a step at the centre: each adds 3 m of width. */
+const rings = (depth: number, offset: number): FlowStep =>
+  loop(offset, [
+    depth === 0 ? step(offset + 1, 1) : rings(depth - 1, offset + 10),
   ]);
 
 describe("budget", () => {
@@ -67,6 +74,28 @@ describe("budget", () => {
     expect(cluster.rooms.length).toBeLessThanOrEqual(FLOW_BUDGET.rooms);
   });
 
+  it("collapses the innermost rings first until nested loops fit the width budget", () => {
+    const cluster = valid(clusterOf([rings(20, 1)]));
+    expect(cluster.width).toBeLessThanOrEqual(FLOW_BUDGET.width);
+    expect(cluster.rooms[0]?.role).toBe("loop-head");
+    const collapsed = cluster.rooms.filter((room) => room.role === "collapsed");
+    expect(collapsed).toHaveLength(1);
+    expect(collapsed[0]?.label).toMatch(/^while \(x\) · /);
+  });
+
+  it("counts loops against the same quota as forks", () => {
+    const steps = Array.from({ length: FORK_QUOTA + 2 }, (_, index) =>
+      index % 2 === 0
+        ? loop(10 * index + 1, [step(10 * index + 2, 1)])
+        : branch(10 * index + 1, [step(10 * index + 2, 1)])
+    );
+    const tree = measureTree(fnWith(steps), indexSites([]));
+    expect(tree.filter((item) => item.kind !== "room")).toHaveLength(
+      FORK_QUOTA
+    );
+    expect(tree.slice(-2).map((item) => item.kind)).toEqual(["room", "room"]);
+  });
+
   it("stops when nothing more can fold", () => {
     const { node, sites } = calling(1, 100);
     const cluster = clusterOf([node], sites);
@@ -78,6 +107,13 @@ describe("budget", () => {
     const fn: FunctionNode = fnWith([nested(300, 1)]);
     const started = Date.now();
     const cluster = layoutFlow(planFlow(fn, []));
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(cluster.width).toBeLessThanOrEqual(FLOW_BUDGET.width);
+  });
+
+  it("plans three hundred nested loops quickly", () => {
+    const started = Date.now();
+    const cluster = layoutFlow(planFlow(fnWith([rings(300, 1)]), []));
     expect(Date.now() - started).toBeLessThan(1000);
     expect(cluster.width).toBeLessThanOrEqual(FLOW_BUDGET.width);
   });

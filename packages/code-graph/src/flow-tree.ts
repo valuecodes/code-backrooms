@@ -1,12 +1,10 @@
-// A function's interior before it is placed: a tree of rooms. A branch or
-// switch is a fork (a head room, one lane per way through, a merge room
-// where the lanes rejoin); everything else is one room. Widths come from
-// the tree bottom-up; the placer stretches lanes to fill their column.
+// Measures a function's body into a tree of rooms: a branch or switch
+// becomes a fork, a loop a ring, everything else one room. The shapes and
+// their metrics live in flow-composite.ts; the placer stretches them.
 
-import type { LaneLabel } from "@repo/types";
+import type { FlowRole, LaneLabel } from "@repo/types";
 import {
   FLOW_BUDGET,
-  FLOW_LANE_WIDTH,
   FLOW_LEAF_DEPTH,
   FLOW_MAX_CASES,
 } from "@repo/world-generator/config";
@@ -15,46 +13,31 @@ import type {
   BranchNode,
   FlowStep,
   FunctionNode,
+  LoopNode,
   SequenceNode,
   SwitchNode,
 } from "./code-graph";
 import { isTerminal, walkFlow } from "./flow";
-import {
-  calleesOf,
-  depthOf,
-  emptyBodySpec,
-  PORT_PITCH,
-  specOf,
-} from "./flow-measure";
+import { BODY_LANE } from "./flow-composite";
+import type { FlowTree, ForkSpec, LaneSpec, LoopSpec } from "./flow-composite";
+import { calleesOf, depthOf, emptyBodySpec, specOf } from "./flow-measure";
 import type { FlowRoomSpec } from "./flow-measure";
-import { emptyLaneText, forkText, mergeText, resolvedSites } from "./flow-text";
+import {
+  emptyLaneText,
+  forkText,
+  loopEndText,
+  loopHeadText,
+  loopTestText,
+  mergeText,
+  resolvedSites,
+} from "./flow-text";
 import type { SiteIndex } from "./flow-text";
 import { flowNodeId, parseFlowNodeId } from "./ids";
 
-/** One way through a fork: a sub-column of rooms. */
-type LaneSpec = {
-  /** The lane's sequence node, or the synthesised `default` of a switch. */
-  readonly id: string;
-  readonly label: LaneLabel;
-  readonly body: readonly FlowTree[];
-  /** Control may run out of the lane's end into the merge room. */
-  readonly rejoins: boolean;
-};
-
-type ForkSpec = {
-  readonly kind: "fork";
-  readonly node: BranchNode | SwitchNode;
-  readonly head: FlowRoomSpec;
-  readonly lanes: readonly LaneSpec[];
-  /** Null when no lane rejoins: nothing runs past the fork. */
-  readonly merge: FlowRoomSpec | null;
-};
-
-type FlowTree = FlowRoomSpec | ForkSpec;
-
 /**
- * How many forks a function may open: a fork is four rooms at least, so
- * beyond a quarter of the room budget the rest would only be folded back.
+ * How many forks and loops a function may open: each is four rooms at
+ * least, so beyond a quarter of the room budget the rest would only be
+ * folded back.
  * Bounding it up front keeps the budget pass cheap for huge functions.
  */
 const FORK_QUOTA = Math.floor(FLOW_BUDGET.rooms / 4);
@@ -104,36 +87,70 @@ const hasNestedBreak = (node: SwitchNode): boolean => {
   return found;
 };
 
-/** Whether a composite is laid out as a fork rather than kept collapsed. */
-const expands = (node: FlowStep): node is BranchNode | SwitchNode =>
-  node.kind === "branch" ||
-  (node.kind === "switch" &&
-    node.cases.length <= FLOW_MAX_CASES &&
-    !hasNestedBreak(node) &&
-    !node.cases.some((item) => item.fallsThrough));
+/**
+ * Whether a composite is laid out as a fork or a ring rather than kept
+ * collapsed. A loop whose body never runs out of its end (it ends in a
+ * return, a jump or a fork whose lanes all end) has no way to its test
+ * room, so it stays one room until jumps get portals.
+ */
+const expands = (
+  node: FlowStep
+): node is BranchNode | SwitchNode | LoopNode => {
+  switch (node.kind) {
+    case "branch": {
+      return true;
+    }
+    case "switch": {
+      return (
+        node.cases.length <= FLOW_MAX_CASES &&
+        !hasNestedBreak(node) &&
+        !node.cases.some((item) => item.fallsThrough)
+      );
+    }
+    case "loop": {
+      return !isTerminal(node.body);
+    }
+    case "step":
+    case "call":
+    case "await":
+    case "return":
+    case "break":
+    case "continue":
+    case "try":
+    default: {
+      return false;
+    }
+  }
+};
 
-/** The same id with a tag: the merge room and the synthesised default lane. */
-const tagged = (node: BranchNode | SwitchNode, tag: string): string => {
+/** The same id with a tag: a merge, a synthesised default, a loop's rooms. */
+const tagged = (
+  node: BranchNode | SwitchNode | LoopNode,
+  tag: string
+): string => {
   const ref = parseFlowNodeId(node.id);
   return ref === null
     ? `${node.id}:${tag}`
     : flowNodeId(ref.functionId, ref.offset, ref.kind, tag);
 };
 
-const headSpec = (
-  node: BranchNode | SwitchNode,
+/** A room of a composite holding the calls of its header or condition. */
+const headerSpec = (
+  id: string,
+  role: FlowRole,
+  label: string,
+  callSiteIds: readonly string[],
   sites: SiteIndex,
   entry: boolean
 ): FlowRoomSpec => {
-  const role = node.kind === "branch" ? "fork" : "switch";
-  const callees = calleesOf(node.callSiteIds, sites);
+  const callees = calleesOf(callSiteIds, sites);
   return {
     kind: "room",
-    id: node.id,
+    id,
     role,
-    label: forkText(node),
+    label,
     statements: 1,
-    calls: resolvedSites(node.callSiteIds, sites).length,
+    calls: resolvedSites(callSiteIds, sites).length,
     callees,
     depth: depthOf(role, 1, callees.length, entry),
     floor: depthOf(role, 1, 0, entry),
@@ -143,7 +160,7 @@ const headSpec = (
 
 const plainSpec = (
   id: string,
-  role: "merge" | "lane",
+  role: FlowRole,
   label: string
 ): FlowRoomSpec => ({
   kind: "room",
@@ -238,11 +255,59 @@ const forkOf = (
   return {
     kind: "fork",
     node,
-    head: headSpec(node, measure.sites, entry),
+    head: headerSpec(
+      node.id,
+      node.kind === "branch" ? "fork" : "switch",
+      forkText(node),
+      node.callSiteIds,
+      measure.sites,
+      entry
+    ),
     lanes,
     merge: lanes.some((lane) => lane.rejoins)
       ? plainSpec(tagged(node, "merge"), "merge", mergeText(node))
       : null,
+  };
+};
+
+/**
+ * A loop's ring. The header's calls hang off the room that shows it: the
+ * head, or for a do-while (tested at the end) the test room.
+ */
+const loopOf = (node: LoopNode, measure: Measure, entry: boolean): LoopSpec => {
+  const tested = node.loopKind === "do-while";
+  const header = (
+    id: string,
+    role: FlowRole,
+    label: string,
+    owns: boolean,
+    isEntry: boolean
+  ) =>
+    headerSpec(
+      id,
+      role,
+      label,
+      owns ? node.callSiteIds : [],
+      measure.sites,
+      isEntry
+    );
+  return {
+    kind: "loop",
+    node,
+    head: header(node.id, "loop-head", loopHeadText(node), !tested, entry),
+    body:
+      node.body.steps.length === 0
+        ? [plainSpec(node.body.id, "lane", emptyLaneText(BODY_LANE))]
+        : measureSteps(node.body.steps, measure, false),
+    test: header(
+      tagged(node, "again"),
+      "loop-test",
+      loopTestText(node),
+      tested,
+      false
+    ),
+    back: plainSpec(tagged(node, "back"), "loop-back", "repeat"),
+    end: plainSpec(tagged(node, "end"), "loop-end", loopEndText(node)),
   };
 };
 
@@ -251,11 +316,15 @@ const measureSteps = (
   measure: Measure,
   entry: boolean
 ): readonly FlowTree[] =>
-  steps.map((step, position) =>
-    expands(step) && measure.quota.take()
-      ? forkOf(step, measure, entry && position === 0)
-      : specOf(step, measure.sites, entry && position === 0)
-  );
+  steps.map((step, position) => {
+    const first = entry && position === 0;
+    if (!expands(step) || !measure.quota.take()) {
+      return specOf(step, measure.sites, first);
+    }
+    return step.kind === "loop"
+      ? loopOf(step, measure, first)
+      : forkOf(step, measure, first);
+  });
 
 /**
  * The tree of a function's body, the first FORK_QUOTA forks in source
@@ -273,81 +342,4 @@ const measureTree = (
   return items.length > 0 ? items : [emptyBodySpec(fn)];
 };
 
-/** The width a lane needs: at least one lane, or what its body needs. */
-const laneWidth = (lane: LaneSpec): number =>
-  Math.max(FLOW_LANE_WIDTH, treeWidth(lane.body));
-
-/** The width a sequence needs: its widest fork; rooms take the column's. */
-const treeWidth = (items: readonly FlowTree[]): number =>
-  items.reduce(
-    (width, item) =>
-      item.kind === "fork"
-        ? Math.max(
-            width,
-            item.lanes.reduce((sum, lane) => sum + laneWidth(lane), 0)
-          )
-        : width,
-    0
-  );
-
-const roomCount = (items: readonly FlowTree[]): number =>
-  items.reduce(
-    (count, item) =>
-      count +
-      (item.kind === "fork"
-        ? 1 +
-          (item.merge === null ? 0 : 1) +
-          item.lanes.reduce((sum, lane) => sum + roomCount(lane.body), 0)
-        : 1),
-    0
-  );
-
-/** A room with calls may be grown to the port pitch when placed; budget for it. */
-const placedDepth = (spec: FlowRoomSpec): number =>
-  spec.callees.length > 0 ? Math.max(spec.depth, PORT_PITCH) : spec.depth;
-
-/** The depth a sequence will take once placed: lanes side by side count once. */
-const depthEstimate = (items: readonly FlowTree[]): number =>
-  items.reduce(
-    (depth, item) =>
-      depth +
-      (item.kind === "fork"
-        ? placedDepth(item.head) +
-          Math.max(...item.lanes.map((lane) => depthEstimate(lane.body))) +
-          (item.merge === null ? 0 : item.merge.depth)
-        : placedDepth(item)),
-    0
-  );
-
-/** Every room's label by id, for the HUD. */
-const labelsOf = (items: readonly FlowTree[]): ReadonlyMap<string, string> => {
-  const labels = new Map<string, string>();
-  const visit = (current: readonly FlowTree[]) => {
-    for (const item of current) {
-      if (item.kind === "fork") {
-        labels.set(item.head.id, item.head.label);
-        if (item.merge !== null) {
-          labels.set(item.merge.id, item.merge.label);
-        }
-        for (const lane of item.lanes) {
-          visit(lane.body);
-        }
-      } else {
-        labels.set(item.id, item.label);
-      }
-    }
-  };
-  visit(items);
-  return labels;
-};
-
-export {
-  depthEstimate,
-  FORK_QUOTA,
-  labelsOf,
-  laneWidth,
-  measureTree,
-  roomCount,
-  treeWidth,
-};
-export type { FlowTree, ForkSpec, LaneSpec };
+export { FORK_QUOTA, measureTree };
