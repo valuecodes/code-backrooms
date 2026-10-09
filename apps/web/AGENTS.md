@@ -66,6 +66,10 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   door into `end switch`; its call portals move to the other walls. Only a
   switch with more than six cases still stays one collapsed room. See
   `?code=switches` (`case "suspended"`).
+- Every function of every example is checked against its derived
+  control-flow graph (`@repo/code-graph/cfg-checks`,
+  `world-from-code-cfg.test.ts`): each door and portal stands for a flow
+  edge and each reachable flow edge can be walked. Nothing visible changes.
 
 ---
 

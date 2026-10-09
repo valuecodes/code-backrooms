@@ -140,3 +140,32 @@ function, or a flow room (`{ kind: "flow", fn, module, node, ancestors, text }`,
 `text` being the HUD's words such as `await fetch(…)` or `if (user) · 2
 statements · 2 calls`); `portalSubject` gives a call site with both functions,
 or the function a return portal belongs to.
+
+`./cfg` derives a function's control-flow graph from its flow tree, as a test
+oracle and a debugging aid (`toDot(cfg)` gives Graphviz source); the layout
+never reads it. `cfgOf(fn)` makes one block per statement or composite head,
+an `empty` block for an empty lane, case or loop body, synthetic `entry` and
+`exit` blocks, and per composite the blocks the layout's tagged rooms stand for
+(`:merge`, `:default`, `:again`, `:end`), with the same ids. Edges are typed
+`next | true | false | case | default | fallthrough | loop-back | break |
+continue | return | throw`. A loop's head opens into its body (`true`, or
+`next` for a do-while) and, unless it is a do-while, straight to its end
+(`false`: zero iterations); its `:again` block leads back to the head
+(`loop-back`) or out to the end. A `try` stays one opaque block (exception
+edges are post-MVP) with its ways out: returns, jumps out, and `next` unless it
+ends; a finalizer that ends overrides the rest.
+
+`./cfg-checks` holds two checks in the `checkLayout` style. `cfgFailures(fn,
+cfg)` asserts the semantic invariants: one entry and one exit, no reachable
+dead end, returns and throws only into the exit, every `break` and `continue`
+into a composite that encloses it, fallthrough kept. `cfgLayoutFailures(fn,
+cfg, cluster)` asserts the cluster walks the same graph. Each block lies in the
+room with its id, else in the room of the earlier sibling it was folded into,
+else in the room of the collapsed composite around it. Every door, jump portal
+and return portal must stand for a flow edge (the two doors through a loop's
+back corridor for its `loop-back` edge), and every edge from a reachable block
+must lie inside one room, have a door or a jump portal, or leave a room with a
+return portal for the exit. Two exceptions are deliberate: a collapsed room
+that runs on shows one way out, so an early return hidden in it has no portal;
+and the ring walks every loop at least once, so a loop's zero-iteration edge
+has no door.
