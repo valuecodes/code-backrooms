@@ -165,6 +165,39 @@ describe("loops", () => {
     expect(jumped.state.roomId).toBe("loops.ts::main");
   });
 
+  it("lands a continue in a do-while facing the exit, not its condition's call", () => {
+    const codeGraph = buildCodeGraph([
+      {
+        path: "poll.ts",
+        source:
+          "function main() { do { if (skip()) { continue; } work(); } while (more()); }\nfunction skip() { return false; }\nfunction work() {}\nfunction more() { return false; }",
+      },
+    ]);
+    for (const seed of [1, 2, 3]) {
+      const generated = worldFromCode(codeGraph, seed);
+      const jump = generated.built.portals.find(
+        (built) => built.portal.kind === "jump"
+      );
+      const test = generated.layout.rooms.find(
+        (room) => room.id === jump?.portal.to
+      );
+      expect(test?.role).toBe("loop-test");
+      // The test room also has the door to more(); the jump faces the exit.
+      expect(
+        test?.doors.some(
+          (candidate) => !candidate.targetRoomId.startsWith("poll.ts::main")
+        )
+      ).toBe(true);
+      const facing = generated.layout.rooms.filter(
+        (room) =>
+          room.id !== test?.id &&
+          jump !== undefined &&
+          containsPoint(roomBounds(room), jump.arrival.facing)
+      );
+      expect(facing.map((room) => room.role)).toEqual(["loop-end"]);
+    }
+  });
+
   it("jumps from a break nested in a case to the end switch room", () => {
     const codeGraph = graphOf("switches");
     const world = worldFromCode(codeGraph, 1);

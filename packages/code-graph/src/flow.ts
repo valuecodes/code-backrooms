@@ -189,19 +189,20 @@ const jumpsTo = (node: FlowNode, targetId: string): boolean =>
   jumpsOutOf(node, targetId, true);
 
 /**
- * The first `break` or `continue` under `node`, in source order, whose
- * target lies outside it: the way a collapsed node that ends is left.
+ * Every `break` and `continue` under `node`, in source order, whose target
+ * lies outside it: the ways a collapsed node is left other than its end.
  */
-const escapingJump = (node: FlowNode): BreakNode | ContinueNode | null => {
-  let found: BreakNode | ContinueNode | null = null;
+const escapingJumps = (
+  node: FlowNode
+): readonly (BreakNode | ContinueNode)[] => {
+  const found: (BreakNode | ContinueNode)[] = [];
   walkFlow(node, (current, ancestors) => {
     if (
-      found === null &&
       (current.kind === "break" || current.kind === "continue") &&
       current.targetId !== node.id &&
       !ancestors.some((ancestor) => ancestor.id === current.targetId)
     ) {
-      found = current;
+      found.push(current);
     }
   });
   return found;
@@ -218,7 +219,7 @@ const hasReturn = (node: FlowNode): boolean => {
 
 export {
   countStatements,
-  escapingJump,
+  escapingJumps,
   findFlowNode,
   hasReturn,
   isTerminal,
