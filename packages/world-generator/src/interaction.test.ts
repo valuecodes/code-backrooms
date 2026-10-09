@@ -157,6 +157,40 @@ describe("nearestTarget", () => {
     });
   });
 
+  it("carries the lane of a fork's door onto the target", () => {
+    const lane = { kind: "true" } as const;
+    const laned: GeneratedWorld = {
+      ...world,
+      built: {
+        ...world.built,
+        rooms: world.built.rooms.map((built) =>
+          built.room.id === "main"
+            ? {
+                ...built,
+                room: {
+                  ...built.room,
+                  doors: built.room.doors.map((door) =>
+                    door.targetRoomId === "login" ? { ...door, lane } : door
+                  ),
+                },
+                openings: built.openings.map((opening, index) =>
+                  built.room.doors[index]?.targetRoomId === "login"
+                    ? { ...opening, lane }
+                    : opening
+                ),
+              }
+            : built
+        ),
+      },
+    };
+    expect(promptAtLoginDoor(laned)).toEqual({
+      kind: "door",
+      roomId: "main",
+      targetRoomId: "login",
+      lane,
+    });
+  });
+
   it("names the room at the far end of a corridor", () => {
     const corridorWorld = [2, 3, 5, 4, 6, 7, 8]
       .map((seed) => portalWorld(seed))

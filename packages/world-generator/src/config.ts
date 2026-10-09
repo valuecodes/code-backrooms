@@ -60,8 +60,13 @@ const ARRIVAL_INSET = 1;
 
 // Unit interiors (a function laid out as a column of flow rooms).
 
-/** Width of one lane of an interior: a corridor's width. */
-const FLOW_LANE_WIDTH = 2;
+/**
+ * Width of one lane of an interior (a branch of an `if`, a case of a switch):
+ * a door into it with 1 m to spare, and a south wall wide enough for a portal.
+ */
+const FLOW_LANE_WIDTH = 3;
+/** A switch with more cases than this stays one collapsed room. */
+const FLOW_MAX_CASES = 6;
 /** The entry room is at least this wide and deep: room for the door in and a port. */
 const FLOW_TOP_MIN_WIDTH = 4;
 const FLOW_TOP_MIN_DEPTH = 4;
@@ -77,7 +82,7 @@ const FLOW_STEP_DEPTH_MAX = 8;
 /** Centre spacing of portals pre-placed on one wall (> DOOR_WIDTH + PORTAL_GAP). */
 const FLOW_PORTAL_PITCH = 2;
 /** An interior is folded until it fits in this many metres and rooms. */
-const FLOW_BUDGET = { depth: 96, rooms: 64 } as const;
+const FLOW_BUDGET = { width: 32, depth: 96, rooms: 64 } as const;
 
 export {
   ARRIVAL_INSET,
@@ -89,6 +94,7 @@ export {
   FLOW_CALL_DEPTH,
   FLOW_LANE_WIDTH,
   FLOW_LEAF_DEPTH,
+  FLOW_MAX_CASES,
   FLOW_PORTAL_PITCH,
   FLOW_STEP_DEPTH_MAX,
   FLOW_TOP_MIN_DEPTH,

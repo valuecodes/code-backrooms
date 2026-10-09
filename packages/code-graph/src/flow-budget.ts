@@ -1,14 +1,18 @@
-// Keeps an interior within FLOW_BUDGET by folding neighbouring rooms into
-// one `collapsed` room, shallowest pairs first, until it fits.
+// Keeps an interior within FLOW_BUDGET: forks nested deepest are collapsed
+// back into one room while the tree is too wide, then neighbouring rooms
+// fold into `collapsed` ones, shallowest pairs first, until it fits.
 
 import type { FlowRole } from "@repo/types";
 import { FLOW_BUDGET } from "@repo/world-generator/config";
 
-import { depthOf, PORT_PITCH } from "./flow-measure";
+import { depthOf, specOf } from "./flow-measure";
 import type { FlowCallee, FlowRoomSpec } from "./flow-measure";
 import { foldedText } from "./flow-text";
+import type { SiteIndex } from "./flow-text";
+import { depthEstimate, roomCount, treeWidth } from "./flow-tree";
+import type { FlowTree, ForkSpec } from "./flow-tree";
 
-/** Rooms that may merge: not returns or jumps, which end or leave the flow. */
+/** Rooms that may merge: not returns, which end the flow. */
 const FOLDABLE: ReadonlySet<FlowRole> = new Set<FlowRole>([
   "step",
   "call",
@@ -38,6 +42,7 @@ const merge = (
   const calls = a.calls + b.calls;
   const callees = distinctCallees([...a.callees, ...b.callees]);
   return {
+    kind: "room",
     id: a.id,
     role: "collapsed",
     label: foldedText(statements, calls),
@@ -45,63 +50,194 @@ const merge = (
     calls,
     callees,
     depth: depthOf("collapsed", statements, callees.length, entry),
+    floor: depthOf("collapsed", statements, 0, entry),
+    terminal: b.terminal,
   };
 };
 
-/** A room with calls may be grown to the port pitch when placed; budget for it. */
-const placedDepth = (spec: FlowRoomSpec): number =>
-  spec.callees.length > 0 ? Math.max(spec.depth, PORT_PITCH) : spec.depth;
+const overBudget = (items: readonly FlowTree[]): boolean =>
+  roomCount(items) > FLOW_BUDGET.rooms ||
+  depthEstimate(items) > FLOW_BUDGET.depth;
 
-const overBudget = (specs: readonly FlowRoomSpec[]): boolean =>
-  specs.length > FLOW_BUDGET.rooms ||
-  specs.reduce((sum, spec) => sum + placedDepth(spec), 0) > FLOW_BUDGET.depth;
+type Deepest = {
+  readonly fork: ForkSpec;
+  readonly level: number;
+  readonly rooms: number;
+};
 
-/** The index of the shallowest adjacent foldable pair, or -1. */
-const shallowestPair = (specs: readonly FlowRoomSpec[]): number => {
-  let best = -1;
-  let bestDepth = Infinity;
-  for (let index = 0; index + 1 < specs.length; index += 1) {
-    const a = specs[index];
-    const b = specs[index + 1];
+const deeper = (a: Deepest | null, b: Deepest | null): Deepest | null =>
+  a === null ||
+  (b !== null &&
+    (b.level > a.level || (b.level === a.level && b.rooms > a.rooms)))
+    ? b
+    : a;
+
+/**
+ * The fork nested deepest, ties to the one with most rooms, found in one
+ * pass that counts rooms on the way back up.
+ */
+const deepestFork = (
+  items: readonly FlowTree[],
+  level: number
+): { readonly best: Deepest | null; readonly rooms: number } => {
+  let best: Deepest | null = null;
+  let rooms = 0;
+  for (const item of items) {
+    if (item.kind !== "fork") {
+      rooms += 1;
+      continue;
+    }
+    let own = 1 + (item.merge === null ? 0 : 1);
+    for (const lane of item.lanes) {
+      const inner = deepestFork(lane.body, level + 1);
+      own += inner.rooms;
+      best = deeper(best, inner.best);
+    }
+    best = deeper(best, { fork: item, level, rooms: own });
+    rooms += own;
+  }
+  return { best, rooms };
+};
+
+const replaceFork = (
+  items: readonly FlowTree[],
+  target: ForkSpec,
+  sites: SiteIndex,
+  top: boolean
+): readonly FlowTree[] =>
+  items.map((item, index) => {
+    if (item === target) {
+      return specOf(item.node, sites, top && index === 0);
+    }
+    if (item.kind === "fork") {
+      return {
+        ...item,
+        lanes: item.lanes.map((lane) => ({
+          ...lane,
+          body: replaceFork(lane.body, target, sites, false),
+        })),
+      };
+    }
+    return item;
+  });
+
+/** The tree with its deepest fork collapsed, or null when it has none. */
+const collapseDeepest = (
+  items: readonly FlowTree[],
+  sites: SiteIndex
+): readonly FlowTree[] | null => {
+  const deepest = deepestFork(items, 0).best;
+  return deepest === null
+    ? null
+    : replaceFork(items, deepest.fork, sites, true);
+};
+
+type Pair = {
+  readonly sequence: readonly FlowTree[];
+  readonly index: number;
+  readonly depth: number;
+};
+
+/** The shallowest adjacent foldable pair in any sequence of the tree. */
+const shallowestPair = (items: readonly FlowTree[]): Pair | null => {
+  let best: Pair | null = null;
+  const consider = (candidate: Pair | null) => {
+    if (candidate !== null && (best === null || candidate.depth < best.depth)) {
+      best = candidate;
+    }
+  };
+  for (let index = 0; index + 1 < items.length; index += 1) {
+    const a = items[index];
+    const b = items[index + 1];
     if (
-      a !== undefined &&
-      b !== undefined &&
+      a?.kind === "room" &&
+      b?.kind === "room" &&
       FOLDABLE.has(a.role) &&
-      FOLDABLE.has(b.role) &&
-      a.depth + b.depth < bestDepth
+      FOLDABLE.has(b.role)
     ) {
-      best = index;
-      bestDepth = a.depth + b.depth;
+      consider({ sequence: items, index, depth: a.depth + b.depth });
+    }
+  }
+  for (const item of items) {
+    if (item.kind === "fork") {
+      for (const lane of item.lanes) {
+        consider(shallowestPair(lane.body));
+      }
     }
   }
   return best;
 };
 
+const replaceSequence = (
+  items: readonly FlowTree[],
+  target: readonly FlowTree[],
+  replacement: readonly FlowTree[]
+): readonly FlowTree[] =>
+  items === target
+    ? replacement
+    : items.map((item) =>
+        item.kind === "fork"
+          ? {
+              ...item,
+              lanes: item.lanes.map((lane) => ({
+                ...lane,
+                body: replaceSequence(lane.body, target, replacement),
+              })),
+            }
+          : item
+      );
+
+/** The tree with its shallowest foldable pair folded, or null when none is. */
+const foldShallowest = (
+  items: readonly FlowTree[]
+): readonly FlowTree[] | null => {
+  const pair = shallowestPair(items);
+  const a = pair?.sequence[pair.index];
+  const b = pair?.sequence[pair.index + 1];
+  if (pair === null || a?.kind !== "room" || b?.kind !== "room") {
+    return null;
+  }
+  const folded = [
+    ...pair.sequence.slice(0, pair.index),
+    merge(a, b, pair.sequence === items && pair.index === 0),
+    ...pair.sequence.slice(pair.index + 2),
+  ];
+  return replaceSequence(items, pair.sequence, folded);
+};
+
 /**
- * Folds until the column is within budget or nothing more can fold. A
- * folded room keeps its first room's id, so the HUD still resolves it; its
- * label carries the true counts. The budget is a target, not a guarantee:
- * a collapsed room's own depth is capped, but the wall its distinct callees
- * need is not, so a room calling very many functions can still exceed it.
+ * Folds until the tree is within budget or nothing more can change. Too
+ * wide: the deepest fork collapses into one room. Too deep or too many
+ * rooms: neighbouring rooms fold, then forks collapse. A folded room keeps
+ * its first room's id and a collapsed fork its node's, so the HUD still
+ * resolves them; labels carry the true counts. The budget is a target, not
+ * a guarantee: a room's own depth is capped, but the wall its distinct
+ * callees need is not, so a room calling very many functions can still
+ * exceed it.
  */
 const foldToBudget = (
-  specs: readonly FlowRoomSpec[]
-): readonly FlowRoomSpec[] => {
-  let current = specs;
-  while (overBudget(current)) {
-    const index = shallowestPair(current);
-    const a = current[index];
-    const b = current[index + 1];
-    if (index === -1 || a === undefined || b === undefined) {
-      break;
+  items: readonly FlowTree[],
+  sites: SiteIndex
+): readonly FlowTree[] => {
+  let current = items;
+  for (;;) {
+    if (treeWidth(current) > FLOW_BUDGET.width) {
+      const narrower = collapseDeepest(current, sites);
+      if (narrower === null) {
+        return current;
+      }
+      current = narrower;
+      continue;
     }
-    current = [
-      ...current.slice(0, index),
-      merge(a, b, index === 0),
-      ...current.slice(index + 2),
-    ];
+    if (!overBudget(current)) {
+      return current;
+    }
+    const next = foldShallowest(current) ?? collapseDeepest(current, sites);
+    if (next === null) {
+      return current;
+    }
+    current = next;
   }
-  return current;
 };
 
 export { foldToBudget };

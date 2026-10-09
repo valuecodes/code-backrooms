@@ -8,128 +8,31 @@ import {
 } from "@repo/world-generator/config";
 import { describe, expect, it } from "vitest";
 
-import type {
-  CallSite,
-  FlowStep,
-  FunctionNode,
-  SequenceNode,
-  SourceSpan,
-} from "./code-graph";
-import { layoutFlow } from "./flow-layout";
+import type { CallSite, FlowStep } from "./code-graph";
+import {
+  awaitNode,
+  call,
+  calling,
+  clusterOf,
+  FN,
+  loop,
+  ret,
+  site,
+  step,
+} from "./flow-fixture";
 import { parseFlowNodeId } from "./ids";
-
-const FN = "m.ts::f";
-
-const span: SourceSpan = {
-  start: 0,
-  end: 10,
-  startLine: 1,
-  startColumn: 0,
-  endLine: 1,
-  endColumn: 10,
-};
-
-const site = (offset: number, callee: string): CallSite => ({
-  id: `${FN}@${offset}`,
-  callerId: FN,
-  calleeName: callee,
-  calleeId: `m.ts::${callee}`,
-  resolution: "resolved",
-  kind: "call",
-  awaited: false,
-  span: { ...span, start: offset, end: offset + 3 },
-});
-
-const step = (offset: number, statements: number): FlowStep => ({
-  id: `${FN}@${offset}:step`,
-  kind: "step",
-  span,
-  statements,
-});
-
-const call = (offset: number, callSiteIds: readonly string[]): FlowStep => ({
-  id: `${FN}@${offset}:call`,
-  kind: "call",
-  span,
-  callSiteIds,
-});
-
-const ret = (
-  offset: number,
-  callSiteIds: readonly string[] = []
-): FlowStep => ({
-  id: `${FN}@${offset}:return`,
-  kind: "return",
-  span,
-  throws: false,
-  callSiteIds,
-});
-
-/** An await of something unresolved: no site lies in its span. */
-const awaitNode = (offset: number): FlowStep => ({
-  id: `${FN}@${offset}:await`,
-  kind: "await",
-  span: { ...span, start: 900, end: 910 },
-  callSiteIds: [],
-});
-
-const sequence = (
-  offset: number,
-  steps: readonly FlowStep[]
-): SequenceNode => ({
-  id: `${FN}@${offset}:sequence:then`,
-  kind: "sequence",
-  span,
-  steps,
-});
-
-const branch = (offset: number, steps: readonly FlowStep[]): FlowStep => ({
-  id: `${FN}@${offset}:branch`,
-  kind: "branch",
-  span,
-  condition: "x",
-  callSiteIds: [],
-  consequent: sequence(offset, steps),
-  alternate: { ...sequence(offset, []), id: `${FN}@${offset}:sequence:else` },
-});
-
-const fnWith = (steps: readonly FlowStep[]): FunctionNode => ({
-  id: FN,
-  moduleId: "m.ts",
-  name: "f",
-  qualifiedName: "f",
-  kind: "declaration",
-  span,
-  exported: false,
-  async: false,
-  isStatic: false,
-  parentId: null,
-  className: null,
-  flow: { id: `${FN}@0:sequence:body`, kind: "sequence", span, steps },
-});
-
-/** A room calling `count` distinct functions g1..gN from one statement. */
-const calling = (offset: number, count: number) => {
-  const sites = Array.from({ length: count }, (_, index) =>
-    site(offset + index, `g${index + 1}`)
-  );
-  return {
-    node: call(
-      offset,
-      sites.map((item) => item.id)
-    ),
-    sites,
-  };
-};
 
 const onGrid = (value: number): boolean =>
   Math.abs(value / GRID - Math.round(value / GRID)) < 1e-9;
 
+const depths = (steps: readonly FlowStep[], sites: readonly CallSite[] = []) =>
+  clusterOf(steps, sites).rooms.map((room) => room.rect.maxZ - room.rect.minZ);
+
 describe("layoutFlow", () => {
   it("stacks one full-width room per step from z = 0, doors between neighbours", () => {
     const a = site(5, "g");
-    const cluster = layoutFlow(
-      fnWith([step(1, 2), call(5, [a.id]), awaitNode(9), ret(12)]),
+    const cluster = clusterOf(
+      [step(1, 2), call(5, [a.id]), awaitNode(9), ret(12)],
       [a]
     );
     expect(cluster.width).toBe(4);
@@ -167,7 +70,7 @@ describe("layoutFlow", () => {
   });
 
   it("gives an empty body one room that still names its function", () => {
-    const cluster = layoutFlow(fnWith([]), []);
+    const cluster = clusterOf([], []);
     expect(cluster.rooms).toEqual([
       {
         id: `${FN}@0:step:empty`,
@@ -190,8 +93,8 @@ describe("layoutFlow", () => {
     const one = calling(5, 1);
     const two = calling(20, 2);
     const three = calling(40, 1);
-    const cluster = layoutFlow(
-      fnWith([step(1, 1), one.node, two.node, three.node]),
+    const cluster = clusterOf(
+      [step(1, 1), one.node, two.node, three.node],
       [...one.sites, ...two.sites, ...three.sites]
     );
     // Both walls end a port at z = 7, so the next ports must end at 13; the
@@ -230,8 +133,8 @@ describe("layoutFlow", () => {
     const rooms = Array.from({ length: 4 }, (_, index) =>
       calling(10 * index + 5, 2)
     );
-    const cluster = layoutFlow(
-      fnWith([step(1, 1), ...rooms.map((room) => room.node)]),
+    const cluster = clusterOf(
+      [step(1, 1), ...rooms.map((room) => room.node)],
       rooms.flatMap((room) => room.sites)
     );
     expect(
@@ -255,7 +158,7 @@ describe("layoutFlow", () => {
       [5, 8.5],
     ] as const) {
       const { node, sites } = calling(5, count);
-      const cluster = layoutFlow(fnWith([step(1, 1), node]), sites);
+      const cluster = clusterOf([step(1, 1), node], sites);
       const room = cluster.rooms[1];
       expect(room?.rect.maxZ, `${count} callees`).toBe(4 + depth);
       const ports = cluster.ports.filter((port) => port.roomId === room?.id);
@@ -293,7 +196,7 @@ describe("layoutFlow", () => {
 
   it("puts one return portal on the last room's south wall, whatever ends the body", () => {
     for (const last of [ret(9), step(9, 1)]) {
-      const cluster = layoutFlow(fnWith([step(1, 1), last]), []);
+      const cluster = clusterOf([step(1, 1), last], []);
       expect(cluster.portals).toEqual([
         {
           id: `return:${last.id}`,
@@ -308,33 +211,26 @@ describe("layoutFlow", () => {
   });
 
   it("sizes rooms by role, statements, callees and the entry minimum", () => {
-    const depths = (
-      steps: readonly FlowStep[],
-      sites: readonly CallSite[] = []
-    ) =>
-      layoutFlow(fnWith(steps), sites).rooms.map(
-        (room) => room.rect.maxZ - room.rect.minZ
-      );
     expect(depths([step(1, 1), step(5, 1), step(9, 9), step(13, 100)])).toEqual(
       [4, 2, 6, 8]
     );
     const a = site(5, "g");
     expect(depths([step(1, 1), awaitNode(5), ret(9)])).toEqual([4, 2, 2]);
     expect(depths([step(1, 1), ret(5, [a.id])], [a])).toEqual([4, 3]);
-    expect(depths([branch(1, [step(2, 1)])])).toEqual([4]);
-    expect(depths([step(1, 1), branch(5, [step(6, 1)])])).toEqual([4, 3]);
+    expect(depths([loop(1, [step(2, 1)])])).toEqual([4]);
+    expect(depths([step(1, 1), loop(5, [step(6, 1)])])).toEqual([4, 3]);
   });
 
   it("collapses a composite into one room carrying every call inside it", () => {
     const inner = calling(7, 2);
-    const cluster = layoutFlow(
-      fnWith([step(1, 1), branch(5, [step(6, 1), inner.node])]),
+    const cluster = clusterOf(
+      [step(1, 1), loop(5, [step(6, 1), inner.node])],
       inner.sites
     );
     expect(cluster.rooms[1]).toMatchObject({
-      id: `${FN}@5:branch`,
+      id: `${FN}@5:loop`,
       role: "collapsed",
-      label: "if (x) · 2 statements · 2 calls",
+      label: "while (x) · 2 statements · 2 calls",
     });
     expect(
       cluster.ports
@@ -348,7 +244,10 @@ describe("layoutFlow", () => {
       calling(10 * index + 1, 1)
     );
     const sites = rooms.flatMap((room) => room.sites);
-    const cluster = layoutFlow(fnWith(rooms.map((room) => room.node)), sites);
+    const cluster = clusterOf(
+      rooms.map((room) => room.node),
+      sites
+    );
     expect(cluster.rooms.length).toBeLessThanOrEqual(FLOW_BUDGET.rooms);
     expect(cluster.depth).toBeLessThanOrEqual(FLOW_BUDGET.depth);
     const reached = new Set([
@@ -373,7 +272,7 @@ describe("layoutFlow", () => {
 
   it("is the same on every call", () => {
     const { node, sites } = calling(5, 4);
-    const fn = fnWith([step(1, 3), node, ret(20)]);
-    expect(layoutFlow(fn, sites)).toEqual(layoutFlow(fn, sites));
+    const steps = [step(1, 3), node, ret(20)];
+    expect(clusterOf(steps, sites)).toEqual(clusterOf(steps, sites));
   });
 });

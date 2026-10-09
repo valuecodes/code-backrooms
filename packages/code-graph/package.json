@@ -6,6 +6,7 @@
     ".": "./src/code-graph.ts",
     "./flow": "./src/flow.ts",
     "./flow-layout": "./src/flow-layout.ts",
+    "./flow-text": "./src/flow-text.ts",
     "./ids": "./src/ids.ts",
     "./subjects": "./src/subjects.ts",
     "./world-graph": "./src/world-graph.ts"

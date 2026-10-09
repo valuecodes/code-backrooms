@@ -4,6 +4,7 @@
 import type {
   DoorData,
   FlowRole,
+  LaneLabel,
   Point,
   Port,
   Rect,
@@ -27,6 +28,7 @@ type OrientedRoom = {
   readonly rect: Rect;
   readonly role: FlowRole;
   readonly label?: string;
+  readonly lane?: LaneLabel;
   /** Set on the entry room: the wall the unit is entered through. */
   readonly entry?: WallSide;
   /** Doors to the other rooms of the cluster, both sides declared. */
@@ -208,6 +210,7 @@ const orient = (
     rect: rects.get(room.id) ?? room.rect,
     role: room.role,
     ...(room.label === undefined ? {} : { label: room.label }),
+    ...(room.lane === undefined ? {} : { lane: room.lane }),
     ...(room.id === cluster.entryRoomId ? { entry: entryWall } : {}),
     doors: doors.get(room.id) ?? [],
   }));

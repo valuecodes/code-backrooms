@@ -7,6 +7,7 @@ import type {
   RoomCluster,
   WorldGraph,
 } from "@repo/types";
+import { FLOW_TOP_MIN_WIDTH } from "@repo/world-generator/config";
 
 import type {
   CallEdge,
@@ -15,7 +16,7 @@ import type {
   FunctionNode,
   ModuleNode,
 } from "./code-graph";
-import { layoutFlow } from "./flow-layout";
+import { layoutFlow, planFlow } from "./flow-layout";
 import { hubDimensions } from "./room-size";
 
 /** Functions nobody else calls, from the directed edges, in source order. */
@@ -232,8 +233,15 @@ const moduleWorld = (
 ): ModuleWorld => {
   const functions = graph.functions.filter((fn) => fn.moduleId === module.id);
   const sites = sitesByCaller(graph.callSites);
+  // Every function is planned first: a callee's width sets how far apart
+  // the ports for it must sit, and a plan depends on its own body alone.
+  const plans = new Map(
+    functions.map((fn) => [fn.id, planFlow(fn, sites.get(fn.id) ?? [])])
+  );
+  const widthOf = (id: string): number =>
+    plans.get(id)?.width ?? FLOW_TOP_MIN_WIDTH;
   const clusters = new Map(
-    functions.map((fn) => [fn.id, layoutFlow(fn, sites.get(fn.id) ?? [])])
+    [...plans].map(([id, plan]) => [id, layoutFlow(plan, widthOf)])
   );
   const candidates = new Map(
     [...clusters].map(([id, cluster]) => [

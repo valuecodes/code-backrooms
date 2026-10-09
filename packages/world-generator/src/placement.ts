@@ -6,6 +6,7 @@ import type {
   Connection,
   DoorData,
   FlowRole,
+  LaneLabel,
   Port,
   Portal,
   PortalData,
@@ -40,6 +41,7 @@ type PlacedRoom = {
   readonly cluster?: string;
   readonly role?: FlowRole;
   readonly label?: string;
+  readonly lane?: LaneLabel;
   readonly entry?: WallSide;
 };
 
@@ -80,6 +82,7 @@ const toRoomData = (room: PlacedRoom): RoomData => ({
   ...(room.cluster === undefined ? {} : { cluster: room.cluster }),
   ...(room.role === undefined ? {} : { role: room.role }),
   ...(room.label === undefined ? {} : { label: room.label }),
+  ...(room.lane === undefined ? {} : { lane: room.lane }),
   ...(room.entry === undefined ? {} : { entry: room.entry }),
 });
 
@@ -243,6 +246,7 @@ class Placement {
         cluster: id,
         role: room.role,
         ...(room.label === undefined ? {} : { label: room.label }),
+        ...(room.lane === undefined ? {} : { lane: room.lane }),
         ...(room.entry === undefined ? {} : { entry: room.entry }),
       });
     }

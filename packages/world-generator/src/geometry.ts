@@ -5,6 +5,7 @@ import type {
   DoorData,
   DoorOpening,
   Doorway,
+  LaneLabel,
   Placement,
   Point,
   PortalData,
@@ -148,7 +149,16 @@ const segmentBox = (
       };
 };
 
-/** Full-height boxes between openings, plus a lintel above each opening. */
+const tinted = (
+  segment: WallSegment,
+  lane: LaneLabel | undefined
+): WallSegment => (lane === undefined ? segment : { ...segment, lane });
+
+/**
+ * Full-height boxes between openings, plus a lintel above each opening.
+ * Walls carry the room's lane, lintels their door's (or the room's when
+ * the door has none), so the renderer can tint a lane and its doors.
+ */
 const wallSegments = (
   room: RoomData,
   openings: readonly DoorOpening[]
@@ -174,24 +184,34 @@ const wallSegments = (
       }
       if (gap.start > cursor + EPSILON) {
         segments.push(
-          segmentBox(span, cursor, gap.start, 0, WALL_HEIGHT, "wall")
+          tinted(
+            segmentBox(span, cursor, gap.start, 0, WALL_HEIGHT, "wall"),
+            room.lane
+          )
         );
       }
-      segments.push({
-        ...segmentBox(
-          span,
-          gap.start,
-          gap.end,
-          DOOR_HEIGHT,
-          WALL_HEIGHT,
-          "lintel"
-        ),
-        ...(gap.lane === undefined ? {} : { lane: gap.lane }),
-      });
+      segments.push(
+        tinted(
+          segmentBox(
+            span,
+            gap.start,
+            gap.end,
+            DOOR_HEIGHT,
+            WALL_HEIGHT,
+            "lintel"
+          ),
+          gap.lane ?? room.lane
+        )
+      );
       cursor = gap.end;
     }
     if (span.end > cursor + EPSILON) {
-      segments.push(segmentBox(span, cursor, span.end, 0, WALL_HEIGHT, "wall"));
+      segments.push(
+        tinted(
+          segmentBox(span, cursor, span.end, 0, WALL_HEIGHT, "wall"),
+          room.lane
+        )
+      );
     }
   }
   return segments;

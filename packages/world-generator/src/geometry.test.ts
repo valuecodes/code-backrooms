@@ -317,6 +317,7 @@ describe("buildWorld clusters", () => {
     depth: 4,
     doors: [{ wall: "north", targetRoomId: "a", lane: { kind: "true" } }],
     cluster: "fn",
+    lane: { kind: "false" },
   };
   const into: PortalData = {
     id: "portal:into",
@@ -348,5 +349,23 @@ describe("buildWorld clusters", () => {
     expect(world.doorways[0]).toMatchObject({ lane: { kind: "true" } });
     const plain = buildWorld(worldData);
     expect("lane" in (plain.doorways[0] ?? {})).toBe(false);
+  });
+
+  it("tints a lane room's walls with its lane and its lintels with their door's", () => {
+    const built = world.rooms.find(({ room }) => room.id === "b");
+    const walls = built?.segments.filter((segment) => segment.kind === "wall");
+    expect(walls?.length).toBeGreaterThan(0);
+    expect(walls?.every((segment) => segment.lane?.kind === "false")).toBe(
+      true
+    );
+    expect(
+      built?.segments.find((segment) => segment.kind === "lintel")
+    ).toMatchObject({ lane: { kind: "true" } });
+    const outside = world.rooms.find(({ room }) => room.id === "a");
+    expect(
+      outside?.segments.every((segment) =>
+        segment.kind === "wall" ? segment.lane === undefined : true
+      )
+    ).toBe(true);
   });
 });

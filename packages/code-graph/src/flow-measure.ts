@@ -1,5 +1,5 @@
-// One room per top-level flow node, with the depth it needs. Width is the
-// lane's; everything here is in cluster metres on the grid.
+// One room per flow node that is not expanded, with the depth it needs.
+// Width is the column's; everything here is in cluster metres on the grid.
 
 import type { FlowRole } from "@repo/types";
 import {
@@ -13,14 +13,9 @@ import {
   MIN_GAP,
 } from "@repo/world-generator/config";
 
-import type { CallSite, FlowStep, FunctionNode } from "./code-graph";
-import { countStatements } from "./flow";
-import {
-  flowNodeText,
-  indexSites,
-  resolvedSites,
-  siteIdsUnder,
-} from "./flow-text";
+import type { FlowStep, FunctionNode } from "./code-graph";
+import { countStatements, isTerminal } from "./flow";
+import { flowNodeText, resolvedSites, siteIdsUnder } from "./flow-text";
 import type { SiteIndex } from "./flow-text";
 import { flowNodeId } from "./ids";
 
@@ -31,6 +26,7 @@ type FlowCallee = {
 };
 
 type FlowRoomSpec = {
+  readonly kind: "room";
   readonly id: string;
   readonly role: FlowRole;
   readonly label: string;
@@ -39,13 +35,18 @@ type FlowRoomSpec = {
   readonly calls: number;
   /** Distinct callees in site order. */
   readonly callees: readonly FlowCallee[];
+  /** The depth with both side walls free for its calls: what the budget counts. */
   readonly depth: number;
+  /** The depth its contents alone need; the placer grows it for the calls. */
+  readonly floor: number;
+  /** Control never runs past the room: a return, or a collapsed node that ends. */
+  readonly terminal: boolean;
 };
 
 /**
- * How far apart two ports on one wall must end: a callee is a cluster
- * FLOW_TOP_MIN_WIDTH wide along the wall and keeps MIN_GAP from the
- * previous one, which may reach MIN_GAP past its own port.
+ * How far apart two ports on one wall must end when the callee is as wide
+ * as a plain column: it keeps MIN_GAP from the previous one, which may
+ * reach MIN_GAP past its own port. The placer uses the callee's real width.
  */
 const PORT_PITCH = FLOW_TOP_MIN_WIDTH + MIN_GAP;
 
@@ -90,9 +91,10 @@ const baseDepth = (role: FlowRole, statements: number): number => {
 };
 
 /**
- * Wall for the callees: the first two get a port each (one per side wall),
- * the rest a pre-placed portal each below the port, alternating walls, at
- * FLOW_PORTAL_PITCH; 1.5 m after the last keeps it clear of the corner.
+ * Wall for the callees when both side walls are free: the first two get a
+ * port each (one per side wall), the rest a pre-placed portal each below
+ * the port, alternating walls, at FLOW_PORTAL_PITCH; 1.5 m after the last
+ * keeps it clear of the corner.
  */
 const sitesDepth = (callees: number): number => {
   if (callees === 0) {
@@ -153,6 +155,10 @@ const roleOf = (node: FlowStep): FlowRole => {
   }
 };
 
+/**
+ * One room for a node that is not expanded: a leaf, or a composite kept
+ * whole (`collapsed`) carrying every call inside it.
+ */
 const specOf = (
   node: FlowStep,
   sites: SiteIndex,
@@ -163,6 +169,7 @@ const specOf = (
   const callees = calleesOf(ids, sites);
   const statements = countStatements(node);
   return {
+    kind: "room",
     id: node.id,
     role,
     label: flowNodeText(node, sites),
@@ -170,37 +177,24 @@ const specOf = (
     calls: resolvedSites(ids, sites).length,
     callees,
     depth: depthOf(role, statements, callees.length, entry),
+    floor: depthOf(role, statements, 0, entry),
+    terminal: isTerminal(node),
   };
 };
 
-/**
- * The rooms of a function's top-level flow in order. Composites (branches,
- * switches, loops) are one `collapsed` room each for now, carrying every
- * call inside them. An empty body is one empty step.
- */
-const measureBody = (
-  fn: FunctionNode,
-  sites: readonly CallSite[]
-): readonly FlowRoomSpec[] => {
-  const index = indexSites(sites);
-  const specs = fn.flow.steps.map((step, position) =>
-    specOf(step, index, position === 0)
-  );
-  if (specs.length > 0) {
-    return specs;
-  }
-  return [
-    {
-      id: flowNodeId(fn.id, fn.flow.span.start, "step", "empty"),
-      role: "step",
-      label: "empty body",
-      statements: 0,
-      calls: 0,
-      callees: [],
-      depth: depthOf("step", 0, 0, true),
-    },
-  ];
-};
+/** The one room of a function with nothing in its body. */
+const emptyBodySpec = (fn: FunctionNode): FlowRoomSpec => ({
+  kind: "room",
+  id: flowNodeId(fn.id, fn.flow.span.start, "step", "empty"),
+  role: "step",
+  label: "empty body",
+  statements: 0,
+  calls: 0,
+  callees: [],
+  depth: depthOf("step", 0, 0, true),
+  floor: depthOf("step", 0, 0, true),
+  terminal: false,
+});
 
-export { depthOf, measureBody, PORT_PITCH };
+export { calleesOf, depthOf, emptyBodySpec, PORT_PITCH, specOf };
 export type { FlowCallee, FlowRoomSpec };

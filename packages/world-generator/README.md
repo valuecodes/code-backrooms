@@ -29,9 +29,12 @@ ports on the boundary (stretches of wall another unit may attach to, each
 reserved for one unit) and portals already positioned. The layout places the
 cluster as one unit: it is rotated so the entry faces the wall of the anchor
 it hangs off (a flow running +Z as drawn becomes −Z off a north wall, +X off
-an east wall), every room is emitted with `cluster`, `role`, `label` and, on
-the entry room, `entry`, and other units attach only through its ports, one
-door per port. Plain graphs are laid out exactly as before: a plain room
+an east wall), every room is emitted with `cluster`, `role`, `label`, the
+`lane` it lies in and, on the entry room, `entry`, and other units attach
+only through its ports, one door per port. A door's `lane` reaches its
+opening, lintel and doorway, a room's `lane` its wall segments, and the
+door target `nearestTarget` reports carries the lane, so a renderer can tint
+lanes and a HUD can name them. Plain graphs are laid out exactly as before: a plain room
 simply offers each of its walls as a port.
 
 Portals (`graph.portals`) are directed teleports drawn as a door frame with
