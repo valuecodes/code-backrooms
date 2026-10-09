@@ -321,6 +321,34 @@ describe("worldFromCode", () => {
     expect(doors.length).toBeLessThan(8);
   });
 
+  it("prompts the synthesised default lane of a switch without one", () => {
+    const codeGraph = buildCodeGraph([
+      {
+        path: "s.ts",
+        source:
+          "function f(x: number) { switch (x) { case 1: g(); } h(); }\nfunction g() {}\nfunction h() {}",
+      },
+    ]);
+    const rooms = roomsOf(world(codeGraph), "s.ts::f");
+    const lane = rooms.find((room) => room.role === "lane");
+    expect(
+      promptOf(codeGraph, [], {
+        kind: "door",
+        roomId: rooms[0]?.id ?? "",
+        targetRoomId: lane?.id ?? "",
+        lane: { kind: "default" },
+      })
+    ).toBe("→ default");
+    expect(
+      promptOf(codeGraph, [], {
+        kind: "door",
+        roomId: lane?.id ?? "",
+        targetRoomId: rooms[0]?.id ?? "",
+        lane: { kind: "default" },
+      })
+    ).toBe("→ switch (x)");
+  });
+
   it("words the breadcrumb and the prompts", () => {
     const codeGraph = graphOf("portals");
     const world = worldFromCode(codeGraph, 1);

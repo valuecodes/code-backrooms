@@ -24,15 +24,25 @@ const PALETTE: Record<LaneKind, Rgb> = {
   exit: WHITE,
 };
 
-/** The lane's full colour, white for no lane. */
+/** Dark wood: what a frame is without a lane. The frame material is white. */
+const WOOD: Rgb = rgb("#4a3620");
+
+/** A door frame: the lane's full colour, dark wood for no lane. */
 const frameTint = (lane: LaneLabel | undefined): Rgb =>
+  lane === undefined ? WOOD : PALETTE[lane.kind];
+
+/** A lintel over a door, wallpapered: the lane's full colour, plain for none. */
+const lintelTint = (lane: LaneLabel | undefined): Rgb =>
   lane === undefined ? WHITE : PALETTE[lane.kind];
 
-/** The lane's colour mixed halfway to white: a wash over wallpaper. */
+/** A wall: the lane's colour mixed halfway to white, plain for none. */
 const wallTint = (lane: LaneLabel | undefined): Rgb => {
-  const [r, g, b] = frameTint(lane);
+  if (lane === undefined) {
+    return WHITE;
+  }
+  const [r, g, b] = PALETTE[lane.kind];
   return [(r + 1) / 2, (g + 1) / 2, (b + 1) / 2];
 };
 
-export { frameTint, wallTint };
+export { frameTint, lintelTint, wallTint };
 export type { Rgb };

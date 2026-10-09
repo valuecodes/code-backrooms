@@ -273,15 +273,11 @@ describe("switches", () => {
     ]);
   });
 
-  it("merges case labels into one lane and lets a falling-through case rejoin", () => {
+  it("merges case labels into one lane", () => {
     const cluster = valid(
       clusterOf([
         switchNode(1, [
-          {
-            labels: ['case "a"', 'case "b"'],
-            body: [step(5, 1)],
-            fallsThrough: true,
-          },
+          { labels: ['case "a"', 'case "b"'], body: [step(5, 1)] },
           { labels: ["default"], body: [step(6, 1)] },
         ]),
       ])
@@ -296,7 +292,7 @@ describe("switches", () => {
     ]);
   });
 
-  it("lets a falling-through case rejoin only when the case it falls into does", () => {
+  it("keeps a switch with a falling-through case collapsed", () => {
     const cluster = valid(
       clusterOf([
         switchNode(1, [
@@ -306,11 +302,8 @@ describe("switches", () => {
         ]),
       ])
     );
-    expect(cluster.rooms.some((room) => room.role === "merge")).toBe(false);
-    expect(returnsOf(cluster).map(([id]) => id)).toEqual([
-      `${FN}@6:return`,
-      `${FN}@7:return`,
-    ]);
+    expect(cluster.rooms.map((room) => room.role)).toEqual(["collapsed"]);
+    expect(returnsOf(cluster).map(([id]) => id)).toEqual([`${FN}@1:switch`]);
   });
 
   it("cuts a long list of merged case labels", () => {

@@ -52,8 +52,8 @@ the renderer's tints. Doors from a head carry the lane they open onto. Ids:
 a head is its node, a merge `<node id>:merge`, an empty lane its sequence,
 a synthesised default `<switch id>:default`, so `parseFlowNodeId` and
 `./subjects` resolve them. A switch with more than `FLOW_MAX_CASES` cases,
-or with a `break` nested inside a case (no jump portals yet), stays
-collapsed.
+with a `break` nested inside a case or with a case that falls through (no
+jump portals yet), stays collapsed.
 
 Calls hang off side walls. A room whose wall lies on the cluster boundary
 offers a port there: with both walls free the first callee gets a port on

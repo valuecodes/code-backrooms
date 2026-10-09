@@ -3,7 +3,7 @@ import { WALL_HEIGHT } from "@repo/world-generator/config";
 import { useEffect, useMemo } from "react";
 
 import { FIXTURE_DROP, fixturePositions } from "./fixtures";
-import { frameTint, wallTint } from "./lane-tint";
+import { lintelTint, wallTint } from "./lane-tint";
 import { mergeBoxes } from "./merge";
 import { useSurfaces } from "./surfaces";
 import { tiledPlane } from "./tiled-geometry";
@@ -32,7 +32,7 @@ const Room = ({ built }: RoomProps) => {
           ...segment,
           color:
             segment.kind === "lintel"
-              ? frameTint(segment.lane)
+              ? lintelTint(segment.lane)
               : wallTint(segment.lane),
         })),
         surfaces.tile.wallpaper
