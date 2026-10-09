@@ -122,4 +122,22 @@ const countStatements = (node: FlowNode): number => {
   }
 };
 
-export { countStatements, isTerminal, walkFlow };
+type FoundFlowNode = {
+  readonly node: FlowNode;
+  /** Outermost first, the body sequence included. */
+  readonly ancestors: readonly FlowNode[];
+};
+
+/** The node with `id` under `root`, with the path down to it, or null. */
+const findFlowNode = (root: FlowNode, id: string): FoundFlowNode | null => {
+  let found: FoundFlowNode | null = null;
+  walkFlow(root, (node, ancestors) => {
+    if (found === null && node.id === id) {
+      found = { node, ancestors };
+    }
+  });
+  return found;
+};
+
+export { countStatements, findFlowNode, isTerminal, walkFlow };
+export type { FoundFlowNode };

@@ -1,4 +1,12 @@
-import type { Connection, GraphRoom, Portal, WorldGraph } from "@repo/types";
+import type {
+  ClusterPortal,
+  Connection,
+  GraphRoom,
+  Port,
+  Portal,
+  RoomCluster,
+  WorldGraph,
+} from "@repo/types";
 
 import type {
   CallEdge,
@@ -7,23 +15,8 @@ import type {
   FunctionNode,
   ModuleNode,
 } from "./code-graph";
-import {
-  callPortalId,
-  isFunctionId,
-  parsePortalId,
-  returnPortalId,
-} from "./ids";
-import { hubDimensions, roomDimensions } from "./room-size";
-
-const lineCount = (fn: FunctionNode): number =>
-  fn.span.endLine - fn.span.startLine + 1;
-
-/**
- * Physical call doors out of one room. With its one incoming door (hub or
- * caller) a function room then never needs more walls than the layout's
- * MAX_DEGREE allows; further callees are reached through portals.
- */
-const MAX_CALL_DOORS = 5;
+import { layoutFlow } from "./flow-layout";
+import { hubDimensions } from "./room-size";
 
 /** Functions nobody else calls, from the directed edges, in source order. */
 const rootsOf = (
@@ -44,24 +37,22 @@ type ModulePlan = {
   readonly attached: readonly FunctionNode[];
   /** Calls realised as physical doors, in discovery order. */
   readonly tree: readonly CallEdge[];
-  /** Every other resolved call: recursion, extra callers, cross-module. */
-  readonly portalEdges: readonly CallEdge[];
 };
 
 /**
  * Which calls become doors: a breadth-first walk of the module's call graph
- * from its roots, each function entered once, at most MAX_CALL_DOORS doors
- * out of a room. The door therefore belongs to the caller that first
- * reaches a function in that walk, which is usually but not always its
- * first caller in source order: a caller past its cap leaves the callee for
- * a later one to reach by door. A directed walk from the roots misses
- * functions that only cycles reach (`a <-> b` called by nobody else), so
- * whatever is left over is attached to the hub in source order and walked
- * from there.
+ * from its roots, each function entered once, through the ports its rooms
+ * offer (`candidates`: the callees a function has a port for). The door
+ * therefore belongs to the caller that first reaches a function in that
+ * walk, which is usually but not always its first caller in source order.
+ * A directed walk from the roots misses functions that only cycles reach
+ * (`a <-> b` called by nobody else), so whatever is left over is attached
+ * to the hub in source order and walked from there.
  */
 const planModule = (
   graph: CodeGraph,
-  functions: readonly FunctionNode[]
+  functions: readonly FunctionNode[],
+  candidates: ReadonlyMap<string, ReadonlySet<string>>
 ): ModulePlan => {
   const ids = new Set(functions.map((fn) => fn.id));
   const outgoing = new Map<string, CallEdge[]>();
@@ -73,23 +64,21 @@ const planModule = (
   const visited = new Set<string>();
   const attached: FunctionNode[] = [];
   const tree: CallEdge[] = [];
-  const portalEdges: CallEdge[] = [];
   const walk = (seed: FunctionNode) => {
     attached.push(seed);
     visited.add(seed.id);
     const queue = [seed.id];
     // for...of sees ids pushed while iterating, so this is a plain BFS.
     for (const id of queue) {
-      let doors = 0;
       for (const edge of outgoing.get(id) ?? []) {
-        const local = ids.has(edge.target) && !visited.has(edge.target);
-        if (local && doors < MAX_CALL_DOORS) {
+        if (
+          ids.has(edge.target) &&
+          !visited.has(edge.target) &&
+          candidates.get(id)?.has(edge.target) === true
+        ) {
           visited.add(edge.target);
           tree.push(edge);
           queue.push(edge.target);
-          doors += 1;
-        } else {
-          portalEdges.push(edge);
         }
       }
     }
@@ -102,7 +91,6 @@ const planModule = (
   return {
     attached: attached.sort((a, b) => a.span.start - b.span.start),
     tree,
-    portalEdges,
   };
 };
 
@@ -138,8 +126,65 @@ const hubGroups = (
   return groups;
 };
 
-/** The module a hub id belongs to: `demo.ts#2` → `demo.ts`. */
-const hubModuleId = (roomId: string): string => roomId.replace(/#\d+$/, "");
+type Realised = {
+  readonly cluster: RoomCluster;
+  readonly calls: readonly Portal[];
+  readonly returns: readonly Portal[];
+};
+
+/**
+ * A function's cluster once the doors are decided: the entry port and the
+ * first port per tree callee stay ports; every other reserved port becomes
+ * a call portal at its centre (recursion, extra callers of a shared
+ * function, a second room calling the same callee). Portals get their
+ * graph form, `from` the flow room and `to` the callee or the module hub.
+ */
+const realise = (
+  cluster: RoomCluster,
+  treeCallees: ReadonlySet<string>,
+  hubId: string,
+  nameOf: (id: string) => string
+): Realised => {
+  const kept: Port[] = [];
+  const converted: ClusterPortal[] = [];
+  const doorTo = new Set<string>();
+  for (const port of cluster.ports) {
+    const callee = port.reservedFor;
+    if (callee === undefined) {
+      kept.push(port);
+    } else if (treeCallees.has(callee) && !doorTo.has(callee)) {
+      doorTo.add(callee);
+      kept.push(port);
+    } else if (port.portalId !== undefined) {
+      converted.push({
+        id: port.portalId,
+        kind: "call",
+        roomId: port.roomId,
+        wall: port.wall,
+        along: (port.lo + port.hi) / 2,
+        target: callee,
+      });
+    }
+  }
+  const portals = [...converted, ...cluster.portals].map(
+    (portal): ClusterPortal => ({
+      ...portal,
+      label: portal.kind === "return" ? "return" : nameOf(portal.target ?? ""),
+    })
+  );
+  const toPortal = (portal: ClusterPortal): Portal => ({
+    id: portal.id,
+    kind: portal.kind,
+    from: portal.roomId,
+    to: portal.target ?? hubId,
+    ...(portal.label === undefined ? {} : { label: portal.label }),
+  });
+  return {
+    cluster: { ...cluster, ports: kept, portals },
+    calls: portals.filter((portal) => portal.kind === "call").map(toPortal),
+    returns: portals.filter((portal) => portal.kind === "return").map(toPortal),
+  };
+};
 
 type ModuleWorld = {
   /** The module's hubs, chained in order; the first is its entrance. */
@@ -149,8 +194,15 @@ type ModuleWorld = {
   readonly portals: readonly Portal[];
 };
 
-const bump = (counts: Map<string, number>, id: string) =>
-  counts.set(id, (counts.get(id) ?? 0) + 1);
+const sitesByCaller = (
+  sites: readonly CallSite[]
+): ReadonlyMap<string, readonly CallSite[]> => {
+  const groups = new Map<string, CallSite[]>();
+  for (const site of sites) {
+    groups.set(site.callerId, [...(groups.get(site.callerId) ?? []), site]);
+  }
+  return groups;
+};
 
 const moduleWorld = (
   graph: CodeGraph,
@@ -158,19 +210,53 @@ const moduleWorld = (
   extraHubDegree: number
 ): ModuleWorld => {
   const functions = graph.functions.filter((fn) => fn.moduleId === module.id);
-  const { attached, tree, portalEdges } = planModule(graph, functions);
-  const doors = new Map<string, number>(functions.map((fn) => [fn.id, 0]));
-  // Every function room has a return portal; call portals add to that.
-  const portalsOut = new Map<string, number>(functions.map((fn) => [fn.id, 1]));
+  const sites = sitesByCaller(graph.callSites);
+  const clusters = new Map(
+    functions.map((fn) => [fn.id, layoutFlow(fn, sites.get(fn.id) ?? [])])
+  );
+  const candidates = new Map(
+    [...clusters].map(([id, cluster]) => [
+      id,
+      new Set(
+        cluster.ports.flatMap((port) =>
+          port.reservedFor === undefined ? [] : [port.reservedFor]
+        )
+      ),
+    ])
+  );
+  const { attached, tree } = planModule(graph, functions, candidates);
+  const treeCallees = new Map<string, Set<string>>();
   for (const edge of tree) {
-    bump(doors, edge.source);
-    bump(doors, edge.target);
+    treeCallees.set(
+      edge.source,
+      new Set([...(treeCallees.get(edge.source) ?? []), edge.target])
+    );
   }
-  for (const fn of attached) {
-    bump(doors, fn.id);
-  }
-  for (const edge of portalEdges) {
-    bump(portalsOut, edge.source);
+  const nameOf = (id: string): string =>
+    graph.functions.find((fn) => fn.id === id)?.name ?? id;
+  const rooms: GraphRoom[] = [];
+  const calls: Portal[] = [];
+  const returns: Portal[] = [];
+  for (const fn of functions) {
+    const cluster = clusters.get(fn.id);
+    if (cluster === undefined) {
+      continue;
+    }
+    const realised = realise(
+      cluster,
+      treeCallees.get(fn.id) ?? new Set(),
+      module.id,
+      nameOf
+    );
+    rooms.push({
+      id: fn.id,
+      label: fn.name,
+      width: realised.cluster.width,
+      depth: realised.cluster.depth,
+      cluster: realised.cluster,
+    });
+    calls.push(...realised.calls);
+    returns.push(...realised.returns);
   }
   const groups = hubGroups(attached, extraHubDegree);
   const hubs = groups.map((group, index): GraphRoom => {
@@ -184,15 +270,6 @@ const moduleWorld = (
       ),
     };
   });
-  const rooms = functions.map((fn): GraphRoom => ({
-    id: fn.id,
-    label: fn.name,
-    ...roomDimensions(
-      lineCount(fn),
-      doors.get(fn.id) ?? 0,
-      portalsOut.get(fn.id) ?? 0
-    ),
-  }));
   const connections: Connection[] = [];
   groups.forEach((group, index) => {
     const hub = hubs[index];
@@ -214,34 +291,17 @@ const moduleWorld = (
       kind: "call",
     }))
   );
-  const nameOf = (id: string): string =>
-    graph.functions.find((fn) => fn.id === id)?.name ?? id;
-  const portals: Portal[] = portalEdges.map((edge) => ({
-    id: callPortalId(edge.callSiteIds[0] ?? `${edge.source}->${edge.target}`),
-    kind: "call",
-    from: edge.source,
-    to: edge.target,
-    label: nameOf(edge.target),
-  }));
-  portals.push(
-    ...functions.map((fn): Portal => ({
-      id: returnPortalId(fn.id),
-      kind: "return",
-      from: fn.id,
-      to: module.id,
-      label: "return",
-    }))
-  );
-  return { hubs, rooms, connections, portals };
+  return { hubs, rooms, connections, portals: [...calls, ...returns] };
 };
 
 /**
- * The spatial grammar for this milestone: one room per function with a
- * return portal, one hub per module that opens onto the module's roots (more
- * hubs chained when there are many), a door for each call on the breadth-
- * first tree from those roots and a call portal for every other resolved
- * call. The entrances of successive modules are chained too, so the world is
- * one connected component, and the first module's entrance is the start room.
+ * The spatial grammar: one cluster per function (a column of flow rooms
+ * with a return portal at its end), one hub per module that opens onto the
+ * module's roots (more hubs chained when there are many), a door for each
+ * call on the breadth-first tree from those roots through the rooms' ports,
+ * and a call portal for every other resolved call. The entrances of
+ * successive modules are chained too, so the world is one connected
+ * component, and the first module's entrance is the start room.
  */
 const toWorldGraph = (graph: CodeGraph): WorldGraph => {
   const rooms: GraphRoom[] = [];
@@ -267,72 +327,4 @@ const toWorldGraph = (graph: CodeGraph): WorldGraph => {
     : { rooms, connections, portals, start };
 };
 
-type RoomSubject =
-  | { readonly kind: "module"; readonly module: ModuleNode }
-  | {
-      readonly kind: "function";
-      readonly fn: FunctionNode;
-      readonly module: ModuleNode;
-    };
-
-const functionSubject = (
-  graph: CodeGraph,
-  functionId: string
-): { readonly fn: FunctionNode; readonly module: ModuleNode } | null => {
-  const fn = graph.functions.find((candidate) => candidate.id === functionId);
-  const module =
-    fn === undefined
-      ? undefined
-      : graph.modules.find((candidate) => candidate.id === fn.moduleId);
-  return fn === undefined || module === undefined ? null : { fn, module };
-};
-
-/** What a room stands for, or null for corridors and ids not from this graph. */
-const roomSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
-  if (isFunctionId(roomId)) {
-    const subject = functionSubject(graph, roomId);
-    return subject === null ? null : { kind: "function", ...subject };
-  }
-  const moduleId = hubModuleId(roomId);
-  const module = graph.modules.find((candidate) => candidate.id === moduleId);
-  return module === undefined ? null : { kind: "module", module };
-};
-
-type PortalSubject =
-  | {
-      readonly kind: "call";
-      readonly site: CallSite;
-      readonly caller: FunctionNode;
-      readonly callee: FunctionNode;
-    }
-  | { readonly kind: "return"; readonly fn: FunctionNode };
-
-/** What a portal stands for, or null for ids not from this graph. */
-const portalSubject = (
-  graph: CodeGraph,
-  portalId: string
-): PortalSubject | null => {
-  const ref = parsePortalId(portalId);
-  if (ref === null) {
-    return null;
-  }
-  if (ref.kind === "return") {
-    const fn = functionSubject(graph, ref.functionId)?.fn;
-    return fn === undefined ? null : { kind: "return", fn };
-  }
-  const site = graph.callSites.find(
-    (candidate) => candidate.id === ref.callSiteId
-  );
-  const caller =
-    site === undefined ? undefined : functionSubject(graph, site.callerId)?.fn;
-  const callee =
-    site?.calleeId === null || site?.calleeId === undefined
-      ? undefined
-      : functionSubject(graph, site.calleeId)?.fn;
-  return site === undefined || caller === undefined || callee === undefined
-    ? null
-    : { kind: "call", site, caller, callee };
-};
-
-export { portalSubject, roomSubject, toWorldGraph };
-export type { PortalSubject, RoomSubject };
+export { toWorldGraph };

@@ -7,6 +7,7 @@ import type {
   WorldLayout,
 } from "@repo/types";
 
+import { checkClusters, unitLinks, unitOf } from "./cluster-checks";
 import {
   CORRIDOR_WIDTH,
   DOOR_WIDTH,
@@ -43,8 +44,10 @@ const checkLayout = (graph: WorldGraph, layout: WorldLayout): Failure[] => {
     layout.rooms.map((room) => [room.id, roomBounds(room)])
   );
   const doors = doorKeys(layout.rooms);
+  const links = unitLinks(layout.rooms);
 
-  // Geometry: no overlaps, air between unrelated rooms, grid-aligned.
+  // Geometry: no overlaps, air between unrelated units, grid-aligned. Rooms
+  // of one unit, and of two units joined by a door, may stand flush.
   const rooms = layout.rooms;
   for (const [i, a] of rooms.entries()) {
     const ra = rects.get(a.id);
@@ -63,6 +66,8 @@ const checkLayout = (graph: WorldGraph, layout: WorldLayout): Failure[] => {
       }
       if (rectsOverlap(ra, rb)) {
         failures.push(`${a.id} overlaps ${b.id}`);
+      } else if (unitOf(a) === unitOf(b)) {
+        continue;
       } else if (doors.has(connectionKey(a.id, b.id))) {
         const edge = sharedEdge(ra, rb);
         if (edge === null || edge.overlap < MIN_SHARED) {
@@ -70,7 +75,10 @@ const checkLayout = (graph: WorldGraph, layout: WorldLayout): Failure[] => {
             `${a.id} and ${b.id} have a door without a shared edge`
           );
         }
-      } else if (rectGap(ra, rb) < MIN_GAP) {
+      } else if (
+        !links.has(connectionKey(unitOf(a), unitOf(b))) &&
+        rectGap(ra, rb) < MIN_GAP
+      ) {
         failures.push(`${a.id} and ${b.id} are closer than ${MIN_GAP} m`);
       }
     }
@@ -113,8 +121,8 @@ const checkLayout = (graph: WorldGraph, layout: WorldLayout): Failure[] => {
       const target = rooms.find(
         (candidate) => candidate.id === door.targetRoomId
       );
-      if (target?.kind === "room") {
-        realised.add(connectionKey(room.id, target.id));
+      if (target?.kind === "room" && unitOf(target) !== unitOf(room)) {
+        realised.add(connectionKey(unitOf(room), unitOf(target)));
       }
     }
   }
@@ -203,6 +211,7 @@ const checkLayout = (graph: WorldGraph, layout: WorldLayout): Failure[] => {
     }
   }
   failures.push(...checkPortals(graph, layout, built));
+  failures.push(...checkClusters(graph, layout));
   return failures;
 };
 
@@ -303,6 +312,12 @@ const checkPortals = (
   const rects = new Map(
     built.rooms.map(({ room }) => [room.id, roomBounds(room)])
   );
+  // A portal into a unit lands in its entry room.
+  for (const { room } of built.rooms) {
+    if (room.cluster !== undefined && room.entry !== undefined) {
+      rects.set(room.cluster, roomBounds(room));
+    }
+  }
   for (const portal of built.portals) {
     const own = rects.get(portal.portal.from);
     const target = rects.get(portal.portal.to);

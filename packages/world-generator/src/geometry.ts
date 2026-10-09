@@ -89,7 +89,12 @@ const doorOpening = (
       `Rooms "${room.id}" and "${target.id}" overlap by ${hi - lo} m, less than the ${DOOR_WIDTH} m door`
     );
   }
-  return { wall: door.wall, along: (lo + hi) / 2, width: DOOR_WIDTH };
+  return {
+    wall: door.wall,
+    along: (lo + hi) / 2,
+    width: DOOR_WIDTH,
+    ...(door.lane === undefined ? {} : { lane: door.lane }),
+  };
 };
 
 type WallSpan = {
@@ -157,6 +162,7 @@ const wallSegments = (
       .map((opening) => ({
         start: Math.max(span.start, opening.along - opening.width / 2),
         end: Math.min(span.end, opening.along + opening.width / 2),
+        lane: opening.lane,
       }))
       .sort((p, q) => p.start - q.start);
     let cursor = span.start;
@@ -171,9 +177,17 @@ const wallSegments = (
           segmentBox(span, cursor, gap.start, 0, WALL_HEIGHT, "wall")
         );
       }
-      segments.push(
-        segmentBox(span, gap.start, gap.end, DOOR_HEIGHT, WALL_HEIGHT, "lintel")
-      );
+      segments.push({
+        ...segmentBox(
+          span,
+          gap.start,
+          gap.end,
+          DOOR_HEIGHT,
+          WALL_HEIGHT,
+          "lintel"
+        ),
+        ...(gap.lane === undefined ? {} : { lane: gap.lane }),
+      });
       cursor = gap.end;
     }
     if (span.end > cursor + EPSILON) {
@@ -206,6 +220,7 @@ const doorway = (room: RoomData, opening: DoorOpening): Doorway => {
     axis,
     width: opening.width,
     depth: 2 * WALL_THICKNESS,
+    ...(opening.lane === undefined ? {} : { lane: opening.lane }),
   };
 };
 
@@ -235,11 +250,20 @@ const placementInside = (
 });
 
 /**
- * Where a teleport into a room lands: just inside its first return portal
- * (so turning round leads back out), else the centre facing the first
- * doorway, which is also how the start room is entered.
+ * Where a teleport into a room lands: just inside the wall its unit is
+ * entered through (facing along the flow), else just inside its first
+ * return portal (so turning round leads back out), else the centre facing
+ * the first doorway, which is also how the start room is entered.
  */
 const roomEntry = ({ room, openings }: BuiltRoom): Placement => {
+  if (room.entry !== undefined) {
+    const bounds = roomBounds(room);
+    const [lo, hi] =
+      wallAxis(room.entry) === "x"
+        ? [bounds.minX, bounds.maxX]
+        : [bounds.minZ, bounds.maxZ];
+    return placementInside(room, room.entry, (lo + hi) / 2);
+  }
   const exit = room.portals?.find((portal) => portal.kind === "return");
   if (exit !== undefined) {
     return placementInside(room, exit.wall, exit.along);
@@ -360,6 +384,13 @@ const buildWorld = (data: WorldData): BuiltWorld => {
   const entryOf = new Map(
     rooms.map((built) => [built.room.id, roomEntry(built)])
   );
+  // A portal into a unit lands in its entry room.
+  for (const built of rooms) {
+    const { cluster, entry } = built.room;
+    if (cluster !== undefined && entry !== undefined) {
+      entryOf.set(cluster, roomEntry(built));
+    }
+  }
   const portals = rooms.flatMap((built) =>
     (built.room.portals ?? []).map((portal) =>
       buildPortal(built.room, portal, entryOf)

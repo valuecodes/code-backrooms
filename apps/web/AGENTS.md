@@ -18,13 +18,20 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   (`@repo/code-graph`) and laid out by the same generator; the HUD names the
   file and function the player is standing in. The app itself is thin:
   parsing, generation and rendering all live in `packages/`.
-- Milestone 4 (current): call navigation. Each function has one call door
-  (from the caller that first reaches it in a breadth-first walk from the
-  file's roots, at most five doors out of a room); every other call is a
-  teleport portal (extra callers, recursion), every function room
-  has a return portal, and an exploration stack remembers where each function
-  was entered. The HUD shows the stack as a breadcrumb and names whatever
-  door or portal the player faces.
+- Milestone 4: call navigation. Each function has one call door (from the
+  caller that first reaches it in a breadth-first walk from the file's
+  roots); every other call is a teleport portal (extra callers, recursion),
+  every function has a return portal, and an exploration stack remembers
+  where each function was entered. The HUD shows the stack as a breadcrumb
+  and names whatever door or portal the player faces.
+- Milestone 5 (current): control flow. A function is no longer one room but a
+  column of rooms, one per top-level statement of its body: folded plain
+  statements, a call, an `await` checkpoint, a `return`; an `if`, `switch`
+  or loop is one collapsed room for now. Calls hang off the side walls of
+  the room that makes them (a door for the first call to a function, a
+  portal otherwise), the return portal sits at the end of the column, and
+  the HUD line names the room: `demo.ts · main() · if (user) · 2 statements
+· 2 calls`.
 
 ---
 
@@ -84,20 +91,26 @@ returns to the world start with an empty stack; N takes the next seed.
 
 Code → graph → layout → rendering, each in its own package:
 
-- `@repo/parser` parses one file with `@babel/parser` into functions and call
-  sites (resolved, external or unresolved).
+- `@repo/parser` parses one file with `@babel/parser` into functions (each
+  with its body as a control-flow tree) and call sites (resolved, external
+  or unresolved).
 - `@repo/code-graph` holds the language-independent `CodeGraph` types and the
-  spatial grammar: one room per function, one hub room per file, one call
-  door per function (a breadth-first tree over the calls, capped per room)
-  and a portal for every other call, plus a return portal per function room.
+  spatial grammar: one cluster per function (a column of flow rooms with
+  ports on its side walls, `./flow-layout`), one hub room per file, one call
+  door per function (a breadth-first tree over the calls through those
+  ports) and a portal for every other call, plus a return portal at the end
+  of each column. `./subjects` maps room and portal ids back to the code.
 - `@repo/types` holds the world data shapes for the three layers below.
-- `@repo/world-generator` turns a `WorldGraph` (rooms, connections, portals)
-  into a `WorldLayout` (rooms and corridor-rooms with positions, doors and
-  portals on their walls) and then a `BuiltWorld` (wall boxes, lintels, door
-  frames, portal frames and triggers, colliders). It is three-free and fully
-  seeded. Connections and portals it cannot realise are listed in
-  `layout.unresolved` and `layout.unplacedPortals`; the app shows them in the
-  HUD. Its `navigation` subpath is the exploration stack the app drives.
+- `@repo/world-generator` turns a `WorldGraph` (rooms, some with a `cluster`
+  of pre-placed rooms, connections, portals) into a `WorldLayout` (rooms and
+  corridor-rooms with positions, doors and portals on their walls; a cluster
+  is rotated to face its parent and placed as one unit) and then a
+  `BuiltWorld` (wall boxes, lintels, door frames, portal frames and
+  triggers, colliders). It is three-free and fully seeded. Connections and
+  portals it cannot realise are listed in `layout.unresolved` and
+  `layout.unplacedPortals`; the app shows them in the HUD. Its `navigation`
+  subpath is the exploration stack the app drives, which treats a cluster's
+  rooms as one unit.
 - `@repo/renderer` draws a `BuiltWorld` and runs the player, which reports the
   room it is in through `onRoomChange`, portal entries through `onPortal`, and
   the door or portal ahead through `onNearTarget`; `placement` teleports it.

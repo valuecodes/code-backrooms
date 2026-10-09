@@ -297,3 +297,56 @@ describe("buildWorld portals", () => {
     ).toThrow(/unknown room "nowhere"/);
   });
 });
+
+describe("buildWorld clusters", () => {
+  const a: RoomData = {
+    id: "a",
+    kind: "room",
+    position: [20, 0, 2],
+    width: 4,
+    depth: 4,
+    doors: [{ wall: "south", targetRoomId: "b", lane: { kind: "true" } }],
+    cluster: "fn",
+    entry: "north",
+  };
+  const b: RoomData = {
+    id: "b",
+    kind: "room",
+    position: [20, 0, 6],
+    width: 4,
+    depth: 4,
+    doors: [{ wall: "north", targetRoomId: "a", lane: { kind: "true" } }],
+    cluster: "fn",
+  };
+  const into: PortalData = {
+    id: "portal:into",
+    kind: "call",
+    from: "lobby",
+    to: "fn",
+    wall: "north",
+    along: 0,
+  };
+  const world = buildWorld({
+    startRoomId: "a",
+    rooms: [{ ...lobby, doors: [], portals: [into] }, a, b],
+  });
+
+  it("lands a portal into a unit just inside its entry room, facing along the flow", () => {
+    expect(world.portals[0]?.arrival).toEqual({
+      position: { x: 20, z: 0 + ARRIVAL_INSET },
+      facing: { x: 20, z: ARRIVAL_INSET + 1 },
+    });
+    expect(world.start).toEqual({ x: 20, z: ARRIVAL_INSET });
+  });
+
+  it("carries a door's lane onto its opening, lintel and doorway", () => {
+    const built = world.rooms.find(({ room }) => room.id === "a");
+    expect(built?.openings[0]).toMatchObject({ lane: { kind: "true" } });
+    expect(
+      built?.segments.find((segment) => segment.kind === "lintel")
+    ).toMatchObject({ lane: { kind: "true" } });
+    expect(world.doorways[0]).toMatchObject({ lane: { kind: "true" } });
+    const plain = buildWorld(worldData);
+    expect("lane" in (plain.doorways[0] ?? {})).toBe(false);
+  });
+});

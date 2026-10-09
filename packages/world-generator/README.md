@@ -9,9 +9,10 @@ const { built } = generateWorld({ seed: 12345, roomCount: 15 });
 ```
 
 Subpaths: `./graph` (`generateGraph`, `validateGraph`), `./layout`
-(`generateLayout`), `./geometry` (`buildWorld`), `./collision`, `./locate`
-(`roomRects`, `roomAt`: which room a point is in), `./navigation` (the
-exploration stack), `./interaction` (what the player can step into or is
+(`generateLayout`), `./layout-checks` (`checkLayout`: every invariant, as a
+list of failures for tests), `./geometry` (`buildWorld`), `./collision`,
+`./locate` (`roomRects`, `roomAt`: which room a point is in), `./navigation`
+(the exploration stack), `./interaction` (what the player can step into or is
 facing), `./random`, `./config`, `./presets` (hand-written graphs: `lobby`,
 `linear`, `branching`, `hub`, `cycle`).
 
@@ -20,6 +21,18 @@ undirected connections without duplicates, one connected component. Rooms
 with many connections need long walls; a room that cannot be placed after
 several attempts throws, and a cycle-closing connection that cannot be
 realised is listed in `layout.unresolved`, never dropped.
+
+A graph room may carry a `cluster`: its interior laid out in advance as
+rooms in a local frame (x in `[0, width]`, z in `[0, depth]`, the entry room
+across the top, its north wall the entry port), with doors between them,
+ports on the boundary (stretches of wall another unit may attach to, each
+reserved for one unit) and portals already positioned. The layout places the
+cluster as one unit: it is rotated so the entry faces the wall of the anchor
+it hangs off (a flow running +Z as drawn becomes −Z off a north wall, +X off
+an east wall), every room is emitted with `cluster`, `role`, `label` and, on
+the entry room, `entry`, and other units attach only through its ports, one
+door per port. Plain graphs are laid out exactly as before: a plain room
+simply offers each of its walls as a port.
 
 Portals (`graph.portals`) are directed teleports drawn as a door frame with
 a dark plane on a wall of their `from` room; the wall stays solid. The

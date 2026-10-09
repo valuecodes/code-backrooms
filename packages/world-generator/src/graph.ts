@@ -1,5 +1,6 @@
 import type { Connection, GraphRoom, RoomSize, WorldGraph } from "@repo/types";
 
+import { validateCluster } from "./cluster-graph";
 import { GRID, MAX_DEGREE, MIN_SHARED, ROOM_SIZE_CLASSES } from "./config";
 import { createRng, nextInt, pick, pickWeighted, shuffle } from "./random";
 import type { Rng } from "./random";
@@ -29,9 +30,10 @@ const onGrid = (value: number): boolean =>
  * Rejects graphs the layout cannot honour, naming the offender. The
  * supported contract: unique ids, dimensions on the grid and at least
  * MIN_SHARED, undirected connections between distinct known rooms with no
- * duplicates, portals with unique ids between known rooms (a portal may
- * lead back into its own room), and one connected component over the
- * connections.
+ * duplicates, portals with unique ids from a known room (a cluster's rooms
+ * included) to a known graph room (possibly its own), clusters that satisfy
+ * `validateCluster` and whose reserved ports and placed portals name known
+ * rooms and portals, and one connected component over the connections.
  */
 const validateGraph = (graph: WorldGraph): void => {
   if (graph.rooms.length === 0) {
@@ -54,6 +56,27 @@ const validateGraph = (graph: WorldGraph): void => {
       }
     }
   }
+  // Rooms a portal may sit on: graph rooms and the rooms inside clusters.
+  const roomIds = new Set(ids);
+  const placedPortals = new Map<string, string>();
+  for (const room of graph.rooms) {
+    if (room.cluster === undefined) {
+      continue;
+    }
+    validateCluster(room, room.cluster, roomIds);
+    for (const port of room.cluster.ports) {
+      if (port.reservedFor !== undefined && !ids.has(port.reservedFor)) {
+        throw new Error(
+          `Cluster "${room.id}" reserves a port for unknown room "${port.reservedFor}"`
+        );
+      }
+    }
+    for (const portal of room.cluster.portals) {
+      if (portal.wall !== undefined) {
+        placedPortals.set(portal.id, portal.roomId);
+      }
+    }
+  }
   const keys = new Set<string>();
   for (const { from, to } of graph.connections) {
     if (!ids.has(from) || !ids.has(to)) {
@@ -70,15 +93,32 @@ const validateGraph = (graph: WorldGraph): void => {
   }
   const portalIds = new Set<string>();
   for (const portal of graph.portals ?? []) {
-    if (portal.id === "" || portalIds.has(portal.id) || ids.has(portal.id)) {
+    if (
+      portal.id === "" ||
+      portalIds.has(portal.id) ||
+      roomIds.has(portal.id)
+    ) {
       throw new Error(
         `Portal id "${portal.id}" is empty, duplicated or already a room id`
       );
     }
     portalIds.add(portal.id);
-    if (!ids.has(portal.from) || !ids.has(portal.to)) {
+    if (!roomIds.has(portal.from) || !ids.has(portal.to)) {
       throw new Error(
         `Portal "${portal.id}" (${portal.from} -> ${portal.to}) references an unknown room`
+      );
+    }
+    const placedOn = placedPortals.get(portal.id);
+    if (placedOn !== undefined && placedOn !== portal.from) {
+      throw new Error(
+        `Portal "${portal.id}" is placed on "${placedOn}" by its cluster but sits on "${portal.from}"`
+      );
+    }
+  }
+  for (const [id, roomId] of placedPortals) {
+    if (!portalIds.has(id)) {
+      throw new Error(
+        `Cluster room "${roomId}" places portal "${id}", which the graph does not have`
       );
     }
   }

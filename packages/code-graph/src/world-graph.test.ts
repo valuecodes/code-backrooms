@@ -1,11 +1,14 @@
-import type { Connection, Portal } from "@repo/types";
+import type { Connection, Portal, WorldGraph } from "@repo/types";
 import { generateWorld } from "@repo/world-generator";
 import { validateGraph } from "@repo/world-generator/graph";
+import { checkLayout } from "@repo/world-generator/layout-checks";
 import { describe, expect, it } from "vitest";
 
 import type { CodeGraph } from "./code-graph";
 import { demoGraph, fixtureGraph } from "./fixture";
-import { portalSubject, roomSubject, toWorldGraph } from "./world-graph";
+import { parseFlowNodeId } from "./ids";
+import { portalSubject, roomSubject } from "./subjects";
+import { toWorldGraph } from "./world-graph";
 
 const call = (from: string, to: string): Connection => ({
   from,
@@ -13,34 +16,42 @@ const call = (from: string, to: string): Connection => ({
   kind: "call",
 });
 
-const returnPortal = (fn: string, hub: string): Portal => ({
-  id: `return:${fn}`,
-  kind: "return",
-  from: fn,
-  to: hub,
-  label: "return",
-});
+/** A portal by kind, owning function, target and label; its room varies. */
+const shape = (portal: Portal) => [
+  portal.kind,
+  parseFlowNodeId(portal.from)?.functionId ?? portal.from,
+  portal.to,
+  portal.label,
+];
 
-/** The call portal for the first call from `caller` to `callee` in the graph. */
-const callPortalOf = (
+const returnShape = (fn: string, hub: string) => ["return", fn, hub, "return"];
+
+const nameOf = (graph: CodeGraph, id: string) =>
+  graph.functions.find((fn) => fn.id === id)?.name ?? id;
+
+const callShape = (graph: CodeGraph, caller: string, callee: string) => [
+  "call",
+  caller,
+  callee,
+  nameOf(graph, callee),
+];
+
+/** The call portal id for the n-th site from `caller` to `callee`. */
+const callPortalId = (
   graph: CodeGraph,
   caller: string,
-  callee: string
-): Portal | undefined => {
-  const site = graph.callSites.find(
+  callee: string,
+  index = 0
+): string => {
+  const site = graph.callSites.filter(
     (candidate) =>
       candidate.callerId === caller && candidate.calleeId === callee
-  );
-  return site === undefined
-    ? undefined
-    : {
-        id: `portal:${site.id}`,
-        kind: "call",
-        from: caller,
-        to: callee,
-        label: graph.functions.find((fn) => fn.id === callee)?.name ?? callee,
-      };
+  )[index];
+  return `portal:${site?.id ?? "?"}`;
 };
+
+const clusterOf = (world: WorldGraph, id: string) =>
+  world.rooms.find((room) => room.id === id)?.cluster;
 
 /** Lays the graph out for several seeds; nothing may be left unrealised. */
 const laysOutCleanly = (graph: CodeGraph) => {
@@ -50,11 +61,12 @@ const laysOutCleanly = (graph: CodeGraph) => {
     const generated = generateWorld({ seed, graph: world });
     expect(generated.layout.unresolved, `seed ${seed}`).toEqual([]);
     expect(generated.layout.unplacedPortals, `seed ${seed}`).toEqual([]);
+    expect(checkLayout(world, generated.layout), `seed ${seed}`).toEqual([]);
   }
 };
 
 describe("toWorldGraph", () => {
-  it("turns the reference demo into a hub, five rooms, call doors and return portals", () => {
+  it("turns the reference demo into a hub, five clusters, call doors and return portals", () => {
     const graph = demoGraph();
     const world = toWorldGraph(graph);
     expect(world.rooms.map((room) => [room.id, room.label])).toEqual([
@@ -65,10 +77,22 @@ describe("toWorldGraph", () => {
       ["demo.ts::showLogin", "showLogin"],
       ["demo.ts::loadSession", "loadSession"],
     ]);
-    expect(world.rooms[0]?.hub).toBe(true);
-    expect(world.rooms.slice(1).every((room) => room.hub === undefined)).toBe(
-      true
-    );
+    expect(world.rooms.filter((room) => room.hub === true)).toHaveLength(1);
+    const main = clusterOf(world, "demo.ts::main");
+    expect(main?.rooms.map((room) => room.role)).toEqual([
+      "step",
+      "call",
+      "call",
+      "call",
+    ]);
+    expect(main?.entryRoomId).toBe(main?.rooms[0]?.id);
+    expect(main?.ports.map((port) => port.reservedFor)).toEqual([
+      undefined,
+      "demo.ts::getUser",
+      "demo.ts::showDashboard",
+      "demo.ts::showLogin",
+    ]);
+    expect(world.rooms[1]).toMatchObject({ width: 4, depth: 15 });
     expect(world.connections).toEqual([
       { from: "demo.ts", to: "demo.ts::main" },
       call("demo.ts::main", "demo.ts::getUser"),
@@ -76,34 +100,34 @@ describe("toWorldGraph", () => {
       call("demo.ts::main", "demo.ts::showLogin"),
       call("demo.ts::getUser", "demo.ts::loadSession"),
     ]);
-    expect(world.portals).toEqual(
+    expect(world.portals?.map(shape)).toEqual(
       [
         "demo.ts::main",
         "demo.ts::getUser",
         "demo.ts::showDashboard",
         "demo.ts::showLogin",
         "demo.ts::loadSession",
-      ].map((fn) => returnPortal(fn, "demo.ts"))
+      ].map((fn) => returnShape(fn, "demo.ts"))
     );
+    expect(world.portals?.[0]?.from).toBe(main?.rooms.at(-1)?.id);
     expect(world.start).toBe("demo.ts");
     expect(() => validateGraph(world)).not.toThrow();
   });
 
   it("lays out as a world the generator accepts", () => {
-    const generated = generateWorld({
-      seed: 1,
-      graph: toWorldGraph(demoGraph()),
-    });
+    const world = toWorldGraph(demoGraph());
+    const generated = generateWorld({ seed: 1, graph: world });
     expect(
       generated.layout.rooms.filter((room) => room.kind === "room")
-    ).toHaveLength(6);
+    ).toHaveLength(10);
     expect(generated.layout.unresolved).toEqual([]);
     expect(generated.layout.unplacedPortals).toEqual([]);
     expect(generated.layout.startRoomId).toBe("demo.ts");
     expect(generated.built.portals).toHaveLength(5);
+    expect(checkLayout(world, generated.layout)).toEqual([]);
   });
 
-  it("makes repeated calls one door and the reverse call a portal", () => {
+  it("makes repeated calls one door and the rest portals, the reverse call included", () => {
     const graph = fixtureGraph({
       path: "m.ts",
       functions: [
@@ -116,35 +140,33 @@ describe("toWorldGraph", () => {
       { from: "m.ts", to: "m.ts::a" },
       call("m.ts::a", "m.ts::b"),
     ]);
-    expect(world.portals).toEqual([
-      callPortalOf(graph, "m.ts::b", "m.ts::a"),
-      returnPortal("m.ts::a", "m.ts"),
-      returnPortal("m.ts::b", "m.ts"),
+    expect(world.portals?.map(shape)).toEqual([
+      callShape(graph, "m.ts::a", "m.ts::b"),
+      callShape(graph, "m.ts::b", "m.ts::a"),
+      returnShape("m.ts::a", "m.ts"),
+      returnShape("m.ts::b", "m.ts"),
     ]);
+    // The second room of `a` calling b keeps its portal; the first got the door.
+    expect(world.portals?.[0]?.id).toBe(
+      callPortalId(graph, "m.ts::a", "m.ts::b", 1)
+    );
+    expect(clusterOf(world, "m.ts::a")?.ports).toHaveLength(2);
+    laysOutCleanly(graph);
   });
 
-  it("turns recursion into a portal back into the same room", () => {
+  it("turns recursion into a portal back into the same unit", () => {
     const graph = fixtureGraph({
       path: "m.ts",
       functions: [{ name: "a", calls: ["a"] }],
     });
     const world = toWorldGraph(graph);
     expect(world.connections).toEqual([{ from: "m.ts", to: "m.ts::a" }]);
-    expect(world.portals?.[0]).toEqual(
-      callPortalOf(graph, "m.ts::a", "m.ts::a")
-    );
-    laysOutCleanly(graph);
-  });
-
-  it("attaches only roots to the hub, whichever way the edges were written", () => {
-    const graph = fixtureGraph({
-      path: "m.ts",
-      functions: [{ name: "x" }, { name: "main", calls: ["x"] }],
+    expect(world.portals?.[0]).toMatchObject({
+      id: callPortalId(graph, "m.ts::a", "m.ts::a"),
+      kind: "call",
+      to: "m.ts::a",
     });
-    expect(toWorldGraph(graph).connections).toEqual([
-      { from: "m.ts", to: "m.ts::main" },
-      call("m.ts::main", "m.ts::x"),
-    ]);
+    laysOutCleanly(graph);
   });
 
   it("attaches the first function of a rootless component", () => {
@@ -162,9 +184,9 @@ describe("toWorldGraph", () => {
       { from: "m.ts", to: "m.ts::a" },
       call("m.ts::a", "m.ts::b"),
     ]);
-    expect(world.portals?.[0]).toEqual(
-      callPortalOf(graph, "m.ts::b", "m.ts::a")
-    );
+    expect(world.portals?.slice(0, 1).map(shape)).toEqual([
+      callShape(graph, "m.ts::b", "m.ts::a"),
+    ]);
     expect(() => validateGraph(world)).not.toThrow();
   });
 
@@ -186,11 +208,11 @@ describe("toWorldGraph", () => {
       call("m.ts::d", "m.ts::c"),
       call("m.ts::a", "m.ts::b"),
     ]);
-    expect(world.portals?.slice(0, 2)).toEqual([
-      callPortalOf(graph, "m.ts::a", "m.ts::c"),
-      callPortalOf(graph, "m.ts::b", "m.ts::a"),
+    expect(world.portals?.slice(0, 2).map(shape)).toEqual([
+      callShape(graph, "m.ts::a", "m.ts::c"),
+      callShape(graph, "m.ts::b", "m.ts::a"),
     ]);
-    // A tree: one connection fewer than rooms, so the layout never fails.
+    // A tree: one connection fewer than units, so the layout never fails.
     expect(world.connections).toHaveLength(world.rooms.length - 1);
     laysOutCleanly(graph);
   });
@@ -208,12 +230,12 @@ describe("toWorldGraph", () => {
     expect(world.connections).toContainEqual(
       call("m.ts::main", "m.ts::shared")
     );
-    expect(world.portals?.[0]).toEqual(
-      callPortalOf(graph, "m.ts::other", "m.ts::shared")
+    expect(world.portals?.[0]?.id).toBe(
+      callPortalId(graph, "m.ts::other", "m.ts::shared")
     );
   });
 
-  it("caps the doors out of one room and sizes rooms for doors and portals", () => {
+  it("gives every callee of a room a port and lays out a wide fan-out", () => {
     const callees = Array.from({ length: 8 }, (_, index) => ({
       name: `g${index + 1}`,
       lines: 1,
@@ -231,32 +253,32 @@ describe("toWorldGraph", () => {
     const doorsOut = world.connections.filter(
       (connection) => connection.from === "m.ts::caller"
     );
-    expect(doorsOut).toHaveLength(5);
-    const portalsOut = (world.portals ?? []).filter(
-      (portal) => portal.kind === "call" && portal.from === "m.ts::caller"
+    expect(doorsOut.map((connection) => connection.to)).toEqual(
+      names.map((name) => `m.ts::${name}`)
     );
-    expect(portalsOut.map((portal) => portal.to)).toEqual([
-      "m.ts::g6",
-      "m.ts::g7",
-      "m.ts::g8",
+    expect(
+      world.connections.filter((connection) => connection.from === "m.ts::f")
+    ).toEqual([]);
+    const fromF = (world.portals ?? []).filter(
+      (portal) =>
+        portal.kind === "call" &&
+        parseFlowNodeId(portal.from)?.functionId === "m.ts::f"
+    );
+    expect(fromF.map((portal) => portal.to)).toEqual(
+      names.slice(0, 7).map((name) => `m.ts::${name}`)
+    );
+    // Eight single-call rooms alternate their port side.
+    const caller = clusterOf(world, "m.ts::caller");
+    expect(caller?.ports.slice(1).map((port) => port.wall)).toEqual([
+      "east",
+      "west",
+      "east",
+      "west",
+      "east",
+      "west",
+      "east",
+      "west",
     ]);
-    // f reaches g6 and g7 first, so those two are doors; g1..g5 are portals.
-    expect(
-      world.connections
-        .filter((connection) => connection.from === "m.ts::f")
-        .map((connection) => connection.to)
-    ).toEqual(["m.ts::g6", "m.ts::g7"]);
-    expect(
-      (world.portals ?? []).filter((portal) => portal.from === "m.ts::f")
-    ).toHaveLength(6);
-    const perimeter = (id: string) => {
-      const room = world.rooms.find((candidate) => candidate.id === id);
-      return 2 * ((room?.width ?? 0) + (room?.depth ?? 0));
-    };
-    // Doors cost 8 m of perimeter each, portals 3 m: caller has 6 doors
-    // (hub + 5) and 4 portals, f has 3 doors (hub + 2) and 6 portals.
-    expect(perimeter("m.ts::caller")).toBeGreaterThanOrEqual(60);
-    expect(perimeter("m.ts::f")).toBeGreaterThanOrEqual(42);
     laysOutCleanly(graph);
   });
 
@@ -274,9 +296,9 @@ describe("toWorldGraph", () => {
       { from: "b.ts", to: "b.ts::two" },
       { from: "b.ts", to: "c.ts" },
     ]);
-    expect(world.portals).toEqual([
-      returnPortal("a.ts::one", "a.ts"),
-      returnPortal("b.ts::two", "b.ts"),
+    expect(world.portals?.map(shape)).toEqual([
+      returnShape("a.ts::one", "a.ts"),
+      returnShape("b.ts::two", "b.ts"),
     ]);
     expect(() => validateGraph(world)).not.toThrow();
   });
@@ -310,8 +332,8 @@ describe("toWorldGraph", () => {
       expect(doors.length).toBeLessThanOrEqual(5);
     }
     // Every function returns to the module's first hub, whichever hub it hangs off.
-    expect(world.portals).toEqual(
-      functions.map((fn) => returnPortal(`m.ts::${fn.name}`, "m.ts"))
+    expect(world.portals?.map(shape)).toEqual(
+      functions.map((fn) => returnShape(`m.ts::${fn.name}`, "m.ts"))
     );
     laysOutCleanly(graph);
     expect(roomSubject(graph, "m.ts#3")).toMatchObject({
@@ -332,7 +354,7 @@ describe("toWorldGraph", () => {
 describe("roomSubject", () => {
   const graph = demoGraph();
 
-  it("names modules and functions, and nothing else", () => {
+  it("names modules, functions and flow rooms, and nothing else", () => {
     expect(roomSubject(graph, "demo.ts")).toMatchObject({
       kind: "module",
       module: { path: "demo.ts" },
@@ -342,6 +364,22 @@ describe("roomSubject", () => {
       fn: { name: "getUser" },
       module: { path: "demo.ts" },
     });
+    const main = graph.functions[0];
+    const [first, second] = main?.flow.steps ?? [];
+    expect(roomSubject(graph, first?.id ?? "")).toMatchObject({
+      kind: "flow",
+      fn: { name: "main" },
+      module: { path: "demo.ts" },
+      node: { kind: "step" },
+      ancestors: [{ kind: "sequence" }],
+      text: "9 statements",
+    });
+    expect(roomSubject(graph, second?.id ?? "")).toMatchObject({
+      kind: "flow",
+      text: "getUser(…)",
+    });
+    expect(roomSubject(graph, "demo.ts::main@99999:step")).toBeNull();
+    expect(roomSubject(graph, "demo.ts::nobody@0:step:empty")).toBeNull();
     expect(roomSubject(graph, "corridor-1")).toBeNull();
     expect(roomSubject(graph, "other.ts::getUser")).toBeNull();
   });
@@ -358,8 +396,8 @@ describe("portalSubject", () => {
   });
 
   it("names the call site and both functions of a call portal", () => {
-    const portal = callPortalOf(graph, "m.ts::other", "m.ts::shared");
-    expect(portalSubject(graph, portal?.id ?? "")).toMatchObject({
+    const portal = callPortalId(graph, "m.ts::other", "m.ts::shared");
+    expect(portalSubject(graph, portal)).toMatchObject({
       kind: "call",
       site: { callerId: "m.ts::other" },
       caller: { name: "other" },
@@ -367,7 +405,16 @@ describe("portalSubject", () => {
     });
   });
 
-  it("names the function of a return portal", () => {
+  it("names the function of a return portal by its flow room", () => {
+    const exit = toWorldGraph(graph).portals?.find(
+      (portal) =>
+        portal.kind === "return" &&
+        parseFlowNodeId(portal.from)?.functionId === "m.ts::shared"
+    );
+    expect(portalSubject(graph, exit?.id ?? "")).toMatchObject({
+      kind: "return",
+      fn: { name: "shared" },
+    });
     expect(portalSubject(graph, "return:m.ts::shared")).toMatchObject({
       kind: "return",
       fn: { name: "shared" },
@@ -378,5 +425,6 @@ describe("portalSubject", () => {
     expect(portalSubject(graph, "corridor-1")).toBeNull();
     expect(portalSubject(graph, "portal:m.ts::nobody@1")).toBeNull();
     expect(portalSubject(graph, "return:m.ts::nobody")).toBeNull();
+    expect(portalSubject(graph, "return:m.ts::nobody@3:step")).toBeNull();
   });
 });

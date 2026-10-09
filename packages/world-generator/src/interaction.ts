@@ -21,7 +21,7 @@ type Target =
   | {
       readonly kind: "door";
       readonly roomId: string;
-      /** The room (not corridor) on the other side. */
+      /** The room on the other side, or the unit a corridor leads to. */
       readonly targetRoomId: string;
     };
 
@@ -89,13 +89,15 @@ const nearestTarget = (
   if (built === undefined) {
     return null;
   }
+  // Corridors join units, so a corridor's far end is named by the unit.
+  const unit = built.room.cluster ?? roomId;
   const beyond = (targetRoomId: string): string => {
     const connection = world.rooms.find(({ room }) => room.id === targetRoomId)
       ?.room.connection;
     if (connection === undefined) {
       return targetRoomId;
     }
-    return connection.from === roomId ? connection.to : connection.from;
+    return connection.from === unit ? connection.to : connection.from;
   };
   const candidates: (readonly [Target, Point])[] = [
     ...built.openings.flatMap(

@@ -7,37 +7,8 @@ type RoomDimensions = {
   readonly size: RoomSize;
 };
 
-/** Line-count bands: a function this long gets a room of this class. */
-const BANDS: readonly (readonly [RoomSize, number, number])[] = [
-  ["small", 1, 12],
-  ["medium", 13, 40],
-  ["large", 41, 200],
-];
-
 /** No room grows past the largest size class, whatever its degree. */
 const MAX_EXTENT = ROOM_SIZE_CLASSES.large.max;
-
-/**
- * Walls host roughly one door per 8 m of perimeter (the same heuristic the
- * random graph generator uses for room capacity).
- */
-const PERIMETER_PER_DOOR = 8;
-
-/**
- * A portal is a frame on a solid wall, so it needs only its own width plus
- * clearance, not room for a neighbour alongside.
- */
-const PERIMETER_PER_PORTAL = 3;
-
-const snap = (value: number): number => Math.round(value / GRID) * GRID;
-
-const clamp = (value: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, value));
-
-const bandOf = (lineCount: number): readonly [RoomSize, number, number] => {
-  const band = BANDS.find(([, , hi]) => lineCount <= hi);
-  return band ?? BANDS.at(-1) ?? ["large", 41, 200];
-};
 
 const sizeOf = (width: number): RoomSize => {
   if (width >= ROOM_SIZE_CLASSES.large.min) {
@@ -68,56 +39,22 @@ const growToPerimeter = (
   return [w, d];
 };
 
-/** Grows the footprint until it can plausibly host `degree` doors. */
-const growForDoors = (
-  width: number,
-  depth: number,
-  degree: number,
-  perimeterPerDoor = PERIMETER_PER_DOOR
-): readonly [number, number] =>
-  growToPerimeter(width, depth, degree * perimeterPerDoor);
-
-/**
- * Deterministic room footprint for a function: the size class comes from its
- * length, the exact extent from where in the band it falls, and the openings
- * (doors to neighbouring rooms, portals on its walls) can only make it larger.
- */
-const roomDimensions = (
-  lineCount: number,
-  doors: number,
-  portals = 0
-): RoomDimensions => {
-  const [band, lo, hi] = bandOf(Math.max(1, lineCount));
-  const { min, max } = ROOM_SIZE_CLASSES[band];
-  const t = clamp((Math.max(1, lineCount) - lo) / (hi - lo), 0, 1);
-  const width = snap(min + t * (max - min));
-  const depth = snap(Math.max(min, 0.75 * width));
-  const [w, d] = growToPerimeter(
-    width,
-    depth,
-    doors * PERIMETER_PER_DOOR + portals * PERIMETER_PER_PORTAL
-  );
-  // The class follows the band, unless openings grew the room past it.
-  return { width: w, depth: d, size: w > max ? sizeOf(w) : band };
-};
-
 /** A module hub starts at a fixed medium footprint and grows with its doors. */
 const HUB_EXTENT = 8;
 
 /**
- * Hubs get more wall per door than function rooms: their neighbours are
- * whole rooms that have to fit side by side along the hub's walls.
+ * Hubs get plenty of wall per door: their neighbours are whole units that
+ * have to fit side by side along the hub's walls.
  */
 const HUB_PERIMETER_PER_DOOR = 10;
 
 const hubDimensions = (degree: number): RoomDimensions => {
-  const [w, d] = growForDoors(
+  const [w, d] = growToPerimeter(
     HUB_EXTENT,
     HUB_EXTENT,
-    degree,
-    HUB_PERIMETER_PER_DOOR
+    degree * HUB_PERIMETER_PER_DOOR
   );
   return { width: w, depth: d, size: sizeOf(w) };
 };
 
-export { hubDimensions, roomDimensions };
+export { hubDimensions };

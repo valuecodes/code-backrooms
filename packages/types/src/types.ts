@@ -10,6 +10,94 @@ type RoomKind = "room" | "corridor";
 type RoomSize = "small" | "medium" | "large";
 
 // ---------------------------------------------------------------------------
+// Unit interiors: a graph room laid out in advance as several rooms. The
+// cluster frame has x in [0, width] and z in [0, depth]; flow runs along +Z,
+// the entry room spans the full width at z = 0 and its north wall is the
+// entry port. The layout places the whole rectangle and rotates it.
+
+/** What a room of a unit's interior stands for. */
+type FlowRole =
+  | "step"
+  | "call"
+  | "await"
+  | "return"
+  | "jump"
+  | "fork"
+  | "merge"
+  | "switch"
+  | "lane"
+  | "loop-head"
+  | "loop-end"
+  | "loop-back"
+  | "collapsed";
+
+type LaneKind =
+  "true" | "false" | "case" | "default" | "loop" | "back" | "exit";
+
+/** Which lane a door opens onto; `text` is the lane's own wording (`case "x"`). */
+type LaneLabel = {
+  readonly kind: LaneKind;
+  readonly text?: string;
+};
+
+/**
+ * A stretch of a cluster's boundary where a door to another unit may go.
+ * `lo`/`hi` run along the wall's axis (x for north/south, z for east/west).
+ * No `reservedFor`: the entry port, where the cluster is entered from its
+ * parent. `portalId`: the portal that stands at this port's centre when no
+ * door is made here.
+ */
+type Port = {
+  readonly roomId: string;
+  readonly wall: WallSide;
+  readonly lo: number;
+  readonly hi: number;
+  readonly reservedFor?: string;
+  readonly portalId?: string;
+};
+
+type ClusterRoom = {
+  readonly id: string;
+  /** In cluster coordinates. */
+  readonly rect: Rect;
+  readonly role: FlowRole;
+  readonly label?: string;
+};
+
+/** A door between two rooms of the same cluster; they share an edge. */
+type ClusterDoor = {
+  readonly from: string;
+  readonly to: string;
+  readonly lane?: LaneLabel;
+};
+
+/**
+ * A portal on a cluster room's wall. With `wall` and `along` it is placed
+ * already (cluster coordinates); without, the layout finds free wall.
+ * `target`: the unit entered for `call`, a room of this cluster for `jump`,
+ * absent for `return` (the consumer decides where returns land).
+ */
+type ClusterPortal = {
+  readonly id: string;
+  readonly kind: PortalKind;
+  readonly roomId: string;
+  readonly wall?: WallSide;
+  readonly along?: number;
+  readonly target?: string;
+  readonly label?: string;
+};
+
+type RoomCluster = {
+  readonly width: number;
+  readonly depth: number;
+  readonly entryRoomId: string;
+  readonly rooms: readonly ClusterRoom[];
+  readonly doors: readonly ClusterDoor[];
+  readonly ports: readonly Port[];
+  readonly portals: readonly ClusterPortal[];
+};
+
+// ---------------------------------------------------------------------------
 // Graph layer: what connects to what, with no positions.
 
 type GraphRoom = {
@@ -23,6 +111,8 @@ type GraphRoom = {
   readonly label?: string;
   /** A module hub: entering it empties the navigation stack. */
   readonly hub?: boolean;
+  /** The interior laid out as several rooms; `width`/`depth` equal its own. */
+  readonly cluster?: RoomCluster;
 };
 
 type ConnectionKind = "call";
@@ -52,9 +142,9 @@ type PortalKind = "call" | "return" | "jump";
 type Portal = {
   readonly id: string;
   readonly kind: PortalKind;
-  /** The room whose wall hosts the portal. */
+  /** The room whose wall hosts the portal: a graph room or a cluster room. */
   readonly from: string;
-  /** Where it leads; may equal `from` (recursion). */
+  /** The graph room it leads to (a unit lands at its entry); may be `from`'s own. */
   readonly to: string;
   /** Free text, like GraphRoom.label (the callee's name). */
   readonly label?: string;
@@ -75,6 +165,7 @@ type WorldGraph = {
 type DoorData = {
   readonly wall: WallSide;
   readonly targetRoomId: string;
+  readonly lane?: LaneLabel;
 };
 
 /** A portal on a wall: `along` is the world coordinate of its centre on the wall's axis. */
@@ -103,6 +194,10 @@ type RoomData = {
    * its own unit.
    */
   readonly cluster?: string;
+  readonly role?: FlowRole;
+  readonly label?: string;
+  /** The wall through which this room's unit is entered; the entry room only. */
+  readonly entry?: WallSide;
 };
 
 type WorldData = {
@@ -138,6 +233,7 @@ type DoorOpening = {
   readonly wall: WallSide;
   readonly along: number;
   readonly width: number;
+  readonly lane?: LaneLabel;
 };
 
 /** An axis-aligned box in world space. Lintels span the top of a door opening. */
@@ -145,6 +241,8 @@ type WallSegment = {
   readonly center: Vec3;
   readonly size: Vec3;
   readonly kind: "wall" | "lintel";
+  /** On a lintel: the lane its door opens onto. */
+  readonly lane?: LaneLabel;
 };
 
 /**
@@ -157,6 +255,7 @@ type Doorway = {
   readonly width: number;
   /** Through-wall depth: both rooms' inset walls together, or one wall for a portal. */
   readonly depth: number;
+  readonly lane?: LaneLabel;
 };
 
 /** A floor point and a point to look at: where the player lands or starts. */
@@ -207,19 +306,27 @@ export type {
   BuiltPortal,
   BuiltRoom,
   BuiltWorld,
+  ClusterDoor,
+  ClusterPortal,
+  ClusterRoom,
   Connection,
   ConnectionKind,
   DoorData,
   DoorOpening,
   Doorway,
+  FlowRole,
   GeneratedWorld,
   GraphRoom,
+  LaneKind,
+  LaneLabel,
   Placement,
   Point,
+  Port,
   Portal,
   PortalData,
   PortalKind,
   Rect,
+  RoomCluster,
   RoomData,
   RoomKind,
   RoomSize,
