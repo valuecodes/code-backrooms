@@ -150,15 +150,21 @@ const checkLayout = (graph: WorldGraph, layout: WorldLayout): Failure[] => {
     }
   }
 
-  // Reachability over doors from the start room.
+  // Reachability over doors (and jumps within a cluster) from the start room.
   const seen = new Set([layout.startRoomId]);
   const queue = [layout.startRoomId];
   for (const id of queue) {
     const current = rooms.find((room) => room.id === id);
-    for (const door of current?.doors ?? []) {
-      if (!seen.has(door.targetRoomId)) {
-        seen.add(door.targetRoomId);
-        queue.push(door.targetRoomId);
+    const jumps = (current?.portals ?? []).filter(
+      (portal) => portal.kind === "jump"
+    );
+    for (const next of [
+      ...(current?.doors ?? []).map((door) => door.targetRoomId),
+      ...jumps.map((portal) => portal.to),
+    ]) {
+      if (!seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
       }
     }
   }

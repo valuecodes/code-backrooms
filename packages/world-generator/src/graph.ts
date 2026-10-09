@@ -31,7 +31,8 @@ const onGrid = (value: number): boolean =>
  * supported contract: unique ids, dimensions on the grid and at least
  * MIN_SHARED, undirected connections between distinct known rooms with no
  * duplicates, portals with unique ids from a known room (a cluster's rooms
- * included) to a known graph room (possibly its own), clusters that satisfy
+ * included) to a known graph room (possibly its own; a jump's to a room of
+ * the same cluster), clusters that satisfy
  * `validateCluster` and whose reserved ports and placed portals name known
  * rooms and portals, and one connected component over the connections.
  */
@@ -58,12 +59,17 @@ const validateGraph = (graph: WorldGraph): void => {
   }
   // Rooms a portal may sit on: graph rooms and the rooms inside clusters.
   const roomIds = new Set(ids);
+  // The cluster (graph room) each cluster room belongs to, for jumps.
+  const unitOf = new Map<string, string>();
   const placedPortals = new Map<string, string>();
   for (const room of graph.rooms) {
     if (room.cluster === undefined) {
       continue;
     }
     validateCluster(room, room.cluster, roomIds);
+    for (const inner of room.cluster.rooms) {
+      unitOf.set(inner.id, room.id);
+    }
     for (const port of room.cluster.ports) {
       if (port.reservedFor !== undefined && !ids.has(port.reservedFor)) {
         throw new Error(
@@ -108,7 +114,12 @@ const validateGraph = (graph: WorldGraph): void => {
       );
     }
     portalIds.add(portal.id);
-    if (!roomIds.has(portal.from) || !ids.has(portal.to)) {
+    const known =
+      portal.kind === "jump"
+        ? unitOf.has(portal.to) &&
+          unitOf.get(portal.to) === unitOf.get(portal.from)
+        : ids.has(portal.to);
+    if (!roomIds.has(portal.from) || !known) {
       throw new Error(
         `Portal "${portal.id}" (${portal.from} -> ${portal.to}) references an unknown room`
       );

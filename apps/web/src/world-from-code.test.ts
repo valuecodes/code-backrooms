@@ -204,6 +204,10 @@ describe("worldFromCode", () => {
     expect(route.map((room) => [room.role, room.label])).toEqual([
       ["switch", "switch (status)"],
       ["return", "return showDashboard(…)"],
+      ["fork", "if (isAppealing())"],
+      ["jump", "break"],
+      ["lane", "false · empty"],
+      ["merge", "end if"],
       ["call", "showBanned(…)"],
       ["call", "showLogin(…)"],
       ["merge", "end switch"],
@@ -213,16 +217,16 @@ describe("worldFromCode", () => {
       kind: "case",
       text: 'case "active", case "trial"',
     });
-    expect(route[3]?.lane).toEqual({ kind: "default" });
-    expect(describeRoom(codeGraph, route[4]?.id ?? "")).toBe(
+    expect(route[7]?.lane).toEqual({ kind: "default" });
+    expect(describeRoom(codeGraph, route[8]?.id ?? "")).toBe(
       "switches.ts · route() · end switch"
     );
-    // The middle case touches no outer wall, so its call is a portal and
-    // showBanned hangs off the hub instead.
+    // The middle case touches no outer wall: its calls are hub-side portals.
     const calls = (world.graph.portals ?? []).filter(
       (portal) => portal.kind === "call"
     );
     expect(calls.map((portal) => [ownerOf(portal.from), portal.to])).toEqual([
+      ["switches.ts::route", "switches.ts::isAppealing"],
       ["switches.ts::route", "switches.ts::showBanned"],
     ]);
     expect(world.graph.connections).toContainEqual({

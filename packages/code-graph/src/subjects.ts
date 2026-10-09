@@ -162,7 +162,15 @@ type PortalSubject =
       readonly caller: FunctionNode;
       readonly callee: FunctionNode;
     }
-  | { readonly kind: "return"; readonly fn: FunctionNode };
+  | { readonly kind: "return"; readonly fn: FunctionNode }
+  | {
+      readonly kind: "jump";
+      readonly fn: FunctionNode;
+      /** The room hosting the portal: a `break`, a `continue`, a collapsed room. */
+      readonly roomId: string;
+      /** The room it leads to: a loop's test or end room, a switch's merge. */
+      readonly targetRoomId: string;
+    };
 
 /** What a portal stands for, or null for ids not from this graph. */
 const portalSubject = (
@@ -177,6 +185,18 @@ const portalSubject = (
     const functionId = parseFlowNodeId(ref.roomId)?.functionId ?? ref.roomId;
     const fn = functionSubject(graph, functionId)?.fn;
     return fn === undefined ? null : { kind: "return", fn };
+  }
+  if (ref.kind === "jump") {
+    const functionId = parseFlowNodeId(ref.roomId)?.functionId;
+    const fn =
+      functionId === undefined
+        ? undefined
+        : functionSubject(graph, functionId)?.fn;
+    const targetRoomId =
+      fn === undefined ? undefined : planOf(graph, fn).jumps.get(ref.roomId);
+    return fn === undefined || targetRoomId === undefined
+      ? null
+      : { kind: "jump", fn, roomId: ref.roomId, targetRoomId };
   }
   const site = graph.callSites.find(
     (candidate) => candidate.id === ref.callSiteId

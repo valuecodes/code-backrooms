@@ -146,6 +146,8 @@ type Realised = {
   readonly cluster: RoomCluster;
   readonly calls: readonly Portal[];
   readonly returns: readonly Portal[];
+  /** `break` and `continue`, each to a room of the same cluster. */
+  readonly jumps: readonly Portal[];
 };
 
 /**
@@ -155,7 +157,8 @@ type Realised = {
  * reserved port becomes a call portal at its centre (recursion, extra
  * callers of a shared function, a second room calling the same callee),
  * one per call site. Portals get their graph form, `from` the flow room
- * and `to` the callee or the module hub.
+ * and `to` the callee, the module hub, or for a jump a room of the same
+ * cluster.
  */
 const realise = (
   cluster: RoomCluster,
@@ -196,7 +199,10 @@ const realise = (
   const portals = [...converted, ...cluster.portals].map(
     (portal): ClusterPortal => ({
       ...portal,
-      label: portal.kind === "return" ? "return" : nameOf(portal.target ?? ""),
+      label:
+        portal.kind === "call"
+          ? nameOf(portal.target ?? "")
+          : (portal.label ?? portal.kind),
     })
   );
   const toPortal = (portal: ClusterPortal): Portal => ({
@@ -210,6 +216,7 @@ const realise = (
     cluster: { ...cluster, ports: kept, portals },
     calls: portals.filter((portal) => portal.kind === "call").map(toPortal),
     returns: portals.filter((portal) => portal.kind === "return").map(toPortal),
+    jumps: portals.filter((portal) => portal.kind === "jump").map(toPortal),
   };
 };
 
@@ -282,6 +289,7 @@ const moduleWorld = (
   const rooms: GraphRoom[] = [];
   const calls: Portal[] = [];
   const returns: Portal[] = [];
+  const jumps: Portal[] = [];
   for (const fn of functions) {
     const cluster = clusters.get(fn.id);
     if (cluster === undefined) {
@@ -302,6 +310,7 @@ const moduleWorld = (
     });
     calls.push(...realised.calls);
     returns.push(...realised.returns);
+    jumps.push(...realised.jumps);
   }
   const groups = hubGroups(attached, extraHubDegree);
   const hubs = groups.map((group, index): GraphRoom => {
@@ -336,7 +345,12 @@ const moduleWorld = (
       kind: "call",
     }))
   );
-  return { hubs, rooms, connections, portals: [...calls, ...returns] };
+  return {
+    hubs,
+    rooms,
+    connections,
+    portals: [...calls, ...returns, ...jumps],
+  };
 };
 
 /**

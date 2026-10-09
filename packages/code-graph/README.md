@@ -51,9 +51,10 @@ empty`), and every room in a lane carries the innermost lane it lies in for
 the renderer's tints. Doors from a head carry the lane they open onto. Ids:
 a head is its node, a merge `<node id>:merge`, an empty lane its sequence,
 a synthesised default `<switch id>:default`, so `parseFlowNodeId` and
-`./subjects` resolve them. A switch with more than `FLOW_MAX_CASES` cases,
-with a `break` nested inside a case or with a case that falls through (no
-jump portals yet), stays collapsed.
+`./subjects` resolve them. A `break` nested inside a case jumps to the merge
+room (which then exists even when every lane ends). A switch with more than
+`FLOW_MAX_CASES` cases or with a case that falls through (no door into the
+next lane yet) stays collapsed.
 
 A loop is a ring: a `loop-head` room across the column (its header, `for
 (const x of xs)`, or `do` for a do-while, the header's calls hanging off it),
@@ -65,13 +66,24 @@ body (lane `back`, label `repeat`), a `loop-test` room across below both
 into the corridor, whose top door leads back into the head, and `exit` into
 the end room. A ring is as wide as its body plus the corridor. Ids: the head
 is the loop node, the test, corridor and end `<loop id>:again`, `:back` and
-`:end`, an empty body its sequence (`body · empty`). A `break` or `continue`
-nested in the body is a dead-end `jump` room until jump portals exist; a loop
-whose body never runs out of its end (it ends in a return, a jump or a fork
-whose lanes all end) stays collapsed. Forks and loops share one quota of 16
+`:end`, an empty body its sequence (`body · empty`). A loop opens when its
+body runs out of its end or jumps to the loop; one whose body only ever
+returns stays collapsed. Forks and loops share one quota of 16
 per function, opened in source order. Lane doors are declared from the room
 they lead out of, so the world marks that side `forward` and only a door
 walked with the flow names its lane.
+
+Jumps are portals within the cluster. A `jump` room (`break`, `continue`)
+has a `jump` portal on its south wall, `jump:<room id>`, leading to a room
+of the same cluster: `continue` to the loop's `again?` test, `break` to the
+loop's end room or the switch's merge room; the stack is left alone. A
+collapsed room that ends by jumping out of itself (and holds no `return`)
+gets the jump portal of its first jump out instead of a return portal.
+`FlowPlan.jumps` maps each jumping room to its target. Folding can swallow a
+jump into a collapsed room that runs on; a loop or switch whose rooms only
+that jump led into is then collapsed too, so every room keeps a way in.
+`try` stays one collapsed room showing its source: exception edges are
+beyond the MVP.
 
 Calls hang off side walls. A room whose wall lies on the cluster boundary
 offers a port there: with both walls free the first callee gets a port on
@@ -83,7 +95,7 @@ callee's width, this callee's width) + 2 m` past the previous port on its
 wall (callee clusters keep 2 m from each other), which is why `layoutFlow`
 takes `widthOf` and `./world-graph` plans every function before placing
 any. Return portals sit on the south wall of every `return` room, of every
-collapsed room that ends the flow (`try { return } finally { … }`), and of
+other collapsed room that ends the flow (`try { return } finally { … }`), and of
 the last room when the body falls off its end. Interiors are folded into a
 budget of 32 m wide, 96 m deep and 64 rooms: too wide, the deepest fork or
 loop collapses into one room; too deep or too many rooms, neighbouring rooms fold

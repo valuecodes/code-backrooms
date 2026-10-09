@@ -1,7 +1,12 @@
 // Walking and judging flow trees. Pure functions over the node family in
 // code-graph.ts; nothing here knows about parsers or rooms.
 
-import type { FlowNode, SwitchNode } from "./code-graph";
+import type {
+  BreakNode,
+  ContinueNode,
+  FlowNode,
+  SwitchNode,
+} from "./code-graph";
 
 /** The nodes one level down: lanes, case bodies, loop bodies, steps. */
 const childrenOf = (node: FlowNode): readonly FlowNode[] => {
@@ -179,5 +184,45 @@ const findFlowNode = (root: FlowNode, id: string): FoundFlowNode | null => {
   return found;
 };
 
-export { countStatements, findFlowNode, isTerminal, walkFlow };
+/** Whether a `break` or `continue` under `node` leaves (or restarts) `targetId`. */
+const jumpsTo = (node: FlowNode, targetId: string): boolean =>
+  jumpsOutOf(node, targetId, true);
+
+/**
+ * The first `break` or `continue` under `node`, in source order, whose
+ * target lies outside it: the way a collapsed node that ends is left.
+ */
+const escapingJump = (node: FlowNode): BreakNode | ContinueNode | null => {
+  let found: BreakNode | ContinueNode | null = null;
+  walkFlow(node, (current, ancestors) => {
+    if (
+      found === null &&
+      (current.kind === "break" || current.kind === "continue") &&
+      current.targetId !== node.id &&
+      !ancestors.some((ancestor) => ancestor.id === current.targetId)
+    ) {
+      found = current;
+    }
+  });
+  return found;
+};
+
+/** Whether a `return` or `throw` lies anywhere under `node`. */
+const hasReturn = (node: FlowNode): boolean => {
+  let found = false;
+  walkFlow(node, (current) => {
+    found ||= current.kind === "return";
+  });
+  return found;
+};
+
+export {
+  countStatements,
+  escapingJump,
+  findFlowNode,
+  hasReturn,
+  isTerminal,
+  jumpsTo,
+  walkFlow,
+};
 export type { FoundFlowNode };

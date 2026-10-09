@@ -189,7 +189,8 @@ const clusterOf = (
 
 /**
  * Runs the world generator's contract over a cluster: it tiles its box, its
- * doors share edges and reach every room, its ports lie on the boundary.
+ * doors (and jumps) share edges and reach every room, its ports lie on the
+ * boundary, its jump portals lead to its own rooms.
  */
 const valid = (cluster: RoomCluster): RoomCluster => {
   const callees = new Set([
@@ -197,7 +198,9 @@ const valid = (cluster: RoomCluster): RoomCluster => {
       port.reservedFor === undefined ? [] : [port.reservedFor]
     ),
     ...cluster.portals.flatMap((portal) =>
-      portal.target === undefined ? [] : [portal.target]
+      portal.kind !== "call" || portal.target === undefined
+        ? []
+        : [portal.target]
     ),
   ]);
   const graph: WorldGraph = {

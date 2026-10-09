@@ -151,7 +151,10 @@ type Portal = {
   readonly kind: PortalKind;
   /** The room whose wall hosts the portal: a graph room or a cluster room. */
   readonly from: string;
-  /** The graph room it leads to (a unit lands at its entry); may be `from`'s own. */
+  /**
+   * The graph room it leads to (a unit lands at its entry); may be `from`'s
+   * own. A `jump` leads to a room of the same cluster as `from`.
+   */
   readonly to: string;
   /** Free text, like GraphRoom.label (the callee's name). */
   readonly label?: string;

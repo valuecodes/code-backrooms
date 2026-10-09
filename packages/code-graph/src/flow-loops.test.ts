@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   branch,
-  breakOut,
   calling,
   clusterOf,
   continueOut,
@@ -136,13 +135,8 @@ describe("loops", () => {
     });
   });
 
-  it("keeps a loop collapsed when its body never runs out of its end", () => {
-    for (const last of [
-      ret(3),
-      breakOut(3, LOOP),
-      continueOut(3, LOOP),
-      branch(3, [ret(4)], [ret(5)]),
-    ]) {
+  it("keeps a loop collapsed when its body only ever returns", () => {
+    for (const last of [ret(3), branch(3, [ret(4)], [ret(5)])]) {
       const cluster = valid(
         clusterOf([step(0, 1), loop(1, [step(2, 1), last])])
       );
@@ -153,7 +147,7 @@ describe("loops", () => {
     }
   });
 
-  it("opens a body with a nested jump, the jump a dead end in its lane", () => {
+  it("opens a body with a nested jump, the jump's only door the one in", () => {
     const cluster = valid(
       clusterOf([
         step(0, 1),

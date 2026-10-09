@@ -87,8 +87,20 @@ const parseFlowNodeId = (id: string): FlowNodeRef | null => {
   };
 };
 
+/**
+ * The id of a room a composite adds, tagged on the composite's own id: a
+ * merge, a synthesised default, a loop's test, back corridor and end.
+ */
+const taggedFlowNodeId = (id: string, tag: string): string => {
+  const ref = parseFlowNodeId(id);
+  return ref === null
+    ? `${id}:${tag}`
+    : flowNodeId(ref.functionId, ref.offset, ref.kind, tag);
+};
+
 const CALL_PORTAL_PREFIX = "portal:";
 const RETURN_PORTAL_PREFIX = "return:";
+const JUMP_PORTAL_PREFIX = "jump:";
 
 /** A call portal is named by the call site it stands for: `portal:demo.ts::main@42`. */
 const callPortalId = (callSiteId: string): string =>
@@ -101,9 +113,17 @@ const callPortalId = (callSiteId: string): string =>
 const returnPortalId = (roomId: string): string =>
   `${RETURN_PORTAL_PREFIX}${roomId}`;
 
+/**
+ * A jump portal is named by the `break` or `continue` room (or collapsed
+ * room ending in one) that hosts it: `jump:demo.ts::main@80:continue`.
+ */
+const jumpPortalId = (roomId: string): string =>
+  `${JUMP_PORTAL_PREFIX}${roomId}`;
+
 type PortalRef =
   | { readonly kind: "call"; readonly callSiteId: string }
-  | { readonly kind: "return"; readonly roomId: string };
+  | { readonly kind: "return"; readonly roomId: string }
+  | { readonly kind: "jump"; readonly roomId: string };
 
 /** What a portal id names, or null for ids that are not portals of this grammar. */
 const parsePortalId = (id: string): PortalRef | null => {
@@ -112,6 +132,9 @@ const parsePortalId = (id: string): PortalRef | null => {
   }
   if (id.startsWith(RETURN_PORTAL_PREFIX)) {
     return { kind: "return", roomId: id.slice(RETURN_PORTAL_PREFIX.length) };
+  }
+  if (id.startsWith(JUMP_PORTAL_PREFIX)) {
+    return { kind: "jump", roomId: id.slice(JUMP_PORTAL_PREFIX.length) };
   }
   return null;
 };
@@ -139,10 +162,12 @@ export {
   functionId,
   hubModuleId,
   isFunctionId,
+  jumpPortalId,
   moduleId,
   parseFlowNodeId,
   parsePortalId,
   returnPortalId,
+  taggedFlowNodeId,
   uniqueNames,
 };
 export type { FlowIdKind, FlowNodeRef, PortalRef };

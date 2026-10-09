@@ -17,7 +17,7 @@ import type {
   SequenceNode,
   SwitchNode,
 } from "./code-graph";
-import { isTerminal, walkFlow } from "./flow";
+import { isTerminal, jumpsTo } from "./flow";
 import { BODY_LANE } from "./flow-composite";
 import type { FlowTree, ForkSpec, LaneSpec, LoopSpec } from "./flow-composite";
 import { calleesOf, depthOf, emptyBodySpec, specOf } from "./flow-measure";
@@ -32,7 +32,7 @@ import {
   resolvedSites,
 } from "./flow-text";
 import type { SiteIndex } from "./flow-text";
-import { flowNodeId, parseFlowNodeId } from "./ids";
+import { taggedFlowNodeId } from "./ids";
 
 /**
  * How many forks and loops a function may open: each is four rooms at
@@ -73,25 +73,12 @@ const cut = (text: string): string =>
   text.length > LANE_TEXT_MAX ? `${text.slice(0, LANE_TEXT_MAX - 1)}…` : text;
 
 /**
- * A `break` the parser kept is nested in a case; it needs a jump portal to
- * leave. A case that falls through needs one into the next lane. Neither
- * exists yet, so such switches stay collapsed.
- */
-const hasNestedBreak = (node: SwitchNode): boolean => {
-  let found = false;
-  walkFlow(node, (current) => {
-    if (current.kind === "break" && current.targetId === node.id) {
-      found = true;
-    }
-  });
-  return found;
-};
-
-/**
  * Whether a composite is laid out as a fork or a ring rather than kept
- * collapsed. A loop whose body never runs out of its end (it ends in a
- * return, a jump or a fork whose lanes all end) has no way to its test
- * room, so it stays one room until jumps get portals.
+ * collapsed. A switch with a case that falls through needs a door into the
+ * next lane, which does not exist yet. A loop needs a way into its test
+ * and end rooms: its body running out of its end, or a jump to the loop
+ * (whose portal leads there); a body that only ever returns keeps it one
+ * room.
  */
 const expands = (
   node: FlowStep
@@ -103,12 +90,11 @@ const expands = (
     case "switch": {
       return (
         node.cases.length <= FLOW_MAX_CASES &&
-        !hasNestedBreak(node) &&
         !node.cases.some((item) => item.fallsThrough)
       );
     }
     case "loop": {
-      return !isTerminal(node.body);
+      return !isTerminal(node.body) || jumpsTo(node.body, node.id);
     }
     case "step":
     case "call":
@@ -127,12 +113,7 @@ const expands = (
 const tagged = (
   node: BranchNode | SwitchNode | LoopNode,
   tag: string
-): string => {
-  const ref = parseFlowNodeId(node.id);
-  return ref === null
-    ? `${node.id}:${tag}`
-    : flowNodeId(ref.functionId, ref.offset, ref.kind, tag);
-};
+): string => taggedFlowNodeId(node.id, tag);
 
 /** A room of a composite holding the calls of its header or condition. */
 const headerSpec = (
@@ -264,9 +245,11 @@ const forkOf = (
       entry
     ),
     lanes,
-    merge: lanes.some((lane) => lane.rejoins)
-      ? plainSpec(tagged(node, "merge"), "merge", mergeText(node))
-      : null,
+    // A `break` nested in a case leads to the merge room too.
+    merge:
+      lanes.some((lane) => lane.rejoins) || jumpsTo(node, node.id)
+        ? plainSpec(tagged(node, "merge"), "merge", mergeText(node))
+        : null,
   };
 };
 

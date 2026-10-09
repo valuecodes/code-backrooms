@@ -8,7 +8,6 @@ import { describe, expect, it } from "vitest";
 import type { FlowStep } from "./code-graph";
 import {
   branch,
-  breakOut,
   calling,
   clusterOf,
   FN,
@@ -316,7 +315,7 @@ describe("switches", () => {
     expect(text.endsWith("…")).toBe(true);
   });
 
-  it("keeps a switch collapsed when it has too many cases or a nested break", () => {
+  it("keeps a switch collapsed when it has too many cases", () => {
     const many = switchNode(
       1,
       cases(
@@ -327,18 +326,6 @@ describe("switches", () => {
     );
     expect(clusterOf([many]).rooms.map((room) => room.role)).toEqual([
       "collapsed",
-    ]);
-    const jumping = switchNode(1, [
-      {
-        labels: ["case 1"],
-        body: [branch(2, [breakOut(3, `${FN}@1:switch`)])],
-      },
-      { labels: ["default"], body: [ret(4)] },
-    ]);
-    const cluster = valid(clusterOf([jumping, step(5, 1)]));
-    expect(cluster.rooms.map((room) => room.role)).toEqual([
-      "collapsed",
-      "step",
     ]);
   });
 });
