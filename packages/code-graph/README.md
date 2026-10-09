@@ -12,9 +12,21 @@ const world = generateWorld({ seed: 1, graph: toWorldGraph(graph) });
 roomSubject(graph, world.layout.startRoomId); // { kind: "module", module }
 ```
 
-`.` holds only types: modules, functions (with spans, kinds, qualified names and
-stable ids), call sites with a resolution status, and call/containment edges.
-`./ids` builds the ids (`demo.ts`, `demo.ts::UserService.load`, `~2` on repeats).
+`.` holds only types: modules, functions (with spans, kinds, qualified names,
+stable ids and their control flow), call sites with a resolution status, and
+call/containment edges. `./ids` builds the ids (`demo.ts`,
+`demo.ts::UserService.load`, `~2` on repeats).
+
+A function's `flow` is a `SequenceNode` of steps: `step` (folded plain
+statements), `call`, `await`, `return`, `break`, `continue`, and the composites
+`branch` (two lane sequences), `switch` (cases with labels and a `fallsThrough`
+flag) and `loop` (body sequence). Flow node ids are
+`<function>@<offset>:<kind>[:<tag>]`; a sequence takes its owner's offset (the
+function for `:sequence:body`, the `if` for `:sequence:then` / `:else`, the
+loop for `:sequence:loop`, the case for `:sequence:case`), every other node its
+own, so ids are unique per function and `parseFlowNodeId` maps them back.
+`./flow` walks and judges them: `walkFlow`, `isTerminal` (control never runs
+past the node) and `countStatements`.
 
 `./world-graph` is the grammar for this milestone: one room per function, one
 hub room per module that opens onto the module's root functions, and calls as

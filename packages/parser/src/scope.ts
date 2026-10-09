@@ -34,22 +34,28 @@ import type {
 } from "@babel/types";
 import type { FunctionKind, FunctionNode } from "@repo/code-graph";
 
+/**
+ * A function as the discovery and call passes know it: everything but its
+ * flow, which needs the call sites and is attached last by `parseModule`.
+ */
+type DiscoveredFunction = Omit<FunctionNode, "flow">;
+
 type ClassTable = {
   readonly name: string;
-  readonly instance: Map<string, FunctionNode>;
-  readonly static: Map<string, FunctionNode>;
-  ctor: FunctionNode | null;
+  readonly instance: Map<string, DiscoveredFunction>;
+  readonly static: Map<string, DiscoveredFunction>;
+  ctor: DiscoveredFunction | null;
 };
 
 /** One lexical scope: a function body, an anonymous function, or the module. */
 type Scope = {
   /** The named function whose room owns calls made here (null: the module). */
-  readonly fn: FunctionNode | null;
+  readonly fn: DiscoveredFunction | null;
   /** The class `this` refers to here; null where `this` is dynamic or unknown. */
   readonly classTable: ClassTable | null;
   readonly isStatic: boolean;
   /** Named functions declared directly in this scope, resolvable by name. */
-  readonly locals: Map<string, FunctionNode>;
+  readonly locals: Map<string, DiscoveredFunction>;
   /** Classes declared directly in this scope, resolvable by name. */
   readonly classes: Map<string, ClassTable>;
   /** Every other binding (params, variables, imports): shadows outer names. */
@@ -70,7 +76,7 @@ const IDENTIFIER = /^[\p{ID_Start}$_][\p{ID_Continue}$‌‍]*$/u;
 
 const newScope = (
   parent: Scope | null,
-  fn: FunctionNode | null,
+  fn: DiscoveredFunction | null,
   classTable: ClassTable | null,
   isStatic: boolean
 ): Scope => ({
@@ -126,7 +132,7 @@ const isFunctionLike = (node: Node): node is FunctionLike =>
 const functionScope = (
   parent: Scope,
   node: FunctionLike,
-  fn: FunctionNode | null,
+  fn: DiscoveredFunction | null,
   table: ClassTable | null,
   isStatic: boolean
 ): Scope => {
@@ -251,4 +257,4 @@ export {
   methodKind,
   newScope,
 };
-export type { ClassTable, FunctionLike, Scope };
+export type { ClassTable, DiscoveredFunction, FunctionLike, Scope };

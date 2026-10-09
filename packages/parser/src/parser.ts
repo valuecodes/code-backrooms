@@ -9,6 +9,7 @@ import { moduleId } from "@repo/code-graph/ids";
 
 import { languageOf, parseSource } from "./babel";
 import { collectCalls } from "./calls";
+import { buildFlow } from "./flow";
 import { discover } from "./functions";
 import { lineCountOf } from "./span";
 
@@ -34,6 +35,17 @@ const withPath = <T>(path: string, run: () => T): T => {
   }
 };
 
+/** Call sites grouped by the function (or module) they belong to. */
+const sitesByCaller = (
+  sites: readonly CallSite[]
+): ReadonlyMap<string, readonly CallSite[]> => {
+  const groups = new Map<string, CallSite[]>();
+  for (const site of sites) {
+    groups.set(site.callerId, [...(groups.get(site.callerId) ?? []), site]);
+  }
+  return groups;
+};
+
 /**
  * One file to its part of the graph. Deterministic: functions and call sites
  * come out in source order, ids depend only on the path and the names.
@@ -41,9 +53,25 @@ const withPath = <T>(path: string, run: () => T): T => {
 const parseModule = (file: SourceFile): ParsedModule => {
   const id = moduleId(file.path);
   const ast = parseSource(file.path, file.source);
-  const { discovered, calls } = withPath(file.path, () => {
+  const { discovered, calls, functions } = withPath(file.path, () => {
     const found = discover(id, ast.program);
-    return { discovered: found, calls: collectCalls(id, ast.program, found) };
+    const collected = collectCalls(id, ast.program, found);
+    const byCaller = sitesByCaller(collected.callSites);
+    return {
+      discovered: found,
+      calls: collected,
+      // nodeOf is filled as functions are registered: same order as `functions`.
+      functions: [...found.nodeOf].map(([fn, node]): FunctionNode => ({
+        ...fn,
+        flow: buildFlow({
+          functionId: fn.id,
+          node,
+          source: file.source,
+          sites: byCaller.get(fn.id) ?? [],
+          byNode: found.byNode,
+        }),
+      })),
+    };
   });
   const module: ModuleNode = {
     id,
@@ -53,9 +81,7 @@ const parseModule = (file: SourceFile): ParsedModule => {
   };
   return {
     module,
-    functions: [...discovered.functions].sort(
-      (a, b) => a.span.start - b.span.start
-    ),
+    functions: functions.sort((a, b) => a.span.start - b.span.start),
     callSites: calls.callSites,
     edges: [...discovered.edges, ...calls.edges],
   };

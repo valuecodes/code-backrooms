@@ -18,11 +18,7 @@ import {
   isVariableDeclaration,
 } from "@babel/types";
 import type { ClassBody, Node, Program } from "@babel/types";
-import type {
-  ContainmentEdge,
-  FunctionKind,
-  FunctionNode,
-} from "@repo/code-graph";
+import type { ContainmentEdge, FunctionKind } from "@repo/code-graph";
 import { functionId, uniqueNames } from "@repo/code-graph/ids";
 
 import {
@@ -35,18 +31,23 @@ import {
   methodKind,
   newScope,
 } from "./scope";
-import type { ClassTable, FunctionLike, Scope } from "./scope";
+import type {
+  ClassTable,
+  DiscoveredFunction,
+  FunctionLike,
+  Scope,
+} from "./scope";
 import { spanOf } from "./span";
 import { childrenOf, guardDepth } from "./walk";
 
 type Discovered = {
-  readonly functions: FunctionNode[];
+  readonly functions: DiscoveredFunction[];
   readonly edges: ContainmentEdge[];
-  /** The AST node each function was built from, for the call pass. */
-  readonly nodeOf: Map<FunctionNode, Node>;
-  readonly byNode: Map<Node, FunctionNode>;
+  /** The AST node each function was built from, for the call and flow passes. */
+  readonly nodeOf: Map<DiscoveredFunction, FunctionLike>;
+  readonly byNode: Map<Node, DiscoveredFunction>;
   /** The scope inside each named function. */
-  readonly scopeOf: Map<FunctionNode, Scope>;
+  readonly scopeOf: Map<DiscoveredFunction, Scope>;
   /** The scope inside each anonymous function, keyed by its node. */
   readonly scopeAt: Map<Node, Scope>;
   readonly moduleScope: Scope;
@@ -75,7 +76,7 @@ const register = (
   scope: Scope,
   registration: Registration,
   depth = 0
-): FunctionNode => {
+): DiscoveredFunction => {
   const { node, name, kind, exported, table, isStatic } = registration;
   const className = table?.name ?? null;
   const qualifiedName = context.nextName(
@@ -83,7 +84,7 @@ const register = (
       .filter((part) => part !== null && part !== undefined)
       .join(".")
   );
-  const fn: FunctionNode = {
+  const fn: DiscoveredFunction = {
     id: functionId(context.moduleId, qualifiedName),
     moduleId: context.moduleId,
     name,
