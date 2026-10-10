@@ -17,6 +17,8 @@ import { exportedLocalNames, exportsOf, importsOf } from "./imports";
 import { linkModules } from "./link";
 import type { DiscoveredFunction } from "./scope";
 import { lineCountOf } from "./span";
+import { topLevelOf } from "./top-level";
+import type { TopLevel } from "./top-level";
 
 type SourceFile = {
   readonly path: string;
@@ -63,6 +65,7 @@ const sitesByCaller = (
 type Analysed = {
   readonly module: ModuleNode;
   readonly functions: readonly DiscoveredFunction[];
+  readonly topLevel: TopLevel;
   readonly callSites: readonly CallSite[];
   readonly edges: readonly GraphEdge[];
   readonly discovered: Discovered;
@@ -99,6 +102,7 @@ const analyseModule = (file: SourceFile): Analysed => {
     },
     // nodeOf is filled as functions are registered.
     functions: [...discovered.nodeOf.keys()],
+    topLevel: topLevelOf(ast.program, discovered.byNode),
     callSites: calls.callSites,
     edges: [...discovered.edges, ...calls.edges],
     discovered,
