@@ -6,15 +6,72 @@ import {
   flowNodeId,
   functionId,
   isFunctionId,
+  isRelativeSpecifier,
   jumpPortalId,
   markerPortalId,
   moduleId,
+  normalisePath,
   parseFlowNodeId,
   parsePortalId,
+  resolveSpecifier,
   returnPortalId,
   taggedFlowNodeId,
   uniqueNames,
 } from "./ids";
+
+describe("normalisePath", () => {
+  it.each([
+    ["./a//b/../c.ts", "a/c.ts"],
+    ["src/./a/../../b.ts", "b.ts"],
+    ["../x.ts", "../x.ts"],
+    ["a/../../x.ts", "../x.ts"],
+    ["src\\a\\..\\b.ts", "src/b.ts"],
+    ["/abs//a.ts", "/abs/a.ts"],
+  ])("%s → %s", (path, expected) => {
+    expect(normalisePath(path)).toBe(expected);
+  });
+});
+
+describe("resolveSpecifier", () => {
+  const ids = new Set([
+    "src/a.ts",
+    "src/b.ts",
+    "src/c.tsx",
+    "src/lib/index.ts",
+    "src/raw.js",
+    "src/util/log.ts",
+  ]);
+
+  it.each([
+    ["./b", "src/b.ts"],
+    ["./b.ts", "src/b.ts"],
+    ["./c", "src/c.tsx"],
+    ["./raw.js", "src/raw.js"],
+    ["./util/log.js", "src/util/log.ts"],
+    ["./lib", "src/lib/index.ts"],
+    ["../src/b", "src/b.ts"],
+    ["./missing", null],
+    ["lodash", null],
+    ["node:fs", null],
+    ["@repo/x", null],
+    ["/src/b", null],
+    ["../../b", null],
+  ])("from src/a.ts, %s → %s", (specifier, expected) => {
+    expect(resolveSpecifier("src/a.ts", specifier, ids)).toBe(expected);
+  });
+
+  it("resolves from a nested module up and over", () => {
+    expect(resolveSpecifier("src/util/log.ts", "../lib", ids)).toBe(
+      "src/lib/index.ts"
+    );
+    expect(resolveSpecifier("top.ts", "./src/b", ids)).toBe("src/b.ts");
+  });
+
+  it("tells relative specifiers from packages", () => {
+    expect(["./a", "../a", ".", ".."].every(isRelativeSpecifier)).toBe(true);
+    expect([".a", "a", "node:fs", "/a"].some(isRelativeSpecifier)).toBe(false);
+  });
+});
 
 describe("moduleId", () => {
   it("normalises separators and strips a leading ./", () => {

@@ -36,12 +36,29 @@ the analysis cannot type (`obj.x()`, a dynamic `this`, `this.x()` missing on
 its own class) is ambiguous when two or more classes of the file declare an
 instance member `x`. With one or none it stays unresolved, since one candidate
 would still be a guess. Computed callees (`obj[k]()`), call results
-(`f()()`), `(a || b)()` and the like are dynamic. Imports, `super.x()` and
-IIFEs are unresolved; cross-file resolution is a later milestone. A call
-through an import binding (`helper()`, `new Svc()`, `ns.run()`, `Svc.make()`, `new ns.Svc()`)
-stays unresolved but carries `via: { localName, member, isNew }` for the
-linker; an inner binding of the same name shadows it and carries none, and
-deeper chains (`ns.a.b()`) carry none either. A call that
+(`f()()`), `(a || b)()` and the like are dynamic. `super.x()` and IIFEs are
+unresolved. A call through an import binding (`helper()`, `new Svc()`,
+`ns.run()`, `Svc.make()`, `new ns.Svc()`) carries `via: { localName, member,
+isNew }`; an inner binding of the same name shadows it and carries none, and
+deeper chains (`ns.a.b()`) carry none either.
+
+`buildCodeGraph` sorts the files by module id (code-unit order, so neither ids
+nor `hashSource` depend on how the files were found), analyses each, then
+**links** them (`link.ts`) before building flow. Relative specifiers resolve
+against the other files: the exact path, then `.ts .tsx .mts .cts .js .jsx
+.mjs .cjs`, then a `.js` swapped for its TypeScript twin, then
+`<path>/index.<ext>`; `ImportRecord.moduleId` is set on a hit. Packages
+(`lodash`, `node:fs`, `@repo/x`) and missing files stay null. An export is
+followed through `export { x as y } from`, `export * from` (a named export
+wins; two stars binding the same name to different functions make the call
+**ambiguous**), `export * as ns from` and a local export of an import
+(`import { f } from "./a"; export { f }`); re-export cycles stop. A call
+through an import resolves to a top-level function, `new` to a top-level
+class's constructor (or a plain function), `Cls.m()` to a static method, and
+`ns.f()` through a namespace; anything else (a `const`, an instance method,
+a package) stays unresolved and keeps `via`. Each newly resolved call from a
+function adds a call edge, so it becomes a door or a portal like any other.
+`parseModule` links a file only with itself. A call that
 starts where an inner one does (`f()()`) is told apart by its end:
 `main@12-20`.
 

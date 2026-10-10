@@ -16,8 +16,9 @@ roomSubject(graph, world.layout.startRoomId); // { kind: "module", module }
 `.` holds only types: modules (with their import and export records),
 functions (with spans, kinds, qualified names, stable ids and their control
 flow), call sites with a resolution status (a call through an import also
-names the binding in `via`), and call/containment edges. `./ids` builds the ids (`demo.ts`,
-`demo.ts::UserService.load`, `~2` on repeats).
+names the binding in `via`; `resolved` may cross modules), and call/containment
+edges. `./ids` builds the ids (`demo.ts`, `demo.ts::UserService.load`, `~2` on
+repeats) and resolves relative import specifiers (`resolveSpecifier`).
 
 A function's `flow` is a `SequenceNode` of steps: `step` (folded plain
 statements), `call`, `await`, `return`, `break`, `continue`, and the composites
@@ -99,7 +100,9 @@ before.
 beyond the MVP.
 
 Calls the world cannot follow (ambiguous, dynamic, external, unresolved) get
-a closed **marker**: one framed, boarded panel per room, `marker:<room id>`,
+a closed **marker**: one framed, boarded panel per room, `marker:<room id>`
+(its prompt names an unresolved call into a package by the package,
+`format(…) package "node:util"`, via `packageOf` in `./subjects`),
 hung after the room's call portals as one more slot on its side walls. A room
 boxed in by fallthrough doors puts it on its south wall. It is never a portal
 to a guess, not even an ambiguous call's first candidate. Choosing between

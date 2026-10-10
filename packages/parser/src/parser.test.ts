@@ -252,13 +252,13 @@ describe("parseModule", () => {
 });
 
 describe("buildCodeGraph", () => {
-  it("keeps file order and rejects duplicate paths", () => {
+  it("sorts modules by path and rejects duplicate paths", () => {
     const graph = buildCodeGraph([
       { path: "b.ts", source: "function b() {}" },
-      { path: "a.ts", source: "function a() {}" },
+      { path: "./a.ts", source: "function a() {}" },
     ]);
-    expect(graph.modules.map((module) => module.id)).toEqual(["b.ts", "a.ts"]);
-    expect(graph.functions.map((fn) => fn.id)).toEqual(["b.ts::b", "a.ts::a"]);
+    expect(graph.modules.map((module) => module.id)).toEqual(["a.ts", "b.ts"]);
+    expect(graph.functions.map((fn) => fn.id)).toEqual(["a.ts::a", "b.ts::b"]);
     expect(() =>
       buildCodeGraph([
         { path: "a.ts", source: "" },
@@ -286,6 +286,11 @@ describe("hashSource", () => {
     expect(hashSource([{ path: "ab", source: "c" }])).not.toBe(
       hashSource([{ path: "a", source: "bc" }])
     );
+  });
+
+  it("does not depend on the order the files come in", () => {
+    const other = { path: "b.ts", source: "export const b = 2;\n" };
+    expect(hashSource([file, other])).toBe(hashSource([other, file]));
   });
 
   it("folds a 32-bit hash above the URL's range back into it", () => {

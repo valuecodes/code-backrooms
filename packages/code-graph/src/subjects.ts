@@ -16,6 +16,7 @@ import {
   flowNodeId,
   hubModuleId,
   isFunctionId,
+  isRelativeSpecifier,
   parseFlowNodeId,
   parsePortalId,
 } from "./ids";
@@ -273,5 +274,28 @@ const portalSubject = (
     : { kind: "call", site, caller, callee };
 };
 
-export { portalSubject, roomSubject };
+/**
+ * The package a call goes into: the specifier of the import it is made
+ * through (`"node:util"`), when that import is a package rather than a file
+ * of the graph. Null for every other call.
+ */
+const packageOf = (graph: CodeGraph, site: CallSite): string | null => {
+  const { via } = site;
+  if (via === undefined) {
+    return null;
+  }
+  const separator = site.callerId.indexOf("::");
+  const moduleId =
+    separator === -1 ? site.callerId : site.callerId.slice(0, separator);
+  const record = graph.modules
+    .find((module) => module.id === moduleId)
+    ?.imports.find((item) => item.localName === via.localName);
+  return record === undefined ||
+    record.moduleId !== null ||
+    isRelativeSpecifier(record.specifier)
+    ? null
+    : record.specifier;
+};
+
+export { packageOf, portalSubject, roomSubject };
 export type { PortalSubject, RoomSubject };

@@ -217,13 +217,16 @@ type FunctionNode = {
 };
 
 /**
- * resolved: one function in the graph; ambiguous: the name may refer to
- * several functions in the graph (`candidateIds`), so no one is followed;
- * dynamic: the callee is computed at run time (a parameter or callback,
- * `obj[key]()`, `f()()`); external: a known runtime global such as
- * `console.log`; unresolved: anything else the analysis cannot follow
- * (imports, variables, `obj.method()` on an unknown receiver, `super`). A
- * call through an import stays unresolved within its file and carries `via`.
+ * resolved: one function in the graph, possibly in another module (linked
+ * through relative imports); ambiguous: the name may refer to several
+ * functions in the graph (`candidateIds`), so no one is followed; dynamic:
+ * the callee is computed at run time (a parameter or callback, `obj[key]()`,
+ * `f()()`); external: a known runtime global such as `console.log`;
+ * unresolved: anything else the analysis cannot follow (variables,
+ * `obj.method()` on an unknown receiver, `super`). A call through an import
+ * keeps `via` whatever it resolves to; one left unresolved goes into a
+ * package or to a binding the linker cannot follow (a missing file, a
+ * `const`, a class without that member).
  */
 type CallResolution =
   "resolved" | "ambiguous" | "dynamic" | "unresolved" | "external";

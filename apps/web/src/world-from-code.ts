@@ -1,6 +1,11 @@
 import type { CodeGraph } from "@repo/code-graph";
 import { laneText, markerText } from "@repo/code-graph/flow-text";
-import { portalSubject, roomSubject } from "@repo/code-graph/subjects";
+import { moduleId } from "@repo/code-graph/ids";
+import {
+  packageOf,
+  portalSubject,
+  roomSubject,
+} from "@repo/code-graph/subjects";
 import type { RoomSubject } from "@repo/code-graph/subjects";
 import { generateCodeWorld } from "@repo/code-graph/world-graph";
 import { buildCodeGraph, hashSource } from "@repo/parser";
@@ -25,8 +30,8 @@ type CodeResult =
     }
   | { readonly codeGraph: null; readonly error: string };
 
-/** The files of a bundled example, in order. */
-const filesOf = (name: ExampleName) => [examples[name]];
+/** The files of a bundled example. */
+const filesOf = (name: ExampleName) => examples[name];
 
 /** A bundled example's own seed: the same source always gives the same world. */
 const sourceSeedOf = (name: ExampleName): number => hashSource(filesOf(name));
@@ -36,12 +41,9 @@ const codeGraphOf = (name: ExampleName): CodeResult => {
   const files = filesOf(name);
   try {
     const codeGraph = buildCodeGraph(files);
-    // Modules come out in file order, each id normalised from its path.
+    // Modules come out sorted by path, each id normalised from its path.
     const sources = new Map(
-      codeGraph.modules.map((module, index) => [
-        module.id,
-        files[index]?.source ?? "",
-      ])
+      files.map((file) => [moduleId(file.path), file.source])
     );
     return { codeGraph, sources, error: null };
   } catch (error) {
@@ -148,7 +150,9 @@ const promptOf = (
   if (subject.kind === "marker") {
     const nameOf = (id: string): string =>
       codeGraph?.functions.find((fn) => fn.id === id)?.qualifiedName ?? id;
-    return `closed · ${markerText(subject.sites, nameOf)}`;
+    return `closed · ${markerText(subject.sites, nameOf, (site) =>
+      codeGraph === null ? null : packageOf(codeGraph, site)
+    )}`;
   }
   // A jump reads like a door within the function: `→ again?`, `→ end for`.
   if (subject.kind === "jump") {

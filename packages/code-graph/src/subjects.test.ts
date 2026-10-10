@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import type { CodeGraph, FunctionNode, SourceSpan } from "./code-graph";
+import type {
+  CallSite,
+  CodeGraph,
+  FunctionNode,
+  ImportRecord,
+  SourceSpan,
+} from "./code-graph";
 import { demoGraph, fixtureGraph } from "./fixture";
 import { branch, fnWith, step } from "./flow-fixture";
 import { layoutFlow, planFlow } from "./flow-layout";
 import { parseFlowNodeId } from "./ids";
-import { portalSubject, roomSubject } from "./subjects";
+import { packageOf, portalSubject, roomSubject } from "./subjects";
 import { toWorldGraph } from "./world-graph";
 
 /** The call portal id for the first site from `caller` to `callee`. */
@@ -186,5 +192,62 @@ describe("roomSubject spans", () => {
         endColumn: 7,
       },
     });
+  });
+});
+
+describe("packageOf", () => {
+  const span = spanOf(0);
+  const record = (
+    localName: string,
+    specifier: string,
+    moduleId: string | null
+  ): ImportRecord => ({
+    localName,
+    importedName: localName,
+    specifier,
+    moduleId,
+    span,
+  });
+  const graph: CodeGraph = {
+    ...demoGraph(),
+    modules: [
+      {
+        id: "a.ts",
+        path: "a.ts",
+        language: "typescript",
+        lineCount: 1,
+        imports: [
+          record("format", "node:util", null),
+          record("gone", "./missing", null),
+          record("two", "./b", "b.ts"),
+        ],
+        exports: [],
+      },
+    ],
+  };
+  const site = (callerId: string, localName: string | null): CallSite => ({
+    id: `${callerId}@0`,
+    callerId,
+    calleeName: localName ?? "x",
+    calleeId: null,
+    resolution: "unresolved",
+    kind: "call",
+    awaited: false,
+    span,
+    ...(localName === null
+      ? {}
+      : { via: { localName, member: null, isNew: false } }),
+  });
+
+  it("names the package a call goes into, from a function or the module", () => {
+    expect(packageOf(graph, site("a.ts::main", "format"))).toBe("node:util");
+    expect(packageOf(graph, site("a.ts", "format"))).toBe("node:util");
+  });
+
+  it("is null for files, missing files and calls without an import", () => {
+    expect(packageOf(graph, site("a.ts::main", "two"))).toBeNull();
+    expect(packageOf(graph, site("a.ts::main", "gone"))).toBeNull();
+    expect(packageOf(graph, site("a.ts::main", null))).toBeNull();
+    expect(packageOf(graph, site("other.ts::main", "format"))).toBeNull();
   });
 });
