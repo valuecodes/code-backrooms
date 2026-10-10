@@ -93,6 +93,8 @@ const Player = ({
   const nearKey = useRef<string | null>(null);
   /** Seconds since the last `onMove`; infinite means "report on the next frame". */
   const sinceMove = useRef(Number.POSITIVE_INFINITY);
+  /** The last pose `onMove` reported, as a key. */
+  const lastPose = useRef("");
   const scratch = useRef({
     forward: new Vector3(),
     right: new Vector3(),
@@ -172,11 +174,17 @@ const Player = ({
     }
     sinceMove.current += dt;
     if (onMove !== undefined && sinceMove.current >= MOVE_INTERVAL) {
+      const forced = sinceMove.current === Number.POSITIVE_INFINITY;
       sinceMove.current = 0;
-      onMove({
-        position: next,
-        facing: { x: next.x + forward.x, z: next.z + forward.z },
-      });
+      const pose = `${next.x},${next.z},${forward.x},${forward.z}`;
+      // Standing still and not looking round: nothing new to report.
+      if (forced || pose !== lastPose.current) {
+        lastPose.current = pose;
+        onMove({
+          position: next,
+          facing: { x: next.x + forward.x, z: next.z + forward.z },
+        });
+      }
     }
     if (world.portals.length === 0 && onNearTarget === undefined) {
       return;

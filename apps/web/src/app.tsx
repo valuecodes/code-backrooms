@@ -109,7 +109,14 @@ const App = () => {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // Ctrl/Cmd+R and friends belong to the browser.
-      if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      // Tab would otherwise move the focus, held down too.
+      if (locked && event.code === "Tab") {
+        event.preventDefault();
+      }
+      if (event.repeat) {
         return;
       }
       if (event.code === "KeyN") {
@@ -122,8 +129,6 @@ const App = () => {
       } else if (locked && event.code === "KeyE") {
         setSourceOpen((open) => !open);
       } else if (locked && (event.code === "KeyM" || event.code === "Tab")) {
-        // Tab would otherwise move the focus.
-        event.preventDefault();
         setMapOpen((open) => !open);
       }
     };
