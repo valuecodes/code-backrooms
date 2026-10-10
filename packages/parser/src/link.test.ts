@@ -216,6 +216,33 @@ describe("linkModules", () => {
     expect(siteOf(graph, "session.refresh").resolution).not.toBe("resolved");
   });
 
+  it("links to the module's own binding, not a block's namesake", () => {
+    const graph = graphOf({
+      "a.ts": [
+        'import { f, Svc } from "./b";',
+        "function one() { f(); new Svc(); Svc.make(); }",
+      ].join("\n"),
+      "b.ts": [
+        "if (enabled) {",
+        "  function f() {}",
+        "  class Svc { constructor() {} static make() {} }",
+        "}",
+        "export function f() {}",
+        "export class Svc { constructor() {} static make() {} }",
+      ].join("\n"),
+    });
+    const own = (test: (fn: CodeGraph["functions"][number]) => boolean) =>
+      graph.functions.filter(test).at(-1)?.id;
+    expect(siteOf(graph, "f").calleeId).toBe(own((fn) => fn.name === "f"));
+    expect(siteOf(graph, "f").calleeId).not.toBe("b.ts::f");
+    expect(siteOf(graph, "Svc").calleeId).toBe(
+      own((fn) => fn.kind === "constructor")
+    );
+    expect(siteOf(graph, "Svc.make").calleeId).toBe(
+      own((fn) => fn.name === "make")
+    );
+  });
+
   it("leaves an imported non-function unresolved", () => {
     const graph = graphOf({
       "a.ts": 'import { value } from "./b";\nfunction one() { value(); }',

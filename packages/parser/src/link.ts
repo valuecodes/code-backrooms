@@ -14,12 +14,15 @@ import type {
 import { resolveSpecifier } from "@repo/code-graph/ids";
 
 import type { DiscoveredFunction } from "./scope";
+import type { TopLevel } from "./top-level";
 
 /** What the linker reads and rewrites of one analysed module. */
 type Linkable = {
   readonly module: ModuleNode;
   /** In source order. */
   readonly functions: readonly DiscoveredFunction[];
+  /** The module's own bindings, which an importer reaches. */
+  readonly topLevel: TopLevel;
   readonly callSites: readonly CallSite[];
   readonly edges: readonly GraphEdge[];
 };
@@ -52,6 +55,7 @@ type Linker = {
   readonly ids: ReadonlySet<string>;
   readonly modules: ReadonlyMap<string, ModuleNode>;
   readonly functions: ReadonlyMap<string, readonly DiscoveredFunction[]>;
+  readonly topLevel: ReadonlyMap<string, TopLevel>;
 };
 
 const importBinding = (
@@ -162,30 +166,30 @@ const functionOf = (
   if (binding.kind === "namespace") {
     return null;
   }
-  const topLevel = (linker.functions.get(binding.moduleId) ?? []).filter(
-    (fn) => fn.parentId === null
-  );
   const name = binding.localName;
+  const plain = linker.topLevel.get(binding.moduleId)?.functions.get(name);
+  const range = linker.topLevel.get(binding.moduleId)?.classes.get(name);
+  // A member of the module's own class `name`, not of a block's namesake.
+  const ofClass = (test: (fn: DiscoveredFunction) => boolean) =>
+    range === undefined
+      ? undefined
+      : (linker.functions.get(binding.moduleId) ?? []).find(
+          (fn) =>
+            fn.className === name &&
+            fn.parentId === null &&
+            fn.span.start >= range.start &&
+            fn.span.end <= range.end &&
+            test(fn)
+        );
   if (member !== null) {
     return isNew
       ? null
-      : (topLevel.find(
-          (fn) =>
-            fn.className === name &&
-            fn.isStatic &&
-            fn.qualifiedName === `${name}.${member}`
-        ) ?? null);
+      : (ofClass((fn) => fn.isStatic && fn.name === member) ?? null);
   }
-  const plain =
-    topLevel.find((fn) => fn.className === null && fn.qualifiedName === name) ??
-    null;
   if (!isNew) {
-    return plain;
+    return plain ?? null;
   }
-  return (
-    topLevel.find((fn) => fn.className === name && fn.kind === "constructor") ??
-    plain
-  );
+  return ofClass((fn) => fn.kind === "constructor") ?? plain ?? null;
 };
 
 /** Rewrites one site through its import, or returns it unchanged. */
@@ -294,6 +298,7 @@ const linkModules = <T extends Linkable>(units: readonly T[]): readonly T[] => {
     ids,
     modules,
     functions: new Map(units.map((unit) => [unit.module.id, unit.functions])),
+    topLevel: new Map(units.map((unit) => [unit.module.id, unit.topLevel])),
   };
   return units.map((unit) => {
     const module = modules.get(unit.module.id) ?? unit.module;
