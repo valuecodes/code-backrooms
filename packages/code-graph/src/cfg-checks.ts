@@ -262,16 +262,17 @@ const cfgLayoutFailures = (
   const walked = (edge: CfgEdge): boolean => {
     const from = roomOf.get(edge.from);
     const to = roomOf.get(edge.to);
+    // Inside one room: folded together, or swallowed by a collapsed one.
+    const inside = from !== undefined && from === to;
     switch (edge.kind) {
       case "loop-back": {
         return (
-          from === to ||
-          (hasDoor(from, backOf(edge)) && hasDoor(backOf(edge), to))
+          inside || (hasDoor(from, backOf(edge)) && hasDoor(backOf(edge), to))
         );
       }
       case "break":
       case "continue": {
-        return from === to || jumps.has(`${from ?? ""}>${to ?? ""}`);
+        return inside || jumps.has(`${from ?? ""}>${to ?? ""}`);
       }
       case "next":
       case "true":
@@ -282,7 +283,7 @@ const cfgLayoutFailures = (
       case "return":
       case "throw":
       default: {
-        return from === to || hasDoor(from, to);
+        return inside || hasDoor(from, to);
       }
     }
   };
