@@ -15,6 +15,7 @@ import {
   isFunctionExpression,
   isIdentifier,
   isImportDeclaration,
+  isTSModuleDeclaration,
   isVariableDeclaration,
 } from "@babel/types";
 import type { ClassDeclaration, Node, Program } from "@babel/types";
@@ -68,6 +69,11 @@ type Context = {
   readonly nextClassName: (name: string) => string;
   /** Local names exported by any form (see `exportedLocalNames`). */
   readonly exportedNames: ReadonlySet<string>;
+  /**
+   * Inside a class body (a static block) or a namespace, which keep the
+   * enclosing scope: a class declared there is not top-level.
+   */
+  readonly enclosed: boolean;
   readonly out: Discovered;
 };
 
@@ -148,7 +154,7 @@ const visitClassBody = (
     name,
     span: spanOf(node),
     exported,
-    topLevel: scope.parent === null,
+    topLevel: scope.parent === null && !context.enclosed,
   });
   for (const member of node.body.body) {
     const field = fieldFunction(member);
@@ -192,7 +198,7 @@ const visitClassBody = (
       (field.isStatic ? table.static : table.instance).set(field.name, fn);
     } else {
       for (const child of childrenOf(member)) {
-        visit(context, scope, child, false, depth + 1);
+        visit({ ...context, enclosed: true }, scope, child, false, depth + 1);
       }
     }
   }
@@ -301,6 +307,12 @@ const visit = (
     }
     return;
   }
+  if (isTSModuleDeclaration(node)) {
+    for (const child of childrenOf(node)) {
+      visit({ ...context, enclosed: true }, scope, child, false, depth + 1);
+    }
+    return;
+  }
   if (isCatchClause(node) && node.param !== null && node.param !== undefined) {
     bindingNames(node.param, scope.bindings);
   }
@@ -347,6 +359,7 @@ const discover = (
     moduleId,
     nextName: uniqueNames(),
     nextClassName: uniqueNames(),
+    enclosed: false,
     exportedNames,
     out,
   };
