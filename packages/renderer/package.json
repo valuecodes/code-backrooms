@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     "./controls": "./src/controls.tsx",
+    "./lane-tint": "./src/lane-tint.ts",
     "./player": "./src/player.tsx",
     "./world": "./src/world.tsx"
   },

@@ -18,8 +18,10 @@ import { World } from "@repo/renderer/world";
 another room or corridor (and once for the start room), so a state setter is a
 fine handler. `onPortal` fires once when the player walks into a portal's
 trigger strip while facing it, `onNearTarget` when the door or portal in
-front of them changes, and `placement` (a position, a facing point and a
-nonce) puts the player somewhere else when it changes.
+front of them changes, `onMove` with the player's position and a point 1 m
+ahead at most ten times a second (and on the first frame after a room change
+or a teleport), and `placement` (a position, a facing point and a nonce) puts
+the player somewhere else when it changes.
 
 Each room is five draw calls (merged walls and lintels, floor, ceiling, merged
 fixtures); every door frame in the world is one more, and the portals add
@@ -29,7 +31,9 @@ and inside a function's fork a wash of the lane's colour on the walls (sage
 for true, dusty red for false, slate for a case, grey for default, ochre
 for a loop's body, a deeper ochre for its corridor back) with the full
 colour on the lintel and frame of the door into the lane; a loop's exit
-door keeps a plain lintel and a wooden frame. Lighting is a fixed
+door keeps a plain lintel and a wooden frame. `@repo/renderer/lane-tint`
+exports `laneColour(kind)`, the same colours as CSS hex, for drawing a lane
+outside the scene (the app's overview map). Lighting is a fixed
 pool of eight point lights that follow the player to the nearest fixtures, so
 shaders compile once, and a single static shadow map that re-renders only
 when the shadow light hops to another fixture.

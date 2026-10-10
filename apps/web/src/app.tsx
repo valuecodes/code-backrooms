@@ -10,7 +10,10 @@ import { presets } from "@repo/world-generator/presets";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Hud } from "~/hud";
+import { EMPTY_VISITS, visit, visitedIn } from "~/map-model";
+import { OverviewMap } from "~/overview-map";
 import { parseWorldParams, withSeed } from "~/params";
+import { createPoseFeed } from "~/pose-feed";
 import { SourcePanel } from "~/source-panel";
 import { sourceView } from "~/source-view";
 import { useNavigation } from "~/use-navigation";
@@ -35,6 +38,9 @@ const initial = parseWorldParams(globalThis.location.search);
 // Parsed once: a syntax error in a bundled example does not depend on the
 // seed, and it is shown in the HUD rather than thrown through the renderer.
 const code = initial.code === null ? null : codeGraphOf(initial.code);
+
+// Fed from the render loop and read only by the open map, never by the app.
+const feed = createPoseFeed();
 
 const generate = (seed: number): GeneratedWorld => {
   const codeGraph = code?.codeGraph ?? null;
@@ -81,21 +87,25 @@ const App = () => {
   const [roomId, setRoomId] = useState<string | null>(null);
   const [target, setTarget] = useState<Target | null>(null);
   const [sourceOpen, setSourceOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [visits, setVisits] = useState(EMPTY_VISITS);
   const generated = useGeneratedWorld(seed);
+  const built = generated.world?.built ?? null;
   const navigation = useNavigation(generated.world);
   const { onRoomChange, back, home } = navigation;
 
   const onRoom = useCallback(
     (id: string | null) => {
       setRoomId(id);
+      setVisits((previous) => visit(previous, built, id));
       onRoomChange(id);
     },
-    [onRoomChange]
+    [built, onRoomChange]
   );
 
   // N: next seed (the only thing that regenerates the world). Backspace and
-  // R navigate and E shows the source, only while walking, so a free
-  // pointer leaves them alone.
+  // R navigate, E shows the source and M or Tab the map, only while walking,
+  // so a free pointer leaves them alone.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // Ctrl/Cmd+R and friends belong to the browser.
@@ -111,6 +121,10 @@ const App = () => {
         home();
       } else if (locked && event.code === "KeyE") {
         setSourceOpen((open) => !open);
+      } else if (locked && (event.code === "KeyM" || event.code === "Tab")) {
+        // Tab would otherwise move the focus.
+        event.preventDefault();
+        setMapOpen((open) => !open);
       }
     };
     globalThis.addEventListener("keydown", onKeyDown);
@@ -175,9 +189,18 @@ const App = () => {
             placement={navigation.placement}
             onPortal={navigation.onPortal}
             onNearTarget={setTarget}
+            onMove={feed.publish}
           />
           <PointerLook />
         </Canvas>
+      )}
+      {locked && mapOpen && built !== null && (
+        <OverviewMap
+          world={built}
+          visited={visitedIn(visits, built)}
+          current={roomId}
+          feed={feed}
+        />
       )}
       {locked && sourceOpen && sources !== null && (
         <SourcePanel view={source} />

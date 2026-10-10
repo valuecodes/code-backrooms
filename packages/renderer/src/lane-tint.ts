@@ -14,16 +14,29 @@ const rgb = (hex: string): Rgb => [
   Number.parseInt(hex.slice(5, 7), 16) / 255,
 ];
 
-const PALETTE: Record<LaneKind, Rgb> = {
-  true: rgb("#9fbf9a"),
-  false: rgb("#c28c86"),
-  case: rgb("#8fa3b8"),
-  default: rgb("#b0b0b0"),
-  loop: rgb("#c9a85c"),
+const HEX: Record<LaneKind, string> = {
+  true: "#9fbf9a",
+  false: "#c28c86",
+  case: "#8fa3b8",
+  default: "#b0b0b0",
+  loop: "#c9a85c",
   // Deeper than the body's ochre: the corridor that leads back round.
-  back: rgb("#b08a3e"),
+  back: "#b08a3e",
+  exit: "#ffffff",
+};
+
+const PALETTE: Record<LaneKind, Rgb> = {
+  true: rgb(HEX.true),
+  false: rgb(HEX.false),
+  case: rgb(HEX.case),
+  default: rgb(HEX.default),
+  loop: rgb(HEX.loop),
+  back: rgb(HEX.back),
   exit: WHITE,
 };
+
+/** A lane's full colour as CSS hex, for drawing outside the scene (the map). */
+const laneColour = (kind: LaneKind): string => HEX[kind];
 
 /** Dark wood: what a frame is without a lane. The frame material is white. */
 const WOOD: Rgb = rgb("#4a3620");
@@ -45,5 +58,5 @@ const wallTint = (lane: LaneLabel | undefined): Rgb => {
   return [(r + 1) / 2, (g + 1) / 2, (b + 1) / 2];
 };
 
-export { frameTint, lintelTint, wallTint };
+export { frameTint, laneColour, lintelTint, wallTint };
 export type { Rgb };
