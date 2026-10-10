@@ -27,6 +27,7 @@ const hints: readonly (readonly [string, string])[] = [
 /** Only a code world has source to show. */
 const codeHints: readonly (readonly [string, string])[] = [
   ["E", "show the source"],
+  ["Wheel", "scroll the source"],
 ];
 
 const whereOf = ({

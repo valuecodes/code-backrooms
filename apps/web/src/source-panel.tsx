@@ -9,15 +9,41 @@ type SourcePanelProps = {
 
 /**
  * The code of the room the player stands in, docked right. The pointer is
- * locked while it shows, so it cannot be scrolled: it keeps the room's
- * marked code in view itself.
+ * locked while it shows, so it scrolls itself: to the room's marked code,
+ * or the top when nothing is marked, and the mouse wheel scrolls it on.
  */
 const SourcePanel = ({ view }: SourcePanelProps) => {
+  const codeRef = useRef<HTMLPreElement>(null);
   const markRef = useRef<HTMLElement>(null);
 
+  // Only the code scrolls (`scrollIntoView` would move every ancestor).
   useEffect(() => {
-    markRef.current?.scrollIntoView({ block: "center" });
+    const code = codeRef.current;
+    const mark = markRef.current;
+    if (code === null) {
+      return;
+    }
+    if (mark === null) {
+      code.scrollTop = 0;
+      return;
+    }
+    const box = code.getBoundingClientRect();
+    const marked = mark.getBoundingClientRect();
+    // Centred, or from its top when it is taller than the panel.
+    const margin = Math.max(0, (box.height - marked.height) / 2);
+    code.scrollTop += marked.top - box.top - margin;
   }, [view]);
+
+  // A locked pointer still sends wheel events, and nothing else uses them.
+  useEffect(() => {
+    const onWheel = (event: WheelEvent) => {
+      // Firefox may count in lines rather than pixels.
+      const step = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
+      codeRef.current?.scrollBy({ top: event.deltaY * step });
+    };
+    globalThis.addEventListener("wheel", onWheel, { passive: true });
+    return () => globalThis.removeEventListener("wheel", onWheel);
+  }, []);
 
   if (view === null) {
     return (
@@ -37,7 +63,7 @@ const SourcePanel = ({ view }: SourcePanelProps) => {
           ? `lines ${view.lines}`
           : `${view.region} · lines ${view.lines}`}
       </p>
-      <pre className="min-h-0 flex-1 overflow-hidden">
+      <pre ref={codeRef} className="min-h-0 flex-1 overflow-hidden">
         {view.code.map((line) => (
           <div key={line.number} className="flex gap-3">
             <span className="w-8 shrink-0 text-right text-amber-100/30 select-none">
