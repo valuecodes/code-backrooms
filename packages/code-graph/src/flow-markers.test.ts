@@ -228,6 +228,7 @@ describe("markers", () => {
         },
       ],
       functions: [fn],
+      classes: [],
       callSites: [open(105)],
       edges: [],
     };

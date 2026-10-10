@@ -2,6 +2,7 @@
 
 import type {
   CallSite,
+  ClassNode,
   CodeGraph,
   FlowNode,
   FunctionNode,
@@ -14,6 +15,7 @@ import { findFlowNode } from "./flow";
 import { planFlow } from "./flow-layout";
 import type { FlowPlan } from "./flow-layout";
 import { flowNodeText, indexSites } from "./flow-text";
+import { classOf } from "./hub-plan";
 import {
   flowNodeId,
   hubModuleId,
@@ -21,6 +23,7 @@ import {
   isFunctionId,
   isRelativeSpecifier,
   parseFlowNodeId,
+  parseHubId,
   parsePortalId,
 } from "./ids";
 import type { FlowNodeRef } from "./ids";
@@ -39,6 +42,14 @@ type RoomSubject =
       readonly modules: readonly ModuleNode[];
     }
   | { readonly kind: "module"; readonly module: ModuleNode }
+  | {
+      /** A class's lobby. */
+      readonly kind: "class";
+      readonly module: ModuleNode;
+      readonly node: ClassNode;
+      /** Its members, in source order. */
+      readonly methods: readonly FunctionNode[];
+    }
   | ({ readonly kind: "function" } & FunctionSubject)
   | ({
       readonly kind: "flow";
@@ -179,9 +190,22 @@ const flowSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
   };
 };
 
+/** A class's members, in source order (see `classOf`). */
+const membersOf = (
+  graph: CodeGraph,
+  node: ClassNode
+): readonly FunctionNode[] => {
+  const classes = graph.classes.filter(
+    (candidate) => candidate.moduleId === node.moduleId
+  );
+  return graph.functions.filter(
+    (fn) => fn.moduleId === node.moduleId && classOf(fn, classes) === node
+  );
+};
+
 /**
  * What a room stands for: a flow room of a function, a function, a module
- * hub or the repository entrance; null for corridors and ids not from this
+ * hub, a class's lobby or the repository entrance; null for corridors and ids not from this
  * graph. Flow ids also contain `::`, so they are tried first.
  */
 const roomSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
@@ -199,9 +223,18 @@ const roomSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
       modules: entryModules(graph),
     };
   }
-  const moduleId = hubModuleId(roomId);
-  const module = graph.modules.find((candidate) => candidate.id === moduleId);
-  return module === undefined ? null : { kind: "module", module };
+  const hub = parseHubId(roomId);
+  const module = graph.modules.find((candidate) => candidate.id === hub.module);
+  if (module === undefined) {
+    return null;
+  }
+  if (hub.classId === null) {
+    return { kind: "module", module };
+  }
+  const node = graph.classes.find((candidate) => candidate.id === hub.classId);
+  return node === undefined
+    ? null
+    : { kind: "class", module, node, methods: membersOf(graph, node) };
 };
 
 type PortalSubject =

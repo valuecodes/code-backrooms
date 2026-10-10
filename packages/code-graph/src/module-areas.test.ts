@@ -186,7 +186,7 @@ describe("generateCodeWorld", () => {
   it("throws for a graph without modules", () => {
     expect(() =>
       generateCodeWorld(
-        { modules: [], functions: [], callSites: [], edges: [] },
+        { modules: [], functions: [], classes: [], callSites: [], edges: [] },
         1
       )
     ).toThrow(/at least one module/);

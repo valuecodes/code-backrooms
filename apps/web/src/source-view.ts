@@ -17,7 +17,7 @@ type SourceLine = {
 
 type SourceView = {
   readonly path: string;
-  /** `Class.method()`; null for a hub. */
+  /** `Class.method()`, `class Svc` for a lobby; null for a hub. */
   readonly fn: string | null;
   /** The room's HUD words (`await fetch(…)`); null for a hub or a function. */
   readonly region: string | null;
@@ -76,7 +76,7 @@ const clamp = (span: SourceSpan, within: SourceSpan): Range | null => {
 
 /**
  * What the source panel shows for a room: the whole file for a hub, the
- * whole function for a function room, and the function with the room's
+ * whole class for a lobby, the whole function for a function room, and the function with the room's
  * code marked for a flow room. Null for the entrance (no file of its
  * own), corridors and ids not from this graph.
  */
@@ -102,6 +102,16 @@ const sourceView = (
       region: null,
       lines: lineRange(1, code.length),
       code,
+    };
+  }
+  if (subject.kind === "class") {
+    const { span } = subject.node;
+    return {
+      path: subject.module.path,
+      fn: `class ${subject.node.name}`,
+      region: null,
+      lines: lineRange(span.startLine, span.endLine),
+      code: linesOf(source, span.startLine, span.endLine, null),
     };
   }
   const { fn } = subject;

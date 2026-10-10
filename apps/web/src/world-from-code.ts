@@ -71,7 +71,8 @@ const subjectOf = (
 
 /**
  * `Class.method()` for a function or one of its rooms, the path for a hub,
- * the repository's name for the entrance, the id otherwise.
+ * `class Svc` for a lobby, the repository's name for the entrance, the id
+ * otherwise.
  */
 const labelOf = (codeGraph: CodeGraph | null, roomId: string): string => {
   const subject = subjectOf(codeGraph, roomId);
@@ -81,6 +82,9 @@ const labelOf = (codeGraph: CodeGraph | null, roomId: string): string => {
   if (subject.kind === "entrance") {
     return subject.name;
   }
+  if (subject.kind === "class") {
+    return `class ${subject.node.name}`;
+  }
   return subject.kind === "module"
     ? subject.module.path
     : `${subject.fn.qualifiedName}()`;
@@ -88,7 +92,7 @@ const labelOf = (codeGraph: CodeGraph | null, roomId: string): string => {
 
 /**
  * The HUD line for a room: the repository's name in the entrance, the file
- * for a hub, `file · Class.method()` for a function, `file · Class.method() · await fetch(…)` for a room of its
+ * for a hub, `file · class Svc` for a lobby, `file · Class.method()` for a function, `file · Class.method() · await fetch(…)` for a room of its
  * flow, and the raw id for anything else (corridors, preset rooms).
  */
 const describeRoom = (codeGraph: CodeGraph | null, roomId: string): string => {
@@ -101,6 +105,9 @@ const describeRoom = (codeGraph: CodeGraph | null, roomId: string): string => {
   }
   if (subject.kind === "module") {
     return subject.module.path;
+  }
+  if (subject.kind === "class") {
+    return `${subject.module.path} · class ${subject.node.name}`;
   }
   const head = `${subject.module.path} · ${subject.fn.qualifiedName}()`;
   return subject.kind === "flow" ? `${head} · ${subject.text}` : head;

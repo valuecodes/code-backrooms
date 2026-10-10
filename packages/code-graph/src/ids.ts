@@ -263,8 +263,49 @@ const parsePortalId = (id: string): PortalRef | null => {
   return null;
 };
 
+const CLASS_SEPARATOR = "//class:";
+
+/**
+ * A class: `demo.ts//class:Svc`, `demo.ts//class:Svc~2` for a second
+ * declaration of that name. `normalisePath` never yields `//`, so no module
+ * id, and no hub, function or flow id built on one, can contain the
+ * separator, whatever the files are called. The id doubles as its lobby's.
+ */
+const classId = (module: string, uniqueName: string): string =>
+  `${module}${CLASS_SEPARATOR}${uniqueName}`;
+
+/** A class's lobby, more chained on as `demo.ts//class:Svc#2`. */
+const lobbyId = (classNodeId: string, index: number): string =>
+  index === 0 ? classNodeId : `${classNodeId}#${index + 1}`;
+
+type HubRef = {
+  /** The module (or the entrance) the hub belongs to. */
+  readonly module: string;
+  /** The class whose lobby it is; null for a module hub. */
+  readonly classId: string | null;
+  /** Its place in its chain, from 0. */
+  readonly index: number;
+};
+
+const CHAIN_TAIL = /#(\d+)$/;
+
+/**
+ * Where a hub id stands: `demo.ts#2` is the module's second hub,
+ * `demo.ts//class:Svc` the first lobby of class `Svc`. Class names never
+ * contain `#`, so only a trailing `#<n>` counts as a chain index.
+ */
+const parseHubId = (roomId: string): HubRef => {
+  const match = CHAIN_TAIL.exec(roomId);
+  const head = match === null ? roomId : roomId.slice(0, match.index);
+  const index = match === null ? 0 : Number(match[1]) - 1;
+  const separator = head.indexOf(CLASS_SEPARATOR);
+  return separator === -1
+    ? { module: head, classId: null, index }
+    : { module: head.slice(0, separator), classId: head, index };
+};
+
 /** The module a hub id belongs to: `demo.ts#2` → `demo.ts`. */
-const hubModuleId = (roomId: string): string => roomId.replace(/#\d+$/, "");
+const hubModuleId = (roomId: string): string => parseHubId(roomId).module;
 
 /**
  * The repository entrance: its area and its first hub (more chain on as
@@ -293,6 +334,7 @@ const uniqueNames = (): ((qualifiedName: string) => string) => {
 export {
   callPortalId,
   callSiteId,
+  classId,
   ENTRANCE_ID,
   flowNodeId,
   functionId,
@@ -301,11 +343,13 @@ export {
   isFunctionId,
   isRelativeSpecifier,
   jumpPortalId,
+  lobbyId,
   markerPortalId,
   moduleId,
   modulePortalId,
   normalisePath,
   parseFlowNodeId,
+  parseHubId,
   parsePortalId,
   resolveSpecifier,
   returnPortalId,

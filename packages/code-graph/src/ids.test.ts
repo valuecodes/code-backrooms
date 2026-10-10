@@ -3,18 +3,22 @@ import { describe, expect, it } from "vitest";
 import {
   callPortalId,
   callSiteId,
+  classId,
   ENTRANCE_ID,
   flowNodeId,
   functionId,
+  hubModuleId,
   isEntranceHub,
   isFunctionId,
   isRelativeSpecifier,
   jumpPortalId,
+  lobbyId,
   markerPortalId,
   moduleId,
   modulePortalId,
   normalisePath,
   parseFlowNodeId,
+  parseHubId,
   parsePortalId,
   resolveSpecifier,
   returnPortalId,
@@ -49,6 +53,49 @@ describe("isEntranceHub", () => {
     expect(isEntranceHub("entrance")).toBe(false);
     expect(isEntranceHub("entrance#2")).toBe(false);
     expect(isEntranceHub(moduleId("//entrance"))).toBe(false);
+  });
+});
+
+describe("hub ids", () => {
+  it("parses module hubs, lobbies and their chains", () => {
+    const svc = classId("src/demo.ts", "Svc");
+    expect(svc).toBe("src/demo.ts//class:Svc");
+    expect(lobbyId(svc, 0)).toBe(svc);
+    expect(lobbyId(svc, 1)).toBe("src/demo.ts//class:Svc#2");
+    expect(parseHubId("src/demo.ts")).toEqual({
+      module: "src/demo.ts",
+      classId: null,
+      index: 0,
+    });
+    expect(parseHubId("src/demo.ts#3")).toEqual({
+      module: "src/demo.ts",
+      classId: null,
+      index: 2,
+    });
+    expect(parseHubId(lobbyId(svc, 0))).toEqual({
+      module: "src/demo.ts",
+      classId: svc,
+      index: 0,
+    });
+    expect(parseHubId(lobbyId(classId("a.ts", "Svc~2"), 1))).toEqual({
+      module: "a.ts",
+      classId: "a.ts//class:Svc~2",
+      index: 1,
+    });
+    expect(parseHubId(`${ENTRANCE_ID}#2`)).toEqual({
+      module: ENTRANCE_ID,
+      classId: null,
+      index: 1,
+    });
+  });
+
+  it("keeps a path holding # or class: whole", () => {
+    expect(hubModuleId("a#b/class:c.ts")).toBe("a#b/class:c.ts");
+    expect(hubModuleId(lobbyId(classId("a#b/class:c.ts", "C"), 1))).toBe(
+      "a#b/class:c.ts"
+    );
+    // No normalised path holds the separator, so none parses as a lobby.
+    expect(parseHubId(moduleId("a//class:B")).classId).toBeNull();
   });
 });
 

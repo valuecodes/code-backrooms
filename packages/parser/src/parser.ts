@@ -1,5 +1,6 @@
 import type {
   CallSite,
+  ClassNode,
   CodeGraph,
   FunctionNode,
   GraphEdge,
@@ -28,6 +29,8 @@ type SourceFile = {
 type ParsedModule = {
   readonly module: ModuleNode;
   readonly functions: readonly FunctionNode[];
+  /** Class declarations in source order. */
+  readonly classes: readonly ClassNode[];
   readonly callSites: readonly CallSite[];
   readonly edges: readonly GraphEdge[];
 };
@@ -135,6 +138,7 @@ const finishModule = (analysed: Analysed): ParsedModule => {
   return {
     module,
     functions: functions.sort((a, b) => a.span.start - b.span.start),
+    classes: discovered.classNodes,
     callSites: analysed.callSites,
     edges: analysed.edges,
   };
@@ -182,6 +186,7 @@ const buildCodeGraph = (files: readonly SourceFile[]): CodeGraph => {
   return {
     modules: parsed.map((item) => item.module),
     functions: parsed.flatMap((item) => item.functions),
+    classes: parsed.flatMap((item) => item.classes),
     callSites: parsed.flatMap((item) => item.callSites),
     edges: parsed.flatMap((item) => item.edges),
   };

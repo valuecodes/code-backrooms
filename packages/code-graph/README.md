@@ -181,12 +181,22 @@ directed walk from the roots cannot reach (mutual recursion with no outside
 caller) are attached to the hub in source order. A hub has at most five doors,
 links to the neighbouring hubs included (module portals are not doors but
 widen the first hub), so a module whose roots need more chains further hubs
-(`demo.ts`, `demo.ts#2`, ...). Portals sit on flow rooms (`from`), lead to
+(`demo.ts`, `demo.ts#2`, ...). The hubs are planned in `src/hub-plan.ts`: an
+attached method of a top-level class (`ClassNode.topLevel`) hangs off its
+class's lobby instead, a hub room labelled `class Svc` with id
+`demo.ts//class:Svc` (the class's id; `//` keeps it apart from any module
+path), which takes one door of the module hub at the place of the class's
+first attached method and chains on the same way (`demo.ts//class:Svc#2`).
+A method reached by a call door keeps that door, a class with no attached
+methods has no lobby, and returns still land at the module hub.
+`parseHubId(id)` reads any hub id back as `{ module, classId, index }`.
+Portals sit on flow rooms (`from`), lead to
 units (`to`), and are listed calls first, then returns, jumps, markers and
 module portals.
 
 `./subjects` maps world ids back to the code: `roomSubject` gives a module, a
-function, or a flow room (`{ kind: "flow", fn, module, node, ancestors, text,
+class for a lobby (`{ kind: "class", module, node, methods }`), a function,
+or a flow room (`{ kind: "flow", fn, module, node, ancestors, text,
 span }`, `text` being the HUD's words such as `await fetch(…)` or `if (user) ·
 2 statements · 2 calls`, and `span` the room's code: a tagged room's composite,
 and for a room the budget folded from several, its first node to its last);
