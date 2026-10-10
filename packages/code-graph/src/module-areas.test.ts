@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { demoGraph, fixtureGraph, importOf } from "./fixture";
 import { ENTRANCE_ID, modulePortalId } from "./ids";
-import { generateCodeWorld } from "./module-areas";
+import { codeAreaStore, generateCodeWorld } from "./module-areas";
 
 /** `main.ts` imports `lib.ts` and calls into it; `lib.ts` calls back. */
 const twoModules = () =>
@@ -190,5 +190,57 @@ describe("generateCodeWorld", () => {
         1
       )
     ).toThrow(/at least one module/);
+  });
+});
+
+describe("codeAreaStore", () => {
+  it("generates the entrance only and the modules when asked", () => {
+    const store = codeAreaStore(twoModules(), 1);
+    const { world } = store.snapshot();
+    expect(world.areas.map((area) => area.id)).toEqual([ENTRANCE_ID]);
+    expect(world.pending).toEqual(["lib.ts", "main.ts"]);
+    expect(world.areaOf.get("lib.ts::load")).toBe("lib.ts");
+    expect(checkAreas(world)).toEqual([]);
+    const [first] = world.areas[0]?.graph.portals ?? [];
+    const next = world.areaOf.get(first?.to ?? "") ?? "";
+    store.ensure(next);
+    const grown = store.snapshot().world;
+    expect(grown.pending).toEqual(
+      ["lib.ts", "main.ts"].filter((id) => id !== next)
+    );
+    // The two call each other: the call into the other one has no landing yet.
+    const across = mergeAreas(grown).built.portals.find(
+      ({ portal }) =>
+        portal.kind === "call" && grown.areaOf.get(portal.to) !== next
+    );
+    expect(across?.arrival).toBeNull();
+    expect(checkAreas(grown)).toEqual([]);
+  });
+
+  it("knows every module's units before laying it out", () => {
+    for (const graph of [twoModules(), demoGraph()]) {
+      for (const variation of [false, true]) {
+        for (let seed = 1; seed <= 5; seed += 1) {
+          const world = generateCodeWorld(graph, seed, { variation });
+          for (const area of world.areas) {
+            for (const room of area.graph.rooms) {
+              expect(world.areaOf.get(room.id), `room ${room.id}`).toBe(
+                area.id
+              );
+            }
+          }
+          expect(world.areaOf.size).toBe(
+            world.areas.reduce((sum, area) => sum + area.graph.rooms.length, 0)
+          );
+        }
+      }
+    }
+  });
+
+  it("builds the same world eagerly as generateCodeWorld", () => {
+    const graph = twoModules();
+    expect(codeAreaStore(graph, 4, { eager: true }).snapshot().world).toEqual(
+      generateCodeWorld(graph, 4)
+    );
   });
 });

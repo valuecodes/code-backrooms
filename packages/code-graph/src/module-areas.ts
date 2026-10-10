@@ -1,6 +1,7 @@
-import type { AreaWorld, GeneratedWorld } from "@repo/types";
+import type { AreaWorld, GeneratedWorld, WorldGraph } from "@repo/types";
 import { generateWorld } from "@repo/world-generator";
-import { assembleAreas } from "@repo/world-generator/areas";
+import { createAreaStore } from "@repo/world-generator/area-store";
+import type { AreaSpec, AreaStore } from "@repo/world-generator/area-store";
 import { LayoutError } from "@repo/world-generator/layout";
 
 import type { CodeGraph, ModuleNode } from "./code-graph";
@@ -91,34 +92,81 @@ const moduleArea = (input: AreaInput, variation: boolean): GeneratedWorld => {
   }
 };
 
+type CodeAreaOptions = {
+  readonly variation?: boolean;
+  /** Generate every module at once rather than when first asked for. */
+  readonly eager?: boolean;
+};
+
+/** The ids of a graph's rooms: the units an area will have. */
+const unitsOf = ({ rooms }: WorldGraph): readonly string[] =>
+  rooms.map((room) => room.id);
+
 /**
- * The code graph as areas: the repository entrance first, then one per
- * module, each laid out on its own and set apart from the others, joined
- * by module and call portals. The player starts in the entrance, whose
- * module portals lead to the entry modules (`entryModules`), from which
- * imports reach every other module.
+ * The repository entrance, then one area per module. A module's units come
+ * from its world graph alone, which is cheap: demoting a call door to a
+ * portal and varying proportions change no room, so they are known before
+ * the module is laid out.
  */
+const codeAreaSpecs = (
+  graph: CodeGraph,
+  seed: number,
+  variation: boolean
+): readonly AreaSpec[] => {
+  const entrance = entranceGraph(graph, entryModules(graph));
+  return [
+    {
+      id: ENTRANCE_ID,
+      units: unitsOf(entrance),
+      generate: () =>
+        generateWorld({
+          seed,
+          graph: entrance,
+          variation: false,
+          corridorPrefix: `${ENTRANCE_ID}/corridor-`,
+        }),
+    },
+    ...graph.modules.map((module): AreaSpec => ({
+      id: module.id,
+      units: unitsOf(toWorldGraph(graph, new Set(), null, module)),
+      generate: () => moduleArea({ graph, module, seed }, variation),
+    })),
+  ];
+};
+
+/**
+ * The code graph as areas: the repository entrance, then one per module,
+ * each laid out on its own and set apart from the others, joined by module
+ * and call portals. The player starts in the entrance, whose module portals
+ * lead to the entry modules (`entryModules`), from which imports reach
+ * every other module. Only the entrance is generated up front unless
+ * `eager`; every module waits for its first `ensure`.
+ */
+const codeAreaStore = (
+  graph: CodeGraph,
+  seed: number,
+  { variation = true, eager = false }: CodeAreaOptions = {}
+): AreaStore => {
+  if (graph.modules.length === 0) {
+    throw new Error("A code graph needs at least one module");
+  }
+  const store = createAreaStore({
+    seed,
+    entry: ENTRANCE_ID,
+    specs: codeAreaSpecs(graph, seed, variation),
+  });
+  if (eager) {
+    store.ensureAll();
+  }
+  return store;
+};
+
+/** Every area of the code graph at once: the entrance, then the modules in order. */
 const generateCodeWorld = (
   graph: CodeGraph,
   seed: number,
   { variation = true }: { readonly variation?: boolean } = {}
-): AreaWorld => {
-  if (graph.modules.length === 0) {
-    throw new Error("A code graph needs at least one module");
-  }
-  const entrance = generateWorld({
-    seed,
-    graph: entranceGraph(graph, entryModules(graph)),
-    variation: false,
-    corridorPrefix: `${ENTRANCE_ID}/corridor-`,
-  });
-  return assembleAreas(seed, ENTRANCE_ID, [
-    { id: ENTRANCE_ID, world: entrance },
-    ...graph.modules.map((module) => ({
-      id: module.id,
-      world: moduleArea({ graph, module, seed }, variation),
-    })),
-  ]);
-};
+): AreaWorld =>
+  codeAreaStore(graph, seed, { variation, eager: true }).snapshot().world;
 
-export { generateCodeWorld };
+export { codeAreaStore, generateCodeWorld };

@@ -7,11 +7,11 @@ import type {
   NavigationState,
   Navigator,
 } from "@repo/world-generator/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 
 type Session = {
-  /** The navigator this session belongs to; another world starts over. */
-  readonly navigator: Navigator | null;
+  /** The seed of the world this session belongs to; another starts over. */
+  readonly seed: number;
   readonly nav: NavigationState;
   readonly placement: Teleport | null;
 };
@@ -30,40 +30,55 @@ type Navigation = {
 
 const EMPTY: NavigationState = { frames: [], roomId: null };
 
-const fresh = (navigator: Navigator | null): Session => ({
-  navigator,
-  nav: navigator?.initial ?? EMPTY,
+const fresh = (seed: number): Session => ({
+  seed,
+  nav: EMPTY,
   placement: null,
 });
 
+/** One navigator per world object: a world that grew gets a new one. */
+const navigators = new WeakMap<GeneratedWorld, Navigator>();
+
+const navigatorOf = (world: GeneratedWorld): Navigator => {
+  const known = navigators.get(world);
+  if (known !== undefined) {
+    return known;
+  }
+  const created = createNavigator(world);
+  navigators.set(world, created);
+  return created;
+};
+
 /**
- * The exploration stack for a world. Events arrive from the render loop and
- * from key handlers, so each one steps from the state React holds at that
- * moment (a functional update), never from a closure. A session made for
- * another world is ignored, which is how a new seed starts over.
+ * The exploration stack for the world of `seed`. Events arrive from the
+ * render loop and from key handlers, so each one steps from the state React
+ * holds at that moment (a functional update), never from a closure, against
+ * the world `current` returns at that moment: an area joined in a moment
+ * before (a portal entered into it) is already there. Areas never move, so
+ * the frames stay valid while the world grows; only a new seed starts over.
  */
-const useNavigation = (world: GeneratedWorld | null): Navigation => {
-  const navigator = useMemo(
-    () => (world === null ? null : createNavigator(world)),
-    [world]
-  );
-  const [saved, setSaved] = useState<Session>(() => fresh(navigator));
-  const session = saved.navigator === navigator ? saved : fresh(navigator);
+const useNavigation = (
+  seed: number,
+  current: () => GeneratedWorld | null
+): Navigation => {
+  const [saved, setSaved] = useState<Session>(() => fresh(seed));
+  const session = saved.seed === seed ? saved : fresh(seed);
 
   const step = useCallback(
     (event: NavigationEvent) => {
-      if (navigator === null) {
+      const world = current();
+      if (world === null) {
         return;
       }
+      const navigator = navigatorOf(world);
       setSaved((previous) => {
-        const base =
-          previous.navigator === navigator ? previous : fresh(navigator);
+        const base = previous.seed === seed ? previous : fresh(seed);
         const { state, teleport } = navigator.step(base.nav, event);
         if (state === base.nav && teleport === null) {
           return base;
         }
         return {
-          navigator,
+          seed,
           nav: state,
           placement:
             teleport === null
@@ -72,7 +87,7 @@ const useNavigation = (world: GeneratedWorld | null): Navigation => {
         };
       });
     },
-    [navigator]
+    [seed, current]
   );
 
   return {

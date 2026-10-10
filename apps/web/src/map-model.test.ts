@@ -31,28 +31,36 @@ const hubRoom = () => {
 
 describe("visit", () => {
   it("records a room of the world", () => {
-    const visits = visit(EMPTY_VISITS, demo, "a");
-    expect([...visitedIn(visits, demo)]).toEqual(["a"]);
+    const visits = visit(EMPTY_VISITS, 1, "a");
+    expect([...visitedIn(visits, 1)]).toEqual(["a"]);
   });
 
   it("leaves the visits alone between rooms and on a repeat", () => {
-    const visits = visit(EMPTY_VISITS, demo, "a");
-    expect(visit(visits, demo, null)).toBe(visits);
-    expect(visit(visits, demo, "a")).toBe(visits);
+    const visits = visit(EMPTY_VISITS, 1, "a");
+    expect(visit(visits, 1, null)).toBe(visits);
+    expect(visit(visits, 1, "a")).toBe(visits);
   });
 
-  it("starts over for another world", () => {
-    const other = builtOf("demo", 2);
-    const visits = visit(visit(EMPTY_VISITS, demo, "a"), demo, "b");
-    const next = visit(visits, other, "c");
-    expect([...visitedIn(next, other)]).toEqual(["c"]);
-    expect(visitedIn(next, demo).size).toBe(0);
-    expect(visitedIn(visit(visits, other, null), other).size).toBe(0);
+  it("starts over for another seed", () => {
+    const visits = visit(visit(EMPTY_VISITS, 1, "a"), 1, "b");
+    const next = visit(visits, 2, "c");
+    expect([...visitedIn(next, 2)]).toEqual(["c"]);
+    expect(visitedIn(next, 1).size).toBe(0);
+    expect(visitedIn(visit(visits, 2, null), 2).size).toBe(0);
   });
 
   it("shows nothing of a world the visits do not belong to", () => {
-    const visits = visit(EMPTY_VISITS, demo, "a");
-    expect(visitedIn(visits, builtOf("demo", 2)).size).toBe(0);
+    const visits = visit(EMPTY_VISITS, 1, "a");
+    expect(visitedIn(visits, 2).size).toBe(0);
+  });
+
+  it("keeps the rooms while the world of the same seed grows", () => {
+    // A new world object for the same seed, as a world that grew is.
+    const before = builtOf("demo");
+    const visits = visit(EMPTY_VISITS, 1, "demo.ts");
+    const after = builtOf("demo");
+    expect(after).not.toBe(before);
+    expect([...visitedIn(visit(visits, 1, null), 1)]).toEqual(["demo.ts"]);
   });
 });
 

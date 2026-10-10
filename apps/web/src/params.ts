@@ -12,6 +12,8 @@ type WorldParams = {
   readonly preset: PresetName | null;
   /** A bundled program to generate rooms from; wins over `preset`. */
   readonly code: ExampleName | null;
+  /** `?eager=1`: generate every module of a code world up front. */
+  readonly eager: boolean;
 };
 
 /** Random and preset worlds without a `?seed`. */
@@ -39,8 +41,8 @@ const parseInteger = <T>(
 };
 
 /**
- * `?seed=12345&rooms=15`, `?graph=branching` or `?code=demo`; anything odd
- * falls back.
+ * `?seed=12345&rooms=15`, `?graph=branching` or `?code=demo&eager=1`;
+ * anything odd falls back.
  */
 const parseWorldParams = (search: string): WorldParams => {
   const params = new URLSearchParams(search);
@@ -56,6 +58,7 @@ const parseWorldParams = (search: string): WorldParams => {
     ),
     preset: graph !== null && isPresetName(graph) ? graph : null,
     code: code !== null && isExampleName(code) ? code : null,
+    eager: params.get("eager") === "1",
   };
 };
 

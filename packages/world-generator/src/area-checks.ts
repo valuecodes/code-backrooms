@@ -26,7 +26,8 @@ const shared = (
 
 /**
  * Every portal into another area: it leads to a unit some area has, lands
- * inside that unit's room there, clear of the walls. Returns the areas each
+ * inside that unit's room there, clear of the walls; one into an area not
+ * generated yet only has to name a unit of it. Returns the areas each
  * area's placed portals reach.
  */
 const checkCrossings = (
@@ -34,15 +35,17 @@ const checkCrossings = (
   failures: string[]
 ): ReadonlyMap<string, ReadonlySet<string>> => {
   const byId = new Map(world.areas.map((area) => [area.id, area]));
+  const pending = new Set(world.pending);
   const reaches = new Map<string, Set<string>>();
   for (const area of world.areas) {
     const own = new Set<string>();
     reaches.set(area.id, own);
     for (const { portal, arrival } of area.built.portals) {
-      if (arrival !== null) {
+      const areaId = world.areaOf.get(portal.to) ?? "";
+      if (arrival !== null || pending.has(areaId)) {
         continue;
       }
-      const target = byId.get(world.areaOf.get(portal.to) ?? "");
+      const target = byId.get(areaId);
       const landing = target?.built.entries.get(portal.to);
       if (target === undefined || landing === undefined) {
         failures.push(`portal ${portal.id} leads to unknown unit ${portal.to}`);

@@ -362,8 +362,14 @@ type AreaWorld = {
   readonly seed: number;
   /** The area the player starts in. */
   readonly entry: string;
+  /** The areas generated so far, in the order they were joined in. */
   readonly areas: readonly BuiltArea[];
-  /** The area of every unit (graph room) of every area. */
+  /**
+   * Areas the world knows of but has not generated yet: portals into them
+   * have no arrival until they are.
+   */
+  readonly pending: readonly string[];
+  /** The area of every unit (graph room) of every area, pending ones too. */
   readonly areaOf: ReadonlyMap<string, string>;
 };
 
