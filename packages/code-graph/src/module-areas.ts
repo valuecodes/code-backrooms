@@ -4,7 +4,9 @@ import { assembleAreas } from "@repo/world-generator/areas";
 import { LayoutError } from "@repo/world-generator/layout";
 
 import type { CodeGraph, ModuleNode } from "./code-graph";
-import { moduleLinks } from "./module-links";
+import { entranceGraph } from "./entrance";
+import { entryModules } from "./entrypoints";
+import { ENTRANCE_ID } from "./ids";
 import { edgeKey, toWorldGraph } from "./world-graph";
 
 /** How one module's area is laid out. */
@@ -12,8 +14,6 @@ type AreaInput = {
   readonly graph: CodeGraph;
   readonly module: ModuleNode;
   readonly seed: number;
-  /** Modules the hub also gets a module portal to. */
-  readonly extraLinks: readonly string[];
 };
 
 /** Ids of what a layout left out: unresolved connections, unplaced portals. */
@@ -25,19 +25,13 @@ const gapsOf = ({ layout }: GeneratedWorld): string =>
 
 /** One module's world: varied when `varied`, its corridors named after the module. */
 const layOut = (
-  { graph, module, seed, extraLinks }: AreaInput,
+  { graph, module, seed }: AreaInput,
   portalOnly: ReadonlySet<string>,
   varied: boolean
 ): GeneratedWorld =>
   generateWorld({
     seed,
-    graph: toWorldGraph(
-      graph,
-      portalOnly,
-      varied ? seed : null,
-      module,
-      extraLinks
-    ),
+    graph: toWorldGraph(graph, portalOnly, varied ? seed : null, module),
     variation: varied,
     corridorPrefix: `${module.id}/corridor-`,
   });
@@ -98,87 +92,33 @@ const moduleArea = (input: AreaInput, variation: boolean): GeneratedWorld => {
 };
 
 /**
- * The modules nobody imports first, then the rest (only cycles reach
- * those), each group in module order.
- */
-const rootsFirst = (graph: CodeGraph): readonly ModuleNode[] => {
-  const imported = new Set(
-    graph.modules.flatMap((module) => moduleLinks(graph, module))
-  );
-  return [
-    ...graph.modules.filter((module) => !imported.has(module.id)),
-    ...graph.modules.filter((module) => imported.has(module.id)),
-  ];
-};
-
-/**
- * Modules the entry cannot reach by following imports, so that its hub
- * gets a module portal to them: roots first, each one only if no earlier
- * one already leads there.
- */
-const straysFrom = (graph: CodeGraph, entry: ModuleNode): readonly string[] => {
-  const byId = new Map(graph.modules.map((module) => [module.id, module]));
-  const reached = new Set<string>();
-  const reach = (id: string) => {
-    const queue = [id];
-    reached.add(id);
-    // for...of sees ids pushed while iterating, so this is a plain BFS.
-    for (const current of queue) {
-      const module = byId.get(current);
-      for (const next of module === undefined
-        ? []
-        : moduleLinks(graph, module)) {
-        if (!reached.has(next)) {
-          reached.add(next);
-          queue.push(next);
-        }
-      }
-    }
-  };
-  reach(entry.id);
-  const strays: string[] = [];
-  for (const module of rootsFirst(graph)) {
-    if (!reached.has(module.id)) {
-      strays.push(module.id);
-      reach(module.id);
-    }
-  }
-  return strays;
-};
-
-/**
- * The code graph as areas, one per module, each laid out on its own and set
- * apart from the others, joined by module and call portals. The entry is
- * the first module nobody imports; its hub also leads to every module the
- * imports from it do not reach, so every area can be walked to.
+ * The code graph as areas: the repository entrance first, then one per
+ * module, each laid out on its own and set apart from the others, joined
+ * by module and call portals. The player starts in the entrance, whose
+ * module portals lead to the entry modules (`entryModules`), from which
+ * imports reach every other module.
  */
 const generateCodeWorld = (
   graph: CodeGraph,
   seed: number,
   { variation = true }: { readonly variation?: boolean } = {}
 ): AreaWorld => {
-  // The first module nobody imports, or the first one when all are (a cycle).
-  const entry = rootsFirst(graph)[0];
-  if (entry === undefined) {
+  if (graph.modules.length === 0) {
     throw new Error("A code graph needs at least one module");
   }
-  const strays = straysFrom(graph, entry);
-  return assembleAreas(
+  const entrance = generateWorld({
     seed,
-    entry.id,
-    graph.modules.map((module) => ({
+    graph: entranceGraph(graph, entryModules(graph)),
+    variation: false,
+    corridorPrefix: `${ENTRANCE_ID}/corridor-`,
+  });
+  return assembleAreas(seed, ENTRANCE_ID, [
+    { id: ENTRANCE_ID, world: entrance },
+    ...graph.modules.map((module) => ({
       id: module.id,
-      world: moduleArea(
-        {
-          graph,
-          module,
-          seed,
-          extraLinks: module === entry ? strays : [],
-        },
-        variation
-      ),
-    }))
-  );
+      world: moduleArea({ graph, module, seed }, variation),
+    })),
+  ]);
 };
 
 export { generateCodeWorld };

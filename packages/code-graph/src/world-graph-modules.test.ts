@@ -94,7 +94,7 @@ describe("toWorldGraph across modules", () => {
     expect(moduleLinks(graph, barrel)).toEqual(["lib/a.ts", "lib/b.ts"]);
   });
 
-  it("links extra modules too, but never a module to itself", () => {
+  it("never links a module to itself or to a file outside the graph", () => {
     const graph = fixtureGraph(
       {
         path: "a.ts",
@@ -103,15 +103,11 @@ describe("toWorldGraph across modules", () => {
       },
       { path: "b.ts", functions: [] }
     );
-    expect(toWorldGraph(graph).portals?.map(shape)).toEqual([
+    const world = toWorldGraph(graph);
+    expect(world.portals?.map(shape)).toEqual([
       returnShape("a.ts::one", "a.ts"),
     ]);
-    const linked = toWorldGraph(graph, new Set(), null, graph.modules[0], [
-      "b.ts",
-      "a.ts",
-    ]);
-    expect(linked.external).toEqual(["b.ts"]);
-    expect(() => validateGraph(linked)).not.toThrow();
+    expect(world.external).toBeUndefined();
   });
 
   it("spreads the module portals of a file importing many along its hubs", () => {

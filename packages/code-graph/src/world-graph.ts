@@ -396,8 +396,6 @@ const moduleWorld = (
   };
 };
 
-const EMPTY_LINKS: readonly string[] = [];
-
 /**
  * The spatial grammar for one module (the first by default): one cluster
  * per function (a column of flow rooms with a return portal at its end),
@@ -406,8 +404,8 @@ const EMPTY_LINKS: readonly string[] = [];
  * roots through the rooms' ports, a call portal for every other resolved
  * call, and a closed marker in every room holding calls the world cannot
  * follow (ambiguous, dynamic, external or unresolved; never a portal to a
- * guess). The hub holds a module portal to every module it imports (and to
- * each of `extraLinks`). Portals into other modules lead to units of their
+ * guess). The hub holds a module portal to every module it imports or
+ * re-exports from. Portals into other modules lead to units of their
  * areas, listed in `external`; the hub is the start room. Edges in
  * `portalOnly` (`source->target`) never become doors. A `seed` varies the
  * widths of columns and hubs, never what is connected; null keeps them plain.
@@ -416,15 +414,12 @@ const toWorldGraph = (
   graph: CodeGraph,
   portalOnly: ReadonlySet<string> = new Set(),
   seed: number | null = null,
-  module: ModuleNode | undefined = graph.modules[0],
-  extraLinks: readonly string[] = EMPTY_LINKS
+  module: ModuleNode | undefined = graph.modules[0]
 ): WorldGraph => {
   if (module === undefined) {
     return { rooms: [], connections: [], portals: [] };
   }
-  const links = [
-    ...new Set([...moduleLinks(graph, module), ...extraLinks]),
-  ].filter((id) => id !== module.id);
+  const links = moduleLinks(graph, module);
   const world = moduleWorld(graph, module, links.length, portalOnly, seed);
   const pathOf = (id: string): string =>
     graph.modules.find((candidate) => candidate.id === id)?.path ?? id;
@@ -462,4 +457,4 @@ const toWorldGraph = (
   };
 };
 
-export { edgeKey, toWorldGraph };
+export { edgeKey, linksOn, MODULE_PORTALS_PER_HUB, toWorldGraph };

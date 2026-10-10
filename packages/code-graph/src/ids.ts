@@ -267,6 +267,17 @@ const parsePortalId = (id: string): PortalRef | null => {
 const hubModuleId = (roomId: string): string => roomId.replace(/#\d+$/, "");
 
 /**
+ * The repository entrance: its area and its first hub (more chain on as
+ * `//entrance#2`). `normalisePath` never yields `//`, so no module id, and
+ * no id built on one, can equal it, whatever the files are called.
+ */
+const ENTRANCE_ID = "//entrance";
+
+/** Whether a room is one of the entrance's hubs. */
+const isEntranceHub = (roomId: string): boolean =>
+  hubModuleId(roomId) === ENTRANCE_ID;
+
+/**
  * Keeps qualified names unique within a module: the first `foo` stays `foo`,
  * the next become `foo~2`, `foo~3`, in the order they are asked for.
  */
@@ -282,9 +293,11 @@ const uniqueNames = (): ((qualifiedName: string) => string) => {
 export {
   callPortalId,
   callSiteId,
+  ENTRANCE_ID,
   flowNodeId,
   functionId,
   hubModuleId,
+  isEntranceHub,
   isFunctionId,
   isRelativeSpecifier,
   jumpPortalId,

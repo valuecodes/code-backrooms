@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   callPortalId,
   callSiteId,
+  ENTRANCE_ID,
   flowNodeId,
   functionId,
+  isEntranceHub,
   isFunctionId,
   isRelativeSpecifier,
   jumpPortalId,
@@ -30,6 +32,23 @@ describe("normalisePath", () => {
     ["/abs//a.ts", "/abs/a.ts"],
   ])("%s → %s", (path, expected) => {
     expect(normalisePath(path)).toBe(expected);
+  });
+
+  it.each(["//entrance", "///entrance", "./entrance", "\\\\entrance"])(
+    "never yields the entrance id from %s",
+    (path) => {
+      expect(normalisePath(path).startsWith("//")).toBe(false);
+    }
+  );
+});
+
+describe("isEntranceHub", () => {
+  it("tells the entrance and its chain from modules", () => {
+    expect(isEntranceHub(ENTRANCE_ID)).toBe(true);
+    expect(isEntranceHub(`${ENTRANCE_ID}#2`)).toBe(true);
+    expect(isEntranceHub("entrance")).toBe(false);
+    expect(isEntranceHub("entrance#2")).toBe(false);
+    expect(isEntranceHub(moduleId("//entrance"))).toBe(false);
   });
 });
 

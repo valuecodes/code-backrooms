@@ -1,12 +1,13 @@
 import { buildCodeGraph } from "@repo/parser";
 import type { RoomData } from "@repo/types";
+import { checkAreas } from "@repo/world-generator/area-checks";
 import { roomBounds } from "@repo/world-generator/geometry";
-import { checkLayout } from "@repo/world-generator/layout-checks";
 import { containsPoint } from "@repo/world-generator/locate";
 import { createNavigator } from "@repo/world-generator/navigation";
 import { describe, expect, it } from "vitest";
 
 import {
+  areasFromCode,
   codeGraphOf,
   describeRoom,
   promptOf,
@@ -253,9 +254,8 @@ describe("loops", () => {
       },
     ]);
     for (let seed = 1; seed <= 30; seed += 1) {
-      const generated = worldFromCode(codeGraph, seed);
       expect(
-        checkLayout(generated.graph, generated.layout),
+        checkAreas(areasFromCode(codeGraph, seed)),
         `seed ${seed}`
       ).toEqual([]);
     }

@@ -69,11 +69,17 @@ const subjectOf = (
 ): RoomSubject | null =>
   codeGraph === null ? null : roomSubject(codeGraph, roomId);
 
-/** `Class.method()` for a function or one of its rooms, the path for a hub, the id otherwise. */
+/**
+ * `Class.method()` for a function or one of its rooms, the path for a hub,
+ * the repository's name for the entrance, the id otherwise.
+ */
 const labelOf = (codeGraph: CodeGraph | null, roomId: string): string => {
   const subject = subjectOf(codeGraph, roomId);
   if (subject === null) {
     return roomId;
+  }
+  if (subject.kind === "entrance") {
+    return subject.name;
   }
   return subject.kind === "module"
     ? subject.module.path
@@ -81,14 +87,17 @@ const labelOf = (codeGraph: CodeGraph | null, roomId: string): string => {
 };
 
 /**
- * The HUD line for a room: the file for a hub, `file · Class.method()` for
- * a function, `file · Class.method() · await fetch(…)` for a room of its
+ * The HUD line for a room: the repository's name in the entrance, the file
+ * for a hub, `file · Class.method()` for a function, `file · Class.method() · await fetch(…)` for a room of its
  * flow, and the raw id for anything else (corridors, preset rooms).
  */
 const describeRoom = (codeGraph: CodeGraph | null, roomId: string): string => {
   const subject = subjectOf(codeGraph, roomId);
   if (subject === null) {
     return roomId;
+  }
+  if (subject.kind === "entrance") {
+    return subject.name;
   }
   if (subject.kind === "module") {
     return subject.module.path;

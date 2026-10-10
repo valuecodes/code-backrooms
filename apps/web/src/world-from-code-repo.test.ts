@@ -1,4 +1,8 @@
-import { modulePortalId, parseFlowNodeId } from "@repo/code-graph/ids";
+import {
+  ENTRANCE_ID,
+  modulePortalId,
+  parseFlowNodeId,
+} from "@repo/code-graph/ids";
 import type { Point } from "@repo/types";
 import { mergeAreas } from "@repo/world-generator/areas";
 import { roomBounds } from "@repo/world-generator/geometry";
@@ -7,7 +11,13 @@ import { createNavigator } from "@repo/world-generator/navigation";
 import { describe, expect, it } from "vitest";
 
 import { sourceView } from "./source-view";
-import { areasFromCode, codeGraphOf, promptOf } from "./world-from-code";
+import {
+  areasFromCode,
+  breadcrumbOf,
+  codeGraphOf,
+  describeRoom,
+  promptOf,
+} from "./world-from-code";
 
 /** The repo example, parsed, or the test fails with the parser's message. */
 const parsed = () => {
@@ -55,15 +65,48 @@ describe("the repo example", () => {
     ]);
   });
 
-  it("lays each file out as its own area and starts in src/index.ts", () => {
-    expect(areas.areas.map((area) => area.id)).toEqual(
-      codeGraph.modules.map((module) => module.id)
+  it("lays each file out as its own area and starts in the entrance", () => {
+    expect(areas.areas.map((area) => area.id)).toEqual([
+      ENTRANCE_ID,
+      ...codeGraph.modules.map((module) => module.id),
+    ]);
+    expect(areas.entry).toBe(ENTRANCE_ID);
+    expect(areas.areas.find((area) => area.id === ENTRANCE_ID)?.offset).toEqual(
+      { x: 0, z: 0 }
     );
-    expect(areas.entry).toBe("src/index.ts");
-    expect(
-      areas.areas.find((area) => area.id === "src/index.ts")?.offset
-    ).toEqual({ x: 0, z: 0 });
-    expect(world.graph.start).toBe("src/index.ts");
+    expect(world.graph.start).toBe(ENTRANCE_ID);
+    expect(world.layout.startRoomId).toBe(ENTRANCE_ID);
+  });
+
+  it("leads from the entrance to src/index.ts alone, named after src", () => {
+    const fromEntrance = world.built.portals.filter(
+      ({ portal }) => portal.from === ENTRANCE_ID
+    );
+    expect(fromEntrance.map(({ portal }) => prompt(portal.id))).toEqual([
+      "→ src/index.ts",
+    ]);
+    expect(landsIn("src/index.ts", fromEntrance[0]?.arrival?.position)).toBe(
+      "src/index.ts"
+    );
+    expect(describeRoom(codeGraph, ENTRANCE_ID)).toBe("src");
+    expect(breadcrumbOf(codeGraph, [], ENTRANCE_ID)).toBe("src");
+    expect(sourceView(codeGraph, sources, ENTRANCE_ID)).toBeNull();
+  });
+
+  it("returns home to the entrance with an empty stack", () => {
+    const navigator = createNavigator(world);
+    const portal = modulePortalId(ENTRANCE_ID, "src/index.ts");
+    const entered = navigator.step(navigator.initial, {
+      type: "portal",
+      portalId: portal,
+    });
+    expect(entered.state).toEqual({ frames: [], roomId: "src/index.ts" });
+    const home = navigator.step(entered.state, { type: "home" });
+    expect(home.state).toEqual({ frames: [], roomId: ENTRANCE_ID });
+    expect(home.teleport).toEqual({
+      position: world.built.start,
+      facing: world.built.facing,
+    });
   });
 
   it("leads from a hub to the files it imports", () => {

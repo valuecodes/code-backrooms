@@ -18,16 +18,13 @@ const worldOf = (name: ExampleName, seed = 1): GeneratedWorld => {
 const builtOf = (name: ExampleName, seed = 1): BuiltWorld =>
   worldOf(name, seed).built;
 
-const demoWorld = worldOf("demo");
-const demo = demoWorld.built;
+const demo = builtOf("demo");
 
-/** Where the player starts in `demo`. */
-const startRoom = () => {
-  const found = demo.rooms.find(
-    ({ room }) => room.id === demoWorld.layout.startRoomId
-  );
+/** The hub of `demo.ts`, with doors to its functions. */
+const hubRoom = () => {
+  const found = demo.rooms.find(({ room }) => room.id === "demo.ts");
   if (found === undefined) {
-    throw new Error("no start room");
+    throw new Error("no demo.ts hub");
   }
   return found;
 };
@@ -69,7 +66,7 @@ describe("mapModel", () => {
   });
 
   it("shows the room stood in and, hollow, the rooms behind its doors", () => {
-    const { room } = startRoom();
+    const { room } = hubRoom();
     const model = mapModel(demo, new Set([room.id]), room.id);
     const neighbours = new Set(room.doors.map((door) => door.targetRoomId));
     expect(neighbours.size).toBeGreaterThan(0);
@@ -87,7 +84,7 @@ describe("mapModel", () => {
   });
 
   it("puts the doors at the centres of the openings, each once", () => {
-    const start = startRoom();
+    const start = hubRoom();
     const { room } = start;
     const alone = mapModel(demo, new Set([room.id]), room.id);
     expect(alone.doors.map((door) => door.point)).toEqual(

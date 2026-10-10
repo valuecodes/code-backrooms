@@ -29,8 +29,8 @@ import {
 
 type Generated = {
   readonly world: GeneratedWorld | null;
-  /** Areas the world was joined from: one per module, one for other worlds. */
-  readonly areas: number;
+  /** Modules of a code world, each its own area; one for other worlds. */
+  readonly modules: number;
   readonly codeGraph: CodeGraph | null;
   /** Graph connections and portals the layout could not realise, one line each. */
   readonly warnings: readonly string[];
@@ -55,18 +55,19 @@ const feed = createPoseFeed();
 
 const generate = (
   seed: number
-): { readonly world: GeneratedWorld; readonly areas: number } => {
+): { readonly world: GeneratedWorld; readonly modules: number } => {
   const codeGraph = code?.codeGraph ?? null;
   if (codeGraph !== null) {
     const areas = areasFromCode(codeGraph, seed);
-    return { world: mergeAreas(areas), areas: areas.areas.length };
+    // The entrance is an area but not a module.
+    return { world: mergeAreas(areas), modules: codeGraph.modules.length };
   }
   const world = generateWorld({
     seed,
     roomCount: initial.rooms,
     graph: initial.preset === null ? undefined : presets[initial.preset],
   });
-  return { world, areas: 1 };
+  return { world, modules: 1 };
 };
 
 /**
@@ -79,14 +80,14 @@ const useGeneratedWorld = (seed: number): Generated =>
     if (code !== null && code.error !== null) {
       return {
         world: null,
-        areas: 0,
+        modules: 0,
         codeGraph,
         warnings: [],
         error: code.error,
       };
     }
     try {
-      const { world, areas } = generate(seed);
+      const { world, modules } = generate(seed);
       // Shown in the HUD, so the console stays quiet.
       const warnings = [
         ...world.layout.unresolved.map(
@@ -96,11 +97,11 @@ const useGeneratedWorld = (seed: number): Generated =>
           ({ id }) => `${id} has no wall space`
         ),
       ];
-      return { world, areas, codeGraph, warnings, error: null };
+      return { world, modules, codeGraph, warnings, error: null };
     } catch (error) {
       return {
         world: null,
-        areas: 0,
+        modules: 0,
         codeGraph,
         warnings: [],
         error: String(error),
@@ -241,7 +242,7 @@ const App = () => {
         locked={locked}
         seed={seed}
         rooms={generated.world?.graph.rooms.length ?? 0}
-        modules={generated.areas}
+        modules={generated.modules}
         preset={initial.preset}
         code={initial.code}
         place={place}
