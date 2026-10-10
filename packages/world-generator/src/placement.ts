@@ -156,11 +156,13 @@ class Placement {
   /**
    * `reserved`: every id the graph uses (cluster rooms included), so
    * generated ids never shadow one. `portals`: the graph's, which a
-   * cluster's pre-placed portals must be among.
+   * cluster's pre-placed portals must be among. `corridorPrefix` starts
+   * every corridor id, so areas built apart keep distinct ones.
    */
   constructor(
     private readonly reserved: ReadonlySet<string>,
-    private readonly portals: ReadonlyMap<string, Portal>
+    private readonly portals: ReadonlyMap<string, Portal>,
+    private readonly corridorPrefix = "corridor-"
   ) {}
 
   /** `prefix`, suffixed until it is neither a graph id nor placed. */
@@ -300,7 +302,7 @@ class Placement {
 
   corridor(from: Endpoint, wall: WallSide, rect: Rect, to: Endpoint): void {
     this.corridors += 1;
-    const id = this.freeId(`corridor-${this.corridors}`);
+    const id = this.freeId(`${this.corridorPrefix}${this.corridors}`);
     this.add(id, "corridor", rect, { from: from.unit, to: to.unit });
     this.connect(from.room, wall, id);
     this.connect(id, wall, to.room);

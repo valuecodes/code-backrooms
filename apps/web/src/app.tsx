@@ -5,6 +5,7 @@ import { Player } from "@repo/renderer/player";
 import { World } from "@repo/renderer/world";
 import type { GeneratedWorld } from "@repo/types";
 import { generateWorld } from "@repo/world-generator";
+import { mergeAreas } from "@repo/world-generator/areas";
 import type { Target } from "@repo/world-generator/interaction";
 import { presets } from "@repo/world-generator/presets";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -18,16 +19,18 @@ import { SourcePanel } from "~/source-panel";
 import { sourceView } from "~/source-view";
 import { useNavigation } from "~/use-navigation";
 import {
+  areasFromCode,
   breadcrumbOf,
   codeGraphOf,
   describeRoom,
   promptOf,
   sourceSeedOf,
-  worldFromCode,
 } from "~/world-from-code";
 
 type Generated = {
   readonly world: GeneratedWorld | null;
+  /** Areas the world was joined from: one per module, one for other worlds. */
+  readonly areas: number;
   readonly codeGraph: CodeGraph | null;
   /** Graph connections and portals the layout could not realise, one line each. */
   readonly warnings: readonly string[];
@@ -50,16 +53,20 @@ const startSeed = initialSeed(
 // Fed from the render loop and read only by the open map, never by the app.
 const feed = createPoseFeed();
 
-const generate = (seed: number): GeneratedWorld => {
+const generate = (
+  seed: number
+): { readonly world: GeneratedWorld; readonly areas: number } => {
   const codeGraph = code?.codeGraph ?? null;
   if (codeGraph !== null) {
-    return worldFromCode(codeGraph, seed);
+    const areas = areasFromCode(codeGraph, seed);
+    return { world: mergeAreas(areas), areas: areas.areas.length };
   }
-  return generateWorld({
+  const world = generateWorld({
     seed,
     roomCount: initial.rooms,
     graph: initial.preset === null ? undefined : presets[initial.preset],
   });
+  return { world, areas: 1 };
 };
 
 /**
@@ -70,10 +77,16 @@ const useGeneratedWorld = (seed: number): Generated =>
   useMemo(() => {
     const codeGraph = code?.codeGraph ?? null;
     if (code !== null && code.error !== null) {
-      return { world: null, codeGraph, warnings: [], error: code.error };
+      return {
+        world: null,
+        areas: 0,
+        codeGraph,
+        warnings: [],
+        error: code.error,
+      };
     }
     try {
-      const world = generate(seed);
+      const { world, areas } = generate(seed);
       // Shown in the HUD, so the console stays quiet.
       const warnings = [
         ...world.layout.unresolved.map(
@@ -83,9 +96,15 @@ const useGeneratedWorld = (seed: number): Generated =>
           ({ id }) => `${id} has no wall space`
         ),
       ];
-      return { world, codeGraph, warnings, error: null };
+      return { world, areas, codeGraph, warnings, error: null };
     } catch (error) {
-      return { world: null, codeGraph, warnings: [], error: String(error) };
+      return {
+        world: null,
+        areas: 0,
+        codeGraph,
+        warnings: [],
+        error: String(error),
+      };
     }
   }, [seed]);
 
@@ -222,6 +241,7 @@ const App = () => {
         locked={locked}
         seed={seed}
         rooms={generated.world?.graph.rooms.length ?? 0}
+        modules={generated.areas}
         preset={initial.preset}
         code={initial.code}
         place={place}

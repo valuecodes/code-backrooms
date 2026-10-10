@@ -1,16 +1,13 @@
 import type {
   ClusterPortal,
   Connection,
-  GeneratedWorld,
   GraphRoom,
   Port,
   Portal,
   RoomCluster,
   WorldGraph,
 } from "@repo/types";
-import { generateWorld } from "@repo/world-generator";
 import { FLOW_TOP_MIN_WIDTH } from "@repo/world-generator/config";
-import { LayoutError } from "@repo/world-generator/layout";
 
 import type {
   CallEdge,
@@ -20,6 +17,7 @@ import type {
   ModuleNode,
 } from "./code-graph";
 import { layoutFlow, planFlow } from "./flow-layout";
+import { modulePortalId, resolveSpecifier } from "./ids";
 import { hubDimensions } from "./room-size";
 import { columnJitter, hubRatio } from "./variation";
 
@@ -121,18 +119,16 @@ const MAX_HUB_DOORS = 5;
 
 /**
  * Splits the roots over hubs so that no hub exceeds MAX_HUB_DOORS once its
- * links to the previous and next hub (and `extraLinks` on the first) count.
- * Always at least one group, possibly empty.
+ * links to the previous and next hub count. Module portals are not doors,
+ * so they do not count. Always at least one group, possibly empty.
  */
 const hubGroups = (
-  attached: readonly FunctionNode[],
-  extraLinks: number
+  attached: readonly FunctionNode[]
 ): readonly (readonly FunctionNode[])[] => {
   const groups: (readonly FunctionNode[])[] = [];
   let remaining = attached;
   do {
-    const links =
-      (groups.length > 0 ? 1 : 0) + (groups.length === 0 ? extraLinks : 0);
+    const links = groups.length > 0 ? 1 : 0;
     let take = Math.max(1, MAX_HUB_DOORS - links);
     if (remaining.length > take) {
       take = Math.max(1, take - 1);
@@ -247,10 +243,11 @@ const sitesByCaller = (
   return groups;
 };
 
+/** `links`: module portals on the first hub, which widen it but are not doors. */
 const moduleWorld = (
   graph: CodeGraph,
   module: ModuleNode,
-  extraHubDegree: number,
+  links: number,
   portalOnly: ReadonlySet<string>,
   seed: number | null
 ): ModuleWorld => {
@@ -326,7 +323,7 @@ const moduleWorld = (
     jumps.push(...realised.jumps);
     markers.push(...realised.markers);
   }
-  const groups = hubGroups(attached, extraHubDegree);
+  const groups = hubGroups(attached);
   const hubs = groups.map((group, index): GraphRoom => {
     const chain = (index > 0 ? 1 : 0) + (index < groups.length - 1 ? 1 : 0);
     const id = index === 0 ? module.id : `${module.id}#${index + 1}`;
@@ -335,7 +332,7 @@ const moduleWorld = (
       label: module.path,
       hub: true,
       ...hubDimensions(
-        group.length + chain + (index === 0 ? extraHubDegree : 0),
+        group.length + chain + (index === 0 ? links : 0),
         hubRatio(seed, id)
       ),
     };
@@ -370,119 +367,95 @@ const moduleWorld = (
 };
 
 /**
- * The spatial grammar: one cluster per function (a column of flow rooms
- * with a return portal at its end), one hub per module that opens onto the
- * module's roots (more hubs chained when there are many), a door for each
- * call on the breadth-first tree from those roots through the rooms' ports,
- * a call portal for every other resolved call, and a closed marker in every
- * room holding calls the world cannot follow (ambiguous, dynamic,
- * external or unresolved; never a portal to a guess). The entrances of
- * successive modules are chained too, so the world is one connected
- * component, and the first module's entrance is the start room. Edges in
+ * The files of the graph `module` imports (its linked imports) and then
+ * the ones it re-exports from (`export … from`, so a barrel leads on to
+ * what it gathers), each once, in source order, never itself.
+ */
+const moduleLinks = (
+  graph: CodeGraph,
+  module: ModuleNode
+): readonly string[] => {
+  const ids = new Set(graph.modules.map((candidate) => candidate.id));
+  const links: string[] = [];
+  const reExported = module.exports.flatMap(({ specifier }) =>
+    specifier === null ? [] : [resolveSpecifier(module.id, specifier, ids)]
+  );
+  for (const moduleId of [
+    ...module.imports.map((record) => record.moduleId),
+    ...reExported,
+  ]) {
+    if (
+      moduleId !== null &&
+      moduleId !== module.id &&
+      ids.has(moduleId) &&
+      !links.includes(moduleId)
+    ) {
+      links.push(moduleId);
+    }
+  }
+  return links;
+};
+
+const EMPTY_LINKS: readonly string[] = [];
+
+/**
+ * The spatial grammar for one module (the first by default): one cluster
+ * per function (a column of flow rooms with a return portal at its end),
+ * a hub that opens onto the module's roots (more hubs chained when there
+ * are many), a door for each call on the breadth-first tree from those
+ * roots through the rooms' ports, a call portal for every other resolved
+ * call, and a closed marker in every room holding calls the world cannot
+ * follow (ambiguous, dynamic, external or unresolved; never a portal to a
+ * guess). The hub holds a module portal to every module it imports (and to
+ * each of `extraLinks`). Portals into other modules lead to units of their
+ * areas, listed in `external`; the hub is the start room. Edges in
  * `portalOnly` (`source->target`) never become doors. A `seed` varies the
  * widths of columns and hubs, never what is connected; null keeps them plain.
  */
 const toWorldGraph = (
   graph: CodeGraph,
   portalOnly: ReadonlySet<string> = new Set(),
-  seed: number | null = null
+  seed: number | null = null,
+  module: ModuleNode | undefined = graph.modules[0],
+  extraLinks: readonly string[] = EMPTY_LINKS
 ): WorldGraph => {
-  const rooms: GraphRoom[] = [];
-  const connections: Connection[] = [];
-  const portals: Portal[] = [];
-  let previousHub: string | null = null;
-  graph.modules.forEach((module, index) => {
-    const chained =
-      (index > 0 ? 1 : 0) + (index < graph.modules.length - 1 ? 1 : 0);
-    const world = moduleWorld(graph, module, chained, portalOnly, seed);
-    rooms.push(...world.hubs, ...world.rooms);
-    const entrance = world.hubs[0];
-    if (previousHub !== null && entrance !== undefined) {
-      connections.push({ from: previousHub, to: entrance.id });
-    }
-    connections.push(...world.connections);
-    portals.push(...world.portals);
-    previousHub = entrance?.id ?? previousHub;
-  });
-  const start = graph.modules[0]?.id;
-  return start === undefined
-    ? { rooms, connections, portals }
-    : { rooms, connections, portals, start };
-};
-
-type Plain = {
-  readonly world: GeneratedWorld;
-  /** The call edges demoted to portals, which fix the door/portal plan. */
-  readonly portalOnly: ReadonlySet<string>;
-};
-
-/**
- * The plain world: a call door the layout cannot place is demoted to a
- * portal and the layout tried again, until everything fits.
- */
-const plainWorld = (graph: CodeGraph, seed: number): Plain => {
-  const portalOnly = new Set<string>();
-  for (;;) {
-    try {
-      const world = generateWorld({
-        seed,
-        graph: toWorldGraph(graph, portalOnly),
-        variation: false,
-      });
-      return { world, portalOnly };
-    } catch (error) {
-      const failed =
-        error instanceof LayoutError && error.connection.kind === "call"
-          ? edgeKey(error.connection.from, error.connection.to)
-          : null;
-      if (failed === null || portalOnly.has(failed)) {
-        throw error;
-      }
-      portalOnly.add(failed);
-    }
+  if (module === undefined) {
+    return { rooms: [], connections: [], portals: [] };
   }
+  const links = [
+    ...new Set([...moduleLinks(graph, module), ...extraLinks]),
+  ].filter((id) => id !== module.id);
+  const world = moduleWorld(graph, module, links.length, portalOnly, seed);
+  const pathOf = (id: string): string =>
+    graph.modules.find((candidate) => candidate.id === id)?.path ?? id;
+  const rooms = [...world.hubs, ...world.rooms];
+  const portals = [
+    ...world.portals,
+    ...links.map((to): Portal => ({
+      id: modulePortalId(module.id, to),
+      kind: "module",
+      from: module.id,
+      to,
+      label: pathOf(to),
+    })),
+  ];
+  // Only calls and module portals leave the module; the rest stay inside.
+  const ids = new Set(rooms.map((room) => room.id));
+  const external = [
+    ...new Set(
+      portals
+        .filter(({ kind }) => kind === "call" || kind === "module")
+        .map((portal) => portal.to)
+        .filter((to) => !ids.has(to))
+    ),
+  ].toSorted();
+  return {
+    rooms,
+    connections: world.connections,
+    portals,
+    start: module.id,
+    ...(external.length > 0 ? { external } : {}),
+  };
 };
 
-/** Ids of what a layout left out: unresolved connections, unplaced portals. */
-const gapsOf = ({ layout }: GeneratedWorld): string =>
-  JSON.stringify([
-    ...layout.unresolved.map(({ from, to }) => `${from}->${to}`).toSorted(),
-    ...layout.unplacedPortals.map(({ id }) => id).toSorted(),
-  ]);
-
-/**
- * The code graph laid out; the seed only changes the placement. A call
- * door the layout cannot place (a call inside a lane offers one wall only,
- * and that side may be taken) is demoted to a portal and the layout tried
- * again, so a program that parses always becomes a world: tree calls are
- * walkable where the walls allow, the rest teleport. `variation` (on by
- * default) lets the seed vary proportions too: column and hub widths here,
- * corridor widths in the layout. Which calls are doors is decided on the
- * plain world first and kept; a varied layout that cannot realise exactly
- * that plan gives way to the plain world, so variation never changes what
- * is connected.
- */
-const generateCodeWorld = (
-  graph: CodeGraph,
-  seed: number,
-  { variation = true }: { readonly variation?: boolean } = {}
-): GeneratedWorld => {
-  const plain = plainWorld(graph, seed);
-  if (!variation) {
-    return plain.world;
-  }
-  try {
-    const varied = generateWorld({
-      seed,
-      graph: toWorldGraph(graph, plain.portalOnly, seed),
-    });
-    return gapsOf(varied) === gapsOf(plain.world) ? varied : plain.world;
-  } catch (error) {
-    if (error instanceof LayoutError) {
-      return plain.world;
-    }
-    throw error;
-  }
-};
-
-export { generateCodeWorld, toWorldGraph };
+export { edgeKey, moduleLinks, toWorldGraph };

@@ -100,13 +100,21 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   marker: a boarded frame whose prompt names the calls (`closed · fetch(…)
 external, x.render(…) ambiguous: A.render() | B.render()`). Choosing
   between an ambiguous call's candidates is left for Phase 6.
-- Milestone 14 (current): cross-file calls. An example may hold several
+- Milestone 14: cross-file calls. An example may hold several
   files (`?code=repo`, a seven-file repository); the parser links calls
   through relative imports, barrels and re-exports, so a call into another
   file is a portal into that file's function and Backspace returns across
   files. A call into a package stays a marker that names it
-  (`closed · format(…) package "node:util"`). Modules are sorted by path; the
-  world still starts at the first one's hub until the repository entrance.
+  (`closed · format(…) package "node:util"`). Modules are sorted by path.
+- Milestone 15 (current): module areas. Every file is laid out on its own,
+  as an area 32 m from the next (out of sight past the fog), and areas are
+  joined by portals only: a call portal into another file's function, and a
+  green module portal on a hub to every file it imports or re-exports from
+  (`→ src/server.ts`), which empties the breadcrumb like walking into a hub.
+  The world starts in the first file nobody imports (`src/index.ts` in
+  `repo`), whose hub also leads to any file its imports never reach; the HUD
+  counts the modules. Areas are still built all at once and merged for the
+  renderer; generating them on approach comes later.
 
 ---
 
@@ -185,7 +193,9 @@ Code → graph → layout → rendering, each in its own package:
   ports on its side walls, `./flow-layout`), one hub room per file, one call
   door per function (a breadth-first tree over the calls through those
   ports) and a portal for every other call, plus a return portal at the end
-  of each column. `./subjects` maps room and portal ids back to the code.
+  of each column. Each file is an area of its own (`./module-areas`), joined
+  to the others by call and module portals. `./subjects` maps room and
+  portal ids back to the code.
 - `@repo/types` holds the world data shapes for the three layers below.
 - `@repo/world-generator` turns a `WorldGraph` (rooms, some with a `cluster`
   of pre-placed rooms, connections, portals) into a `WorldLayout` (rooms and
@@ -203,7 +213,8 @@ Code → graph → layout → rendering, each in its own package:
 
 The example is parsed once at startup (a syntax error is shown in the HUD),
 and the world is built in a `useMemo` keyed on the seed, so it never
-regenerates while the player moves.
+regenerates while the player moves. A code world's areas are merged into one
+`GeneratedWorld` (`mergeAreas`) for the renderer, the navigator and the map.
 
 ---
 

@@ -10,6 +10,7 @@ import {
   jumpPortalId,
   markerPortalId,
   moduleId,
+  modulePortalId,
   normalisePath,
   parseFlowNodeId,
   parsePortalId,
@@ -131,6 +132,17 @@ describe("portal ids", () => {
       kind: "marker",
       roomId: "m.ts::f@12:step",
     });
+  });
+
+  it("round-trips module portals at the first >", () => {
+    const portal = modulePortalId("src/index.ts", "src/a>b.ts");
+    expect(portal).toBe("module:src/index.ts>src/a>b.ts");
+    expect(parsePortalId(portal)).toEqual({
+      kind: "module",
+      from: "src/index.ts",
+      to: "src/a>b.ts",
+    });
+    expect(parsePortalId("module:src/index.ts")).toBeNull();
   });
 
   it("rejects ids that are not portals", () => {

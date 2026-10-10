@@ -1,4 +1,4 @@
-import { generateCodeWorld } from "@repo/code-graph/world-graph";
+import { generateCodeWorld } from "@repo/code-graph/module-areas";
 import type { GeneratedWorld } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
@@ -44,7 +44,9 @@ describe("aesthetic variation", () => {
       for (let seed = 1; seed <= 10; seed += 1) {
         const on = generateCodeWorld(codeGraph, seed);
         const off = generateCodeWorld(codeGraph, seed, { variation: false });
-        expect(connectivity(on), `seed ${seed}`).toEqual(connectivity(off));
+        expect(on.areas.map(connectivity), `seed ${seed}`).toEqual(
+          off.areas.map(connectivity)
+        );
       }
     }
   );

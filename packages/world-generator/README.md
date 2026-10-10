@@ -14,7 +14,8 @@ list of failures for tests), `./geometry` (`buildWorld`), `./collision`,
 `./locate` (`roomRects`, `roomAt`: which room a point is in), `./navigation`
 (the exploration stack), `./interaction` (what the player can step into or is
 facing), `./random`, `./config`, `./presets` (hand-written graphs: `lobby`,
-`linear`, `branching`, `hub`, `cycle`).
+`linear`, `branching`, `hub`, `cycle`), `./areas` (`assembleAreas`,
+`mergeAreas`), `./area-checks` (`checkAreas`).
 
 Supported graphs: unique ids, dimensions on the 0.5 m grid and at least 2 m,
 undirected connections without duplicates, one connected component. Rooms
@@ -69,3 +70,21 @@ portal leads to a room of the same cluster (`validateGraph` and
 `validateCluster` check it, and count it as a way into that room); it lands
 in the room's centre facing the way on: its return portal, else its last
 doorway.
+
+Areas are worlds generated one at a time (one per module of a code world)
+and then set apart. Each is laid out round the origin with its own corridor
+ids (`generateWorld({ corridorPrefix })`, `corridor-` by default) and may
+lead elsewhere: `graph.external` lists units of other areas that its `call`
+and `module` portals may name (a `module` portal stands on a hub and leads
+to another hub; entering it empties the stack like entering a hub).
+`buildWorld(layout, external)` leaves such a portal's `arrival` null and
+lists every unit's landing in `built.entries`. `assembleAreas(seed, entry,
+parts)` packs the areas on shelves, the entry first at the origin, each
+other one 32 m beyond the last (past the fog) and rows 512 m wide, moves
+their layouts there and builds them again. `mergeAreas` joins them into one
+world for the renderer and `createNavigator`, cross-area arrivals resolved
+through `areaOf` and the target's `entries`; its graph has one component per
+area, so `checkLayout` does not apply to it. `checkAreas` does: every area's
+own `checkLayout`, ids unique across areas, areas 32 m apart, each start
+room at its offset, cross-area portals landing in their unit, and every area
+reachable from the entry over placed portals.

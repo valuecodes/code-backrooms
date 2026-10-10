@@ -20,7 +20,13 @@ type PortalsProps = {
 /** Keeps the void plane clear of the wall's inner face. */
 const LIFT = 0.01;
 
-const KINDS: readonly PortalKind[] = ["call", "return", "jump", "marker"];
+const KINDS: readonly PortalKind[] = [
+  "call",
+  "return",
+  "jump",
+  "marker",
+  "module",
+];
 
 /**
  * One plane per portal of a kind, standing on the wall's inner face and
@@ -87,6 +93,7 @@ const Portals = ({ portals }: PortalsProps) => {
     return: surfaces.voidReturn,
     jump: surfaces.voidJump,
     marker: surfaces.markerPanel,
+    module: surfaces.voidModule,
   } satisfies Record<PortalKind, unknown>;
   return (
     <group>

@@ -15,6 +15,8 @@ type GenerateWorldOptions = {
    * corridors 2 or 3 m wide). Defaults to on; off gives the plain layout.
    */
   readonly variation?: boolean;
+  /** Starts every corridor id; defaults to `corridor-`. */
+  readonly corridorPrefix?: string;
 };
 
 const DEFAULT_ROOM_COUNT = 15;
@@ -35,14 +37,16 @@ const generateWorld = ({
   roomCount = DEFAULT_ROOM_COUNT,
   graph,
   variation = true,
+  corridorPrefix,
 }: GenerateWorldOptions): GeneratedWorld => {
   const attempts = graph === undefined ? GRAPH_ATTEMPTS : 1;
   for (let attempt = 0; ; attempt += 1) {
     const source =
       graph ?? generateGraph({ seed: seed + attempt * 7919, roomCount });
     try {
-      const layout = generateLayout(source, seed, variation);
-      return { seed, graph: source, layout, built: buildWorld(layout) };
+      const layout = generateLayout(source, seed, variation, corridorPrefix);
+      const built = buildWorld(layout, new Set(source.external ?? []));
+      return { seed, graph: source, layout, built };
     } catch (error) {
       if (attempt + 1 >= attempts) {
         throw error;

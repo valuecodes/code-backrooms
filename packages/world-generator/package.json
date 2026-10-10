@@ -4,6 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/world-generator.ts",
+    "./area-checks": "./src/area-checks.ts",
+    "./areas": "./src/areas.ts",
     "./collision": "./src/collision.ts",
     "./config": "./src/config.ts",
     "./geometry": "./src/geometry.ts",

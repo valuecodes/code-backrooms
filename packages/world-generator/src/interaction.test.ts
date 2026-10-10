@@ -81,7 +81,10 @@ describe("portalToEnter", () => {
     const motion = { position, forward: intoWall, velocity: intoWall };
     expect(portalToEnter(world.built.portals, motion, false)).toBeNull();
     expect(inAnyTrigger(world.built.portals, position)).toBe(true);
-    const landing = portal.arrival.position;
+    const landing = portal.arrival?.position;
+    if (landing === undefined) {
+      throw new Error("The portal has no arrival");
+    }
     expect(inAnyTrigger(world.built.portals, landing)).toBe(false);
     expect(
       portalToEnter(

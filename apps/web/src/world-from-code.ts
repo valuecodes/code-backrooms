@@ -1,15 +1,16 @@
 import type { CodeGraph } from "@repo/code-graph";
 import { laneText, markerText } from "@repo/code-graph/flow-text";
 import { moduleId } from "@repo/code-graph/ids";
+import { generateCodeWorld } from "@repo/code-graph/module-areas";
 import {
   packageOf,
   portalSubject,
   roomSubject,
 } from "@repo/code-graph/subjects";
 import type { RoomSubject } from "@repo/code-graph/subjects";
-import { generateCodeWorld } from "@repo/code-graph/world-graph";
 import { buildCodeGraph, hashSource } from "@repo/parser";
-import type { GeneratedWorld } from "@repo/types";
+import type { AreaWorld, GeneratedWorld } from "@repo/types";
+import { mergeAreas } from "@repo/world-generator/areas";
 import type { Target } from "@repo/world-generator/interaction";
 import type { Frame } from "@repo/world-generator/navigation";
 
@@ -51,9 +52,16 @@ const codeGraphOf = (name: ExampleName): CodeResult => {
   }
 };
 
-/** Lays the code graph out; a call door that does not fit becomes a portal. */
-const worldFromCode = (codeGraph: CodeGraph, seed: number): GeneratedWorld =>
+/**
+ * Lays the code graph out as one area per module; a call door that does
+ * not fit becomes a portal.
+ */
+const areasFromCode = (codeGraph: CodeGraph, seed: number): AreaWorld =>
   generateCodeWorld(codeGraph, seed);
+
+/** The areas as one world, as the renderer and the navigator take it. */
+const worldFromCode = (codeGraph: CodeGraph, seed: number): GeneratedWorld =>
+  mergeAreas(areasFromCode(codeGraph, seed));
 
 const subjectOf = (
   codeGraph: CodeGraph | null,
@@ -146,6 +154,9 @@ const promptOf = (
   if (subject.kind === "call") {
     return `→ ${subject.callee.qualifiedName}()`;
   }
+  if (subject.kind === "module") {
+    return `→ ${subject.module.path}`;
+  }
   // A marker leads nowhere: it names the calls the world cannot follow.
   if (subject.kind === "marker") {
     const nameOf = (id: string): string =>
@@ -164,6 +175,7 @@ const promptOf = (
 };
 
 export {
+  areasFromCode,
   breadcrumbOf,
   codeGraphOf,
   describeRoom,

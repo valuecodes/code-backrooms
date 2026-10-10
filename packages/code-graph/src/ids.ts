@@ -179,6 +179,7 @@ const CALL_PORTAL_PREFIX = "portal:";
 const RETURN_PORTAL_PREFIX = "return:";
 const JUMP_PORTAL_PREFIX = "jump:";
 const MARKER_PORTAL_PREFIX = "marker:";
+const MODULE_PORTAL_PREFIX = "module:";
 
 /** A call portal is named by the call site it stands for: `portal:demo.ts::main@42`. */
 const callPortalId = (callSiteId: string): string =>
@@ -205,11 +206,20 @@ const jumpPortalId = (roomId: string): string =>
 const markerPortalId = (roomId: string): string =>
   `${MARKER_PORTAL_PREFIX}${roomId}`;
 
+/**
+ * A module portal is named by the hub it stands on and the module it leads
+ * to: `module:src/index.ts>src/server.ts`. Read back at the first `>`, so
+ * a hub id with a `>` in it would not round-trip.
+ */
+const modulePortalId = (fromHub: string, toModule: string): string =>
+  `${MODULE_PORTAL_PREFIX}${fromHub}>${toModule}`;
+
 type PortalRef =
   | { readonly kind: "call"; readonly callSiteId: string }
   | { readonly kind: "return"; readonly roomId: string }
   | { readonly kind: "jump"; readonly roomId: string }
-  | { readonly kind: "marker"; readonly roomId: string };
+  | { readonly kind: "marker"; readonly roomId: string }
+  | { readonly kind: "module"; readonly from: string; readonly to: string };
 
 /** What a portal id names, or null for ids that are not portals of this grammar. */
 const parsePortalId = (id: string): PortalRef | null => {
@@ -224,6 +234,17 @@ const parsePortalId = (id: string): PortalRef | null => {
   }
   if (id.startsWith(MARKER_PORTAL_PREFIX)) {
     return { kind: "marker", roomId: id.slice(MARKER_PORTAL_PREFIX.length) };
+  }
+  if (id.startsWith(MODULE_PORTAL_PREFIX)) {
+    const rest = id.slice(MODULE_PORTAL_PREFIX.length);
+    const split = rest.indexOf(">");
+    return split === -1
+      ? null
+      : {
+          kind: "module",
+          from: rest.slice(0, split),
+          to: rest.slice(split + 1),
+        };
   }
   return null;
 };
@@ -255,6 +276,7 @@ export {
   jumpPortalId,
   markerPortalId,
   moduleId,
+  modulePortalId,
   normalisePath,
   parseFlowNodeId,
   parsePortalId,

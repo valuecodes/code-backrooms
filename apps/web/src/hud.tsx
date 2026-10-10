@@ -2,6 +2,8 @@ type HudProps = {
   readonly locked: boolean;
   readonly seed: number;
   readonly rooms: number;
+  /** Modules of a code world, each its own area. */
+  readonly modules: number;
   readonly preset: string | null;
   readonly code: string | null;
   /** Where the player is: `file · fn()` for code worlds, else the room id. */
@@ -34,11 +36,17 @@ const codeHints: readonly (readonly [string, string])[] = [
 const whereOf = ({
   seed,
   rooms,
+  modules,
   preset,
   code,
-}: Pick<HudProps, "seed" | "rooms" | "preset" | "code">): string => {
+}: Pick<
+  HudProps,
+  "seed" | "rooms" | "modules" | "preset" | "code"
+>): string => {
   if (code !== null) {
-    return `seed ${seed} · code ${code}`;
+    return modules > 1
+      ? `seed ${seed} · code ${code} · ${modules} modules`
+      : `seed ${seed} · code ${code}`;
   }
   return `seed ${seed} · ${preset ?? `${rooms} rooms`}`;
 };

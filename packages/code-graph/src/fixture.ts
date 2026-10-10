@@ -19,7 +19,10 @@ type FixtureFunction = {
   readonly name: string;
   /** Lines the function spans; defaults to 3. */
   readonly lines?: number;
-  /** Callee names in this module, in source order. Repeats allowed. */
+  /**
+   * Callee names in this module, in source order, or function ids
+   * (`b.ts::two`) of any module of the graph. Repeats allowed.
+   */
   readonly calls?: readonly string[];
 };
 
@@ -77,7 +80,7 @@ const flowOf = (
   };
 };
 
-const fixtureModule = (module: FixtureModule): CodeGraph => {
+const functionsOf = (module: FixtureModule): readonly FunctionNode[] => {
   const functions: FunctionNode[] = [];
   let line = 1;
   for (const fn of module.functions) {
@@ -100,6 +103,15 @@ const fixtureModule = (module: FixtureModule): CodeGraph => {
     });
     line += lines + 1;
   }
+  return functions;
+};
+
+/** `functions`: this module's; `all`: every module's, for calls by id. */
+const fixtureModule = (
+  module: FixtureModule,
+  functions: readonly FunctionNode[],
+  all: readonly FunctionNode[]
+): CodeGraph => {
   const callSites: CallSite[] = [];
   const edges = new Map<string, CallEdge>();
   module.functions.forEach((fn, index) => {
@@ -108,7 +120,9 @@ const fixtureModule = (module: FixtureModule): CodeGraph => {
       return;
     }
     (fn.calls ?? []).forEach((callee, offset) => {
-      const target = functions.find((candidate) => candidate.name === callee);
+      const target = callee.includes("::")
+        ? all.find((candidate) => candidate.id === callee)
+        : functions.find((candidate) => candidate.name === callee);
       if (target === undefined) {
         throw new Error(`Fixture calls unknown function "${callee}"`);
       }
@@ -137,7 +151,10 @@ const fixtureModule = (module: FixtureModule): CodeGraph => {
     id: module.path,
     path: module.path,
     language: "typescript",
-    lineCount: line - 1,
+    lineCount: functions.reduce(
+      (sum, fn) => sum + fn.span.endLine - fn.span.startLine + 2,
+      0
+    ),
     imports: module.imports ?? [],
     exports: module.exports ?? [],
   };
@@ -158,7 +175,11 @@ const fixtureModule = (module: FixtureModule): CodeGraph => {
 
 /** Several modules in one graph, in the order given. */
 const fixtureGraph = (...modules: readonly FixtureModule[]): CodeGraph => {
-  const graphs = modules.map(fixtureModule);
+  const functions = modules.map(functionsOf);
+  const all = functions.flat();
+  const graphs = modules.map((module, index) =>
+    fixtureModule(module, functions[index] ?? [], all)
+  );
   return {
     modules: graphs.flatMap((graph) => graph.modules),
     functions: graphs.flatMap((graph) => graph.functions),
@@ -166,6 +187,15 @@ const fixtureGraph = (...modules: readonly FixtureModule[]): CodeGraph => {
     edges: graphs.flatMap((graph) => graph.edges),
   };
 };
+
+/** A linked `import { name } from "./<target>"`, as the parser records it. */
+const importOf = (target: string, name = "x"): ImportRecord => ({
+  localName: name,
+  importedName: name,
+  specifier: `./${target}`,
+  moduleId: target,
+  span: spanAt(1, 1),
+});
 
 /** The reference demo from the product plan (section 23). */
 const demoGraph = (): CodeGraph =>
@@ -184,4 +214,4 @@ const demoGraph = (): CodeGraph =>
     ],
   });
 
-export { demoGraph, fixtureGraph };
+export { demoGraph, fixtureGraph, importOf };

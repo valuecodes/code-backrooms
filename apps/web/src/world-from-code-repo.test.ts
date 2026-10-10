@@ -1,8 +1,13 @@
 import { parseFlowNodeId } from "@repo/code-graph/ids";
+import type { Point } from "@repo/types";
+import { mergeAreas } from "@repo/world-generator/areas";
+import { roomBounds } from "@repo/world-generator/geometry";
+import { containsPoint } from "@repo/world-generator/locate";
+import { createNavigator } from "@repo/world-generator/navigation";
 import { describe, expect, it } from "vitest";
 
 import { sourceView } from "./source-view";
-import { codeGraphOf, promptOf, worldFromCode } from "./world-from-code";
+import { areasFromCode, codeGraphOf, promptOf } from "./world-from-code";
 
 /** The repo example, parsed, or the test fails with the parser's message. */
 const parsed = () => {
@@ -18,9 +23,25 @@ const ownerOf = (roomId: string): string =>
 
 describe("the repo example", () => {
   const { codeGraph, sources } = parsed();
-  const world = worldFromCode(codeGraph, 1);
+  const areas = areasFromCode(codeGraph, 1);
+  const world = mergeAreas(areas);
   const prompt = (portalId: string) =>
     promptOf(codeGraph, [], { kind: "portal", portalId });
+
+  /** The area holding `point`, by the rooms its unit `unit` stands in. */
+  const landsIn = (unit: string, point: Point | undefined): string | null => {
+    if (point === undefined) {
+      return null;
+    }
+    const area = areas.areas.find((candidate) =>
+      candidate.layout.rooms.some(
+        (room) =>
+          (room.id === unit || room.cluster === unit) &&
+          containsPoint(roomBounds(room), point)
+      )
+    );
+    return area?.id ?? null;
+  };
 
   it("has a module per file, sorted by path", () => {
     expect(codeGraph.modules.map((module) => module.id)).toEqual([
@@ -32,6 +53,66 @@ describe("the repo example", () => {
       "src/server.ts",
       "src/util/log.ts",
     ]);
+  });
+
+  it("lays each file out as its own area and starts in src/index.ts", () => {
+    expect(areas.areas.map((area) => area.id)).toEqual(
+      codeGraph.modules.map((module) => module.id)
+    );
+    expect(areas.entry).toBe("src/index.ts");
+    expect(
+      areas.areas.find((area) => area.id === "src/index.ts")?.offset
+    ).toEqual({ x: 0, z: 0 });
+    expect(world.graph.start).toBe("src/index.ts");
+  });
+
+  it("leads from a hub to the files it imports", () => {
+    const modulePortals = (world.graph.portals ?? []).filter(
+      (portal) => portal.kind === "module"
+    );
+    expect(
+      modulePortals
+        .filter((portal) => portal.from === "src/index.ts")
+        .map((portal) => prompt(portal.id))
+    ).toEqual(["→ src/server.ts", "→ src/config.ts"]);
+    for (const portal of modulePortals) {
+      const built = world.built.portals.find(
+        (candidate) => candidate.portal.id === portal.id
+      );
+      expect(landsIn(portal.to, built?.arrival?.position)).toBe(portal.to);
+    }
+  });
+
+  it("walks a call into another file and back, and empties the stack at a hub", () => {
+    const navigator = createNavigator(world);
+    const call = world.built.portals.find(
+      ({ portal }) =>
+        portal.kind === "call" && portal.to === "src/server.ts::startServer"
+    );
+    if (call === undefined) {
+      throw new Error("No call portal to startServer");
+    }
+    expect(landsIn("src/server.ts::startServer", call.arrival?.position)).toBe(
+      "src/server.ts"
+    );
+    const inMain = navigator.step(navigator.initial, {
+      type: "room",
+      roomId: call.portal.from,
+    }).state;
+    const entered = navigator.step(inMain, {
+      type: "portal",
+      portalId: call.portal.id,
+    });
+    expect(entered.state.roomId).toBe("src/server.ts::startServer");
+    expect(entered.state.frames).toHaveLength(1);
+    const back = navigator.step(entered.state, { type: "back" });
+    expect(back.state).toEqual(inMain);
+    expect(back.teleport).toEqual(call.returnPoint);
+    const across = navigator.step(entered.state, {
+      type: "portal",
+      portalId: "module:src/server.ts>src/util/log.ts",
+    });
+    expect(across.state).toEqual({ frames: [], roomId: "src/util/log.ts" });
   });
 
   it("follows calls across files with call portals", () => {

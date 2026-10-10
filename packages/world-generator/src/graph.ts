@@ -33,7 +33,8 @@ const onGrid = (value: number): boolean =>
  * duplicates, portals with unique ids from a known room (a cluster's rooms
  * included) to a known graph room (possibly its own; a jump's to a room of
  * the same cluster; a marker's to its own cluster room, which placed it and
- * gave it no target), clusters that satisfy
+ * gave it no target; a call's or module's possibly to an `external` unit,
+ * none of which is a room here; a module's from a hub), clusters that satisfy
  * `validateCluster` and whose reserved ports and placed portals name known
  * rooms and portals, and one connected component over the connections.
  */
@@ -121,6 +122,19 @@ const validateGraph = (graph: WorldGraph): void => {
     }
     keys.add(key);
   }
+  // Units of other areas: a call or module portal may lead there.
+  const external = new Set<string>();
+  for (const id of graph.external ?? []) {
+    if (id === "" || external.has(id) || roomIds.has(id)) {
+      throw new Error(
+        `External unit "${id}" is empty, duplicated or a room of this graph`
+      );
+    }
+    external.add(id);
+  }
+  const hubs = new Set(
+    graph.rooms.filter((room) => room.hub === true).map((room) => room.id)
+  );
   const portalIds = new Set<string>();
   for (const portal of graph.portals ?? []) {
     if (
@@ -134,6 +148,14 @@ const validateGraph = (graph: WorldGraph): void => {
     }
     portalIds.add(portal.id);
     let known = ids.has(portal.to);
+    if (portal.kind === "call" || portal.kind === "module") {
+      known ||= external.has(portal.to);
+    }
+    if (portal.kind === "module" && !hubs.has(portal.from)) {
+      throw new Error(
+        `Module portal "${portal.id}" must leave a hub, not "${portal.from}"`
+      );
+    }
     if (portal.kind === "jump") {
       known =
         unitOf.has(portal.to) &&

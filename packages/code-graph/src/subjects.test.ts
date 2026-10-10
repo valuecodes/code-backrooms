@@ -97,6 +97,19 @@ describe("portalSubject", () => {
     });
   });
 
+  it("names the module a module portal leads to", () => {
+    const linked = fixtureGraph(
+      { path: "a.ts", functions: [] },
+      { path: "b.ts", functions: [] }
+    );
+    expect(portalSubject(linked, "module:a.ts>b.ts")).toMatchObject({
+      kind: "module",
+      from: { path: "a.ts" },
+      module: { path: "b.ts" },
+    });
+    expect(portalSubject(linked, "module:a.ts>c.ts")).toBeNull();
+  });
+
   it("returns null for anything else", () => {
     expect(portalSubject(graph, "corridor-1")).toBeNull();
     expect(portalSubject(graph, "portal:m.ts::nobody@1")).toBeNull();

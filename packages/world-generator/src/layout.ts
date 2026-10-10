@@ -130,7 +130,8 @@ const attempt = (
   graph: WorldGraph,
   start: string,
   rng: Rng,
-  variation: boolean
+  variation: boolean,
+  corridorPrefix: string
 ): Attempt => {
   const byId = new Map(graph.rooms.map((room) => [room.id, room]));
   // Neighbour order decides who gets the free wall space first; shuffling it
@@ -146,7 +147,8 @@ const attempt = (
   ]);
   const state = new Placement(
     reserved,
-    new Map((graph.portals ?? []).map((portal) => [portal.id, portal]))
+    new Map((graph.portals ?? []).map((portal) => [portal.id, portal])),
+    corridorPrefix
   );
   const first = byId.get(start);
   if (first === undefined) {
@@ -248,12 +250,14 @@ const shortfall = (layout: WorldLayout): number =>
  * leaves some without a wall, a few more packings are tried and the best
  * one is returned with its `unplacedPortals`, never an error. `variation`
  * lets tree corridors vary in width (CORRIDOR_WIDTHS); without it every
- * corridor is CORRIDOR_WIDTH.
+ * corridor is CORRIDOR_WIDTH. Corridor ids are `corridorPrefix` and a
+ * number.
  */
 const generateLayout = (
   graph: WorldGraph,
   seed: number,
-  variation = true
+  variation = true,
+  corridorPrefix = "corridor-"
 ): WorldLayout => {
   validateGraph(graph);
   const start = graph.start ?? graph.rooms[0]?.id ?? "";
@@ -265,7 +269,8 @@ const generateLayout = (
       graph,
       start,
       createRng(seed + tries * 1_000_003),
-      variation
+      variation,
+      corridorPrefix
     );
     if (!result.ok) {
       failure = result;

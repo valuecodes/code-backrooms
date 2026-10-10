@@ -10,6 +10,7 @@
     "./flow-layout": "./src/flow-layout.ts",
     "./flow-text": "./src/flow-text.ts",
     "./ids": "./src/ids.ts",
+    "./module-areas": "./src/module-areas.ts",
     "./subjects": "./src/subjects.ts",
     "./world-graph": "./src/world-graph.ts"
   },
