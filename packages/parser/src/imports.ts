@@ -18,6 +18,8 @@ import {
   isImportDeclaration,
   isImportDefaultSpecifier,
   isImportNamespaceSpecifier,
+  isTSDeclareFunction,
+  isTSInterfaceDeclaration,
   isVariableDeclaration,
 } from "@babel/types";
 import type {
@@ -170,7 +172,11 @@ const exportsOf = (program: Program): readonly ExportRecord[] =>
       return namedExports(statement);
     }
     if (isExportDefaultDeclaration(statement)) {
-      return [defaultExport(statement)];
+      // Overload signatures and `export default interface` are types only.
+      return isTSDeclareFunction(statement.declaration) ||
+        isTSInterfaceDeclaration(statement.declaration)
+        ? []
+        : [defaultExport(statement)];
     }
     if (isExportAllDeclaration(statement) && statement.exportKind !== "type") {
       return [

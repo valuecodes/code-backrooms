@@ -100,7 +100,7 @@ describe("call resolution", () => {
       'import { console } from "./log";',
       "function run() {",
       "  helper(); ns.run(); new Svc(); Svc.make(); ns.a.b();",
-      "  helper?.(); console.log();",
+      "  helper?.(); console.log(); new ns.Svc(); new ns.a.B();",
       "}",
       "function shadow() { const helper = 1 as never; helper(); }",
     ].join("\n");
@@ -138,6 +138,8 @@ describe("call resolution", () => {
         "unresolved",
         { localName: "console", member: "log", isNew: false },
       ],
+      ["ns.Svc", "unresolved", { localName: "ns", member: "Svc", isNew: true }],
+      ["ns.a.B", "unresolved", undefined],
       ["helper", "unresolved", undefined],
     ]);
   });

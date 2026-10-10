@@ -140,6 +140,15 @@ describe("export records", () => {
       )
     ).toEqual([["v", "v", null, null]]);
     expect(exports("const x = 1;\nexport = x;")).toEqual([]);
+    expect(
+      exports(
+        [
+          "export default function f(a: string): void;",
+          "export default function f(a: unknown) {}",
+          "export default interface I {}",
+        ].join("\n")
+      )
+    ).toEqual([["default", "f", null, null]]);
   });
 
   it("keeps a named default function exported without exporting its name", () => {
