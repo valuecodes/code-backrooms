@@ -130,26 +130,37 @@ const exportOf = (
     : exportOf(linker, target, record.importedName, seen);
 };
 
+/** A binding and the member called on it, if any. */
+type Callee = { readonly binding: Binding; readonly member: string | null };
+
+/**
+ * `ns.f()` names whatever the namespace's module exports as `f` (possibly
+ * several bindings, when stars clash); anything else is called as written.
+ */
+const calleesOf = (
+  linker: Linker,
+  binding: Binding,
+  member: string | null
+): readonly Callee[] =>
+  binding.kind === "namespace" && member !== null
+    ? listOf(exportOf(linker, binding.moduleId, member, new Set())).map(
+        (inner) => ({ binding: inner, member: null })
+      )
+    : [{ binding, member }];
+
 /**
  * The function a binding calls: a top-level plain function, `new` on a
  * top-level class (its constructor) or on a plain function, or with a
- * member a static method of a top-level class. Null for anything else.
+ * member a static method of a top-level class. Null for anything else,
+ * a namespace called directly included.
  */
 const functionOf = (
   linker: Linker,
-  binding: Binding,
-  member: string | null,
+  { binding, member }: Callee,
   isNew: boolean
 ): DiscoveredFunction | null => {
   if (binding.kind === "namespace") {
-    if (member === null) {
-      return null;
-    }
-    const inner = listOf(exportOf(linker, binding.moduleId, member, new Set()));
-    const [only] = inner;
-    return only === undefined || inner.length > 1
-      ? null
-      : functionOf(linker, only, null, isNew);
+    return null;
   }
   const topLevel = (linker.functions.get(binding.moduleId) ?? []).filter(
     (fn) => fn.parentId === null
@@ -192,15 +203,20 @@ const linkSite = (
   );
   const found =
     record === undefined ? null : importBinding(linker, record, new Set());
+  const callees = listOf(found).flatMap((binding) =>
+    calleesOf(linker, binding, via.member)
+  );
   const targets = new Map<string, DiscoveredFunction>();
-  for (const binding of listOf(found)) {
-    const fn = functionOf(linker, binding, via.member, via.isNew);
+  for (const callee of callees) {
+    const fn = functionOf(linker, callee, via.isNew);
     if (fn !== null) {
       targets.set(fn.id, fn);
     }
   }
   const [only, ...others] = targets.values();
-  if (only === undefined) {
+  // A name clashing stars bind to a function and to something else is still
+  // ambiguous, but with one candidate there is nothing to list: unresolved.
+  if (only === undefined || (others.length === 0 && callees.length > 1)) {
     return site;
   }
   if (others.length === 0) {
