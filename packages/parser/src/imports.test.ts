@@ -83,6 +83,25 @@ describe("export records", () => {
     ]);
   });
 
+  it("records runtime enums and namespaces but not ambient or const ones", () => {
+    expect(
+      exports(
+        [
+          "export enum E { a }",
+          "export namespace N { export const x = 1; }",
+          "export namespace A.B { export const y = 2; }",
+          "export const enum C { a }",
+          "export declare enum D { a }",
+          "export declare namespace M {}",
+        ].join("\n")
+      )
+    ).toEqual([
+      ["E", "E", null, null],
+      ["N", "N", null, null],
+      ["A", "A", null, null],
+    ]);
+  });
+
   it("records export lists with aliases", () => {
     expect(
       exports("function a() {}\nconst b = 1;\nexport { a, b as bee };")

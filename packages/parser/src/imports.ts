@@ -19,7 +19,10 @@ import {
   isImportDefaultSpecifier,
   isImportNamespaceSpecifier,
   isTSDeclareFunction,
+  isTSEnumDeclaration,
   isTSInterfaceDeclaration,
+  isTSModuleDeclaration,
+  isTSQualifiedName,
   isVariableDeclaration,
 } from "@babel/types";
 import type {
@@ -108,7 +111,22 @@ const declarationExports = (
     }
     return [...names].map((name) => local(name, name));
   }
-  // Interfaces, type aliases, enums, namespaces and `declare`d functions.
+  // Runtime enums and namespaces (`namespace A.B` binds `A`); `declare`d and
+  // `const` enums, ambient modules, interfaces and type aliases emit nothing.
+  if (
+    isTSEnumDeclaration(declaration) &&
+    declaration.declare !== true &&
+    declaration.const !== true
+  ) {
+    return [local(declaration.id.name, declaration.id.name)];
+  }
+  if (isTSModuleDeclaration(declaration) && declaration.declare !== true) {
+    let id = declaration.id;
+    while (isTSQualifiedName(id)) {
+      id = id.left;
+    }
+    return isIdentifier(id) ? [local(id.name, id.name)] : [];
+  }
   return [];
 };
 
