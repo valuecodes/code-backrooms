@@ -1,8 +1,7 @@
-import { parseFlowNodeId } from "@repo/code-graph/ids";
+import { ENTRANCE_ID, parseFlowNodeId } from "@repo/code-graph/ids";
 import { buildCodeGraph } from "@repo/parser";
 import type { GeneratedWorld } from "@repo/types";
 import { checkAreas } from "@repo/world-generator/area-checks";
-import { checkLayout } from "@repo/world-generator/layout-checks";
 import type { Frame } from "@repo/world-generator/navigation";
 import { describe, expect, it } from "vitest";
 
@@ -53,7 +52,8 @@ describe("worldFromCode", () => {
       const codeGraph = graphOf(name);
       for (let seed = 1; seed <= 30; seed += 1) {
         const areas = areasFromCode(codeGraph, seed);
-        expect(areas.areas).toHaveLength(codeGraph.modules.length);
+        // One area per module, after the entrance.
+        expect(areas.areas).toHaveLength(codeGraph.modules.length + 1);
         for (const area of areas.areas) {
           expect(area.built.rooms.length).toBeGreaterThan(0);
           expect(area.layout.unresolved, `seed ${seed}`).toEqual([]);
@@ -68,6 +68,7 @@ describe("worldFromCode", () => {
     const codeGraph = graphOf("demo");
     const world = worldFromCode(codeGraph, 1);
     expect(world.graph.rooms.map((room) => room.label)).toEqual([
+      "repository",
       "demo.ts",
       "main",
       "getUser",
@@ -75,7 +76,7 @@ describe("worldFromCode", () => {
       "showLogin",
       "loadSession",
     ]);
-    expect(world.layout.startRoomId).toBe("demo.ts");
+    expect(world.layout.startRoomId).toBe(ENTRANCE_ID);
     expect(world.layout.unresolved).toEqual([]);
     const main = roomsOf(world, "demo.ts::main");
     expect(main.map((room) => room.role)).toEqual([
@@ -189,8 +190,8 @@ describe("worldFromCode", () => {
       kind: "call",
     });
     // Five functions end in a return portal; countdown's early return adds
-    // one; format's `value.trim()` is a marker.
-    expect(world.built.portals).toHaveLength(3 + 6 + 1);
+    // one; format's `value.trim()` is a marker; the entrance leads in.
+    expect(world.built.portals).toHaveLength(3 + 6 + 1 + 1);
     expect(
       world.built.portals
         .filter(({ portal }) => portal.kind === "marker")
@@ -324,11 +325,12 @@ describe("worldFromCode", () => {
       { path: "chain.ts", source: `${source}\nfunction f8() {}` },
     ]);
     for (let seed = 1; seed <= 30; seed += 1) {
-      const world = worldFromCode(codeGraph, seed);
-      expect(world.layout.unresolved, `seed ${seed}`).toEqual([]);
-      expect(checkLayout(world.graph, world.layout), `seed ${seed}`).toEqual(
-        []
-      );
+      const areas = areasFromCode(codeGraph, seed);
+      expect(
+        areas.areas.flatMap((area) => area.layout.unresolved),
+        `seed ${seed}`
+      ).toEqual([]);
+      expect(checkAreas(areas), `seed ${seed}`).toEqual([]);
     }
     const doors = world(codeGraph).graph.connections.filter(
       (connection) => connection.kind === "call"

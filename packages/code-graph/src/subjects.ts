@@ -8,6 +8,8 @@ import type {
   ModuleNode,
   SourceSpan,
 } from "./code-graph";
+import { repositoryName } from "./entrance";
+import { entryModules } from "./entrypoints";
 import { findFlowNode } from "./flow";
 import { planFlow } from "./flow-layout";
 import type { FlowPlan } from "./flow-layout";
@@ -15,6 +17,7 @@ import { flowNodeText, indexSites } from "./flow-text";
 import {
   flowNodeId,
   hubModuleId,
+  isEntranceHub,
   isFunctionId,
   isRelativeSpecifier,
   parseFlowNodeId,
@@ -28,6 +31,13 @@ type FunctionSubject = {
 };
 
 type RoomSubject =
+  | {
+      readonly kind: "entrance";
+      /** The repository's name, on the entrance's walls and in the HUD. */
+      readonly name: string;
+      /** The modules its portals lead to, in portal order. */
+      readonly modules: readonly ModuleNode[];
+    }
   | { readonly kind: "module"; readonly module: ModuleNode }
   | ({ readonly kind: "function" } & FunctionSubject)
   | ({
@@ -170,9 +180,9 @@ const flowSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
 };
 
 /**
- * What a room stands for: a flow room of a function, a function, or a
- * module hub; null for corridors and ids not from this graph. Flow ids also
- * contain `::`, so they are tried first.
+ * What a room stands for: a flow room of a function, a function, a module
+ * hub or the repository entrance; null for corridors and ids not from this
+ * graph. Flow ids also contain `::`, so they are tried first.
  */
 const roomSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
   if (parseFlowNodeId(roomId) !== null) {
@@ -181,6 +191,13 @@ const roomSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
   if (isFunctionId(roomId)) {
     const subject = functionSubject(graph, roomId);
     return subject === null ? null : { kind: "function", ...subject };
+  }
+  if (isEntranceHub(roomId)) {
+    return {
+      kind: "entrance",
+      name: repositoryName(graph),
+      modules: entryModules(graph),
+    };
   }
   const moduleId = hubModuleId(roomId);
   const module = graph.modules.find((candidate) => candidate.id === moduleId);
@@ -213,8 +230,8 @@ type PortalSubject =
     }
   | {
       readonly kind: "module";
-      /** The module whose hub holds it. */
-      readonly from: ModuleNode;
+      /** The module whose hub holds it; null for the entrance. */
+      readonly from: ModuleNode | null;
       /** The module it leads to: one this one imports. */
       readonly module: ModuleNode;
     };
@@ -229,9 +246,11 @@ const portalSubject = (
     return null;
   }
   if (ref.kind === "module") {
-    const from = graph.modules.find(
-      (candidate) => candidate.id === hubModuleId(ref.from)
-    );
+    const from = isEntranceHub(ref.from)
+      ? null
+      : graph.modules.find(
+          (candidate) => candidate.id === hubModuleId(ref.from)
+        );
     const module = graph.modules.find((candidate) => candidate.id === ref.to);
     return from === undefined || module === undefined
       ? null

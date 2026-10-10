@@ -7,10 +7,10 @@ import type {
   ImportRecord,
   SourceSpan,
 } from "./code-graph";
-import { demoGraph, fixtureGraph } from "./fixture";
+import { demoGraph, fixtureGraph, importOf } from "./fixture";
 import { branch, fnWith, step } from "./flow-fixture";
 import { layoutFlow, planFlow } from "./flow-layout";
-import { modulePortalId, parseFlowNodeId } from "./ids";
+import { ENTRANCE_ID, modulePortalId, parseFlowNodeId } from "./ids";
 import { packageOf, portalSubject, roomSubject } from "./subjects";
 import { toWorldGraph } from "./world-graph";
 
@@ -58,6 +58,22 @@ describe("roomSubject", () => {
     expect(roomSubject(graph, "demo.ts::nobody@0:step:empty")).toBeNull();
     expect(roomSubject(graph, "corridor-1")).toBeNull();
     expect(roomSubject(graph, "other.ts::getUser")).toBeNull();
+  });
+
+  it("names the entrance and its hubs by the repository", () => {
+    const repo = fixtureGraph(
+      { path: "src/index.ts", functions: [], imports: [importOf("src/a.ts")] },
+      { path: "src/a.ts", functions: [] },
+      { path: "src/cli.ts", functions: [] }
+    );
+    const expected = {
+      kind: "entrance",
+      name: "src",
+      // Both score 3 for their name; the path breaks the tie.
+      modules: [{ path: "src/cli.ts" }, { path: "src/index.ts" }],
+    };
+    expect(roomSubject(repo, ENTRANCE_ID)).toMatchObject(expected);
+    expect(roomSubject(repo, `${ENTRANCE_ID}#2`)).toMatchObject(expected);
   });
 });
 
@@ -110,6 +126,12 @@ describe("portalSubject", () => {
       }
     );
     expect(portalSubject(linked, modulePortalId("a.ts", "c.ts"))).toBeNull();
+    expect(
+      portalSubject(linked, modulePortalId(ENTRANCE_ID, "a.ts"))
+    ).toMatchObject({ kind: "module", from: null, module: { path: "a.ts" } });
+    expect(
+      portalSubject(linked, modulePortalId(ENTRANCE_ID, "c.ts"))
+    ).toBeNull();
   });
 
   it("returns null for anything else", () => {

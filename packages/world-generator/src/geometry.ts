@@ -145,7 +145,8 @@ const centreFacing = (
  * Where a teleport into a room lands: just inside the wall its unit is
  * entered through (facing along the flow), else just inside its first
  * return portal (so turning round leads back out), else the centre facing
- * the first doorway, which is also how the start room is entered.
+ * the first doorway, or for a room without one its first portal, which is
+ * also how the start room is entered.
  */
 const roomEntry = ({ room, openings }: BuiltRoom): Placement => {
   if (room.entry !== undefined) {
@@ -160,7 +161,14 @@ const roomEntry = ({ room, openings }: BuiltRoom): Placement => {
   if (exit !== undefined) {
     return placementInside(room, exit.wall, exit.along);
   }
-  return centreFacing(room, openings[0]);
+  const portal = room.portals?.[0];
+  return centreFacing(
+    room,
+    openings[0] ??
+      (portal === undefined
+        ? undefined
+        : pointInside(room, portal.wall, portal.along, 0))
+  );
 };
 
 /**

@@ -24,6 +24,8 @@ type FixtureFunction = {
    * (`b.ts::two`) of any module of the graph. Repeats allowed.
    */
   readonly calls?: readonly string[];
+  /** Whether the module exports it; defaults to false. */
+  readonly exported?: boolean;
 };
 
 type FixtureModule = {
@@ -94,7 +96,7 @@ const functionsOf = (module: FixtureModule): readonly FunctionNode[] => {
       qualifiedName: fn.name,
       kind: "declaration",
       span,
-      exported: false,
+      exported: fn.exported ?? false,
       async: false,
       isStatic: false,
       parentId: null,
