@@ -24,6 +24,11 @@ const hints: readonly (readonly [string, string])[] = [
   ["Esc", "release the mouse"],
 ];
 
+/** Only a code world has source to show. */
+const codeHints: readonly (readonly [string, string])[] = [
+  ["E", "show the source"],
+];
+
 const whereOf = ({
   seed,
   rooms,
@@ -47,6 +52,7 @@ const Hud = ({
   ...rest
 }: HudProps) => {
   const where = whereOf(rest);
+  const keys = rest.code === null ? hints : [...hints, ...codeHints];
   if (locked) {
     return (
       <>
@@ -96,7 +102,7 @@ const Hud = ({
         </ul>
       )}
       <dl className="grid grid-cols-[auto_auto] gap-x-6 gap-y-1 text-left text-sm text-amber-100/80">
-        {hints.map(([key, action]) => (
+        {keys.map(([key, action]) => (
           <div key={key} className="contents">
             <dt className="font-mono">{key}</dt>
             <dd>{action}</dd>

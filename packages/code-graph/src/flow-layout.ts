@@ -6,7 +6,7 @@ import type { ClusterPortal, ClusterRoom, RoomCluster } from "@repo/types";
 import { FLOW_TOP_MIN_WIDTH } from "@repo/world-generator/config";
 
 import type { CallSite, FunctionNode } from "./code-graph";
-import { foldToBudget } from "./flow-budget";
+import { foldsOf, foldToBudget } from "./flow-budget";
 import { newColumn, placeItems } from "./flow-column";
 import type { ColumnRoom } from "./flow-column";
 import { labelsOf, treeWidth } from "./flow-composite";
@@ -26,6 +26,8 @@ type FlowPlan = {
   readonly labels: ReadonlyMap<string, string>;
   /** Rooms with a jump portal, mapped to the room it leads to. */
   readonly jumps: ReadonlyMap<string, string>;
+  /** Rooms folded from several, mapped to the last node folded into each. */
+  readonly folds: ReadonlyMap<string, string>;
 };
 
 /**
@@ -45,6 +47,7 @@ const planFlow = (fn: FunctionNode, sites: readonly CallSite[]): FlowPlan => {
     width: Math.max(FLOW_TOP_MIN_WIDTH, treeWidth(items)),
     labels: labelsOf(items),
     jumps: jumpsOf(items),
+    folds: foldsOf(items),
   };
 };
 

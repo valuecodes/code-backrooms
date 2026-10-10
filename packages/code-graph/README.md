@@ -136,9 +136,11 @@ chains further hubs (`demo.ts`, `demo.ts#2`, ...). Portals sit on flow rooms
 (`from`), lead to units (`to`), and are listed calls first, then returns.
 
 `./subjects` maps world ids back to the code: `roomSubject` gives a module, a
-function, or a flow room (`{ kind: "flow", fn, module, node, ancestors, text }`,
-`text` being the HUD's words such as `await fetch(…)` or `if (user) · 2
-statements · 2 calls`); `portalSubject` gives a call site with both functions,
+function, or a flow room (`{ kind: "flow", fn, module, node, ancestors, text,
+span }`, `text` being the HUD's words such as `await fetch(…)` or `if (user) ·
+2 statements · 2 calls`, and `span` the room's code: a tagged room's composite,
+and for a room the budget folded from several, its first node to its last);
+`portalSubject` gives a call site with both functions,
 or the function a return portal belongs to.
 
 `./cfg` derives a function's control-flow graph from its flow tree, as a test

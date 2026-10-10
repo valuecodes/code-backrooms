@@ -11,6 +11,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Hud } from "~/hud";
 import { parseWorldParams, withSeed } from "~/params";
+import { SourcePanel } from "~/source-panel";
+import { sourceView } from "~/source-view";
 import { useNavigation } from "~/use-navigation";
 import {
   breadcrumbOf,
@@ -78,6 +80,7 @@ const App = () => {
   const [seed, setSeed] = useState(initial.seed);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [target, setTarget] = useState<Target | null>(null);
+  const [sourceOpen, setSourceOpen] = useState(false);
   const generated = useGeneratedWorld(seed);
   const navigation = useNavigation(generated.world);
   const { onRoomChange, back, home } = navigation;
@@ -91,7 +94,8 @@ const App = () => {
   );
 
   // N: next seed (the only thing that regenerates the world). Backspace and
-  // R navigate, and only while walking, so a free pointer leaves them alone.
+  // R navigate and E shows the source, only while walking, so a free
+  // pointer leaves them alone.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // Ctrl/Cmd+R and friends belong to the browser.
@@ -105,6 +109,8 @@ const App = () => {
         back();
       } else if (locked && event.code === "KeyR") {
         home();
+      } else if (locked && event.code === "KeyE") {
+        setSourceOpen((open) => !open);
       }
     };
     globalThis.addEventListener("keydown", onKeyDown);
@@ -137,6 +143,14 @@ const App = () => {
 
   const place =
     roomId === null ? null : describeRoom(generated.codeGraph, roomId);
+  const sources = code?.error === null ? code.sources : null;
+  const source = useMemo(
+    () =>
+      sources === null
+        ? null
+        : sourceView(generated.codeGraph, sources, roomId),
+    [generated.codeGraph, sources, roomId]
+  );
 
   return (
     <div className="relative h-dvh w-screen overflow-hidden bg-black">
@@ -164,6 +178,9 @@ const App = () => {
           />
           <PointerLook />
         </Canvas>
+      )}
+      {locked && sourceOpen && sources !== null && (
+        <SourcePanel view={source} />
       )}
       <Hud
         locked={locked}

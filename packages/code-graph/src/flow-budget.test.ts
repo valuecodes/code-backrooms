@@ -132,6 +132,29 @@ describe("budget", () => {
     expect(tree.slice(-2).map((item) => item.kind)).toEqual(["room", "room"]);
   });
 
+  it("maps every folded room to the last node folded into it, through folds of folds", () => {
+    const steps = Array.from({ length: 200 }, (_, index) =>
+      step(10 * index + 1, 1)
+    );
+    const plan = planFlow(fnWith(steps), []);
+    const ids = steps.map((node) => node.id);
+    // Rooms cover the steps in order, each from its own id to its last.
+    let next = 0;
+    let widest = 0;
+    for (const item of plan.items) {
+      if (item.kind !== "room") {
+        throw new Error("only rooms expected");
+      }
+      expect(item.id).toBe(ids[next]);
+      const last = ids.indexOf(plan.folds.get(item.id) ?? item.id);
+      expect(last).toBeGreaterThanOrEqual(next);
+      widest = Math.max(widest, last - next + 1);
+      next = last + 1;
+    }
+    expect(next).toBe(ids.length);
+    expect(widest).toBeGreaterThanOrEqual(3);
+  });
+
   it("stops when nothing more can fold", () => {
     const { node, sites } = calling(1, 100);
     const cluster = clusterOf([node], sites);
