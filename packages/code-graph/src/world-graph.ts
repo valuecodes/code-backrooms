@@ -310,14 +310,14 @@ const moduleWorld = (
     links,
     seed,
   });
-  const connections = [...hubConnections];
-  connections.push(
+  const connections = [
+    ...hubConnections,
     ...tree.map((edge): Connection => ({
       from: edge.source,
       to: edge.target,
       kind: "call",
-    }))
-  );
+    })),
+  ];
   return {
     hubs,
     lobbies,
@@ -332,8 +332,8 @@ const moduleWorld = (
  * per function (a column of flow rooms with a return portal at its end),
  * a hub that opens onto the module's roots (more hubs chained when there
  * are many; a top-level class's root methods open off a lobby of their
- * own, which takes one door of the hub), a door for each call on the breadth-first tree from those
- * roots through the rooms' ports, a call portal for every other resolved
+ * own, which takes one door of the hub), a door for each call on the
+ * breadth-first tree from those roots through the rooms' ports, a call portal for every other resolved
  * call, and a closed marker in every room holding calls the world cannot
  * follow (ambiguous, dynamic, external or unresolved; never a portal to a
  * guess). The hub holds a module portal to every module it imports or
