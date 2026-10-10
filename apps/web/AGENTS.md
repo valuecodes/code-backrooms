@@ -70,12 +70,18 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   control-flow graph (`@repo/code-graph/cfg-checks`,
   `world-from-code-cfg.test.ts`): each door and portal stands for a flow
   edge and each reachable flow edge can be walked. Nothing visible changes.
-- Milestone 10 (current): the source panel. E while walking a code world
+- Milestone 10: the source panel. E while walking a code world
   shows the code of the room the player stands in, docked right: the whole
   file for a hub, the whole function for a function, and the function with
   the room's own code marked for a flow room (a merge, test or end room
   marks its whole `if`, loop or switch; a room the budget folded marks
   everything folded into it). The mouse wheel scrolls it.
+- Milestone 11 (current): the overview map. M or Tab while walking shows a
+  map in the top-left corner, north up and centred on the player: the rooms
+  stood in, filled with their lane's colour, the rooms seen through their
+  doors drawn hollow, their doors, and their portals coloured by kind (call
+  amber, return pale, jump grey). It belongs to one world: N starts it over,
+  R does not.
 
 ---
 
@@ -108,6 +114,9 @@ src/
                       breadcrumb and the prompt for the door or portal ahead
   source-panel.tsx    the E overlay: the current room's code, its own lines marked
   source-view.ts      room id -> the lines the source panel shows, pure
+  overview-map.tsx    the M / Tab overlay: an SVG map of the rooms walked so far
+  map-model.ts        visited rooms -> the rooms, doors and portals the map draws, pure
+  pose-feed.ts        the player's position from the render loop to the map, no app render
   params.ts           URL query -> { seed, rooms, preset, code }, with clamping
   examples.ts         bundled example programs for ?code=<name>
   use-navigation.ts   the exploration stack as React state, fed by the Player
@@ -132,7 +141,8 @@ WASD and the mouse move and look, Shift sprints. Walking into a call door or
 a call portal enters that function; Backspace (or the room's return portal)
 goes back to where it was entered, or to the file hub when nothing was; R
 returns to the world start with an empty stack; N takes the next seed; E
-shows or hides the source panel in a code world, and the wheel scrolls it.
+shows or hides the source panel in a code world, and the wheel scrolls it;
+M or Tab shows or hides the overview map.
 
 ### The pipeline
 

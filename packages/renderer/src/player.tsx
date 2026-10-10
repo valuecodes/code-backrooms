@@ -40,6 +40,12 @@ type PlayerProps = {
   readonly onPortal?: (portalId: string) => void;
   /** Called on change: the door or portal in front of the player, or null. */
   readonly onNearTarget?: (target: Target | null) => void;
+  /**
+   * Called from the render loop with where the player stands and a point
+   * 1 m ahead: at most every MOVE_INTERVAL seconds while walking, and on the
+   * first frame after a room change, a teleport or a new world.
+   */
+  readonly onMove?: (pose: Placement) => void;
 };
 
 const UP = new Vector3(0, 1, 0);
@@ -51,6 +57,8 @@ const SMOOTHING = 10;
  * take over rendering from React Three Fiber.
  */
 const PRIORITY = -1;
+/** Seconds between `onMove` calls: often enough for a map, rare enough for React. */
+const MOVE_INTERVAL = 0.1;
 
 const targetKey = (target: Target | null): string | null => {
   if (target === null) {
@@ -69,6 +77,7 @@ const Player = ({
   placement,
   onPortal,
   onNearTarget,
+  onMove,
 }: PlayerProps) => {
   const camera = useThree((state) => state.camera);
   const keys = useMovementKeys();
@@ -82,6 +91,8 @@ const Player = ({
   /** False from a teleport until the player has left every portal trigger. */
   const armed = useRef(true);
   const nearKey = useRef<string | null>(null);
+  /** Seconds since the last `onMove`; infinite means "report on the next frame". */
+  const sinceMove = useRef(Number.POSITIVE_INFINITY);
   const scratch = useRef({
     forward: new Vector3(),
     right: new Vector3(),
@@ -95,6 +106,7 @@ const Player = ({
       velocity.current.set(0, 0, 0);
       camera.position.set(to.position.x, EYE_HEIGHT, to.position.z);
       camera.lookAt(to.facing.x, EYE_HEIGHT, to.facing.z);
+      sinceMove.current = Number.POSITIVE_INFINITY;
     },
     [camera]
   );
@@ -156,6 +168,15 @@ const Player = ({
     if (current !== roomId.current) {
       roomId.current = current;
       onRoomChange?.(current);
+      sinceMove.current = Number.POSITIVE_INFINITY;
+    }
+    sinceMove.current += dt;
+    if (onMove !== undefined && sinceMove.current >= MOVE_INTERVAL) {
+      sinceMove.current = 0;
+      onMove({
+        position: next,
+        facing: { x: next.x + forward.x, z: next.z + forward.z },
+      });
     }
     if (world.portals.length === 0 && onNearTarget === undefined) {
       return;
