@@ -340,10 +340,22 @@ const resolveMember = (
 };
 
 const resolveNew = (callee: Node, scope: Scope): Resolved => {
+  if (isMemberExpression(callee) || isOptionalMemberExpression(callee)) {
+    // `new ns.Svc()`: one member access on an import is still linkable.
+    const object = unwrap(callee.object);
+    const property = callee.computed ? null : propertyName(callee.property);
+    return isIdentifier(object) &&
+      property !== null &&
+      isImport(object.name, scope)
+      ? imported(calleeText(callee), {
+          localName: object.name,
+          member: property,
+          isNew: true,
+        })
+      : unresolved(calleeText(callee));
+  }
   if (!isIdentifier(callee)) {
-    return isMemberExpression(callee) || isOptionalMemberExpression(callee)
-      ? unresolved(calleeText(callee))
-      : otherCallee(callee);
+    return otherCallee(callee);
   }
   const { name } = callee;
   const table = resolveClass(name, scope);

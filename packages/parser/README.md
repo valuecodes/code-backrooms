@@ -38,7 +38,7 @@ instance member `x`. With one or none it stays unresolved, since one candidate
 would still be a guess. Computed callees (`obj[k]()`), call results
 (`f()()`), `(a || b)()` and the like are dynamic. Imports, `super.x()` and
 IIFEs are unresolved; cross-file resolution is a later milestone. A call
-through an import binding (`helper()`, `new Svc()`, `ns.run()`, `Svc.make()`)
+through an import binding (`helper()`, `new Svc()`, `ns.run()`, `Svc.make()`, `new ns.Svc()`)
 stays unresolved but carries `via: { localName, member, isNew }` for the
 linker; an inner binding of the same name shadows it and carries none, and
 deeper chains (`ns.a.b()`) carry none either. A call that
