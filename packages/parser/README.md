@@ -56,7 +56,7 @@ a as b }`) or, for `export … from`, a `specifier` and `importedName` (`"*"`
 for `export *` and `export * as ns`). `export default` names its target: a
 named function or class by its name, an anonymous one, an arrow or a
 function expression by `"default"`, an identifier by itself, any other
-expression by null. Type-only imports and exports, `import x = require()`
+expression by null. Runtime `enum`s and `namespace`s are local exports; `declare`d and `const` enums are not. Type-only imports and exports, `import x = require()`
 and `export =` are not recorded. `FunctionNode.exported` is true for a
 function declared with `export`, or for a top-level one whose name a local
 export record names.
