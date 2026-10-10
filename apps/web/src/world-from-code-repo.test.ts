@@ -1,4 +1,4 @@
-import { parseFlowNodeId } from "@repo/code-graph/ids";
+import { modulePortalId, parseFlowNodeId } from "@repo/code-graph/ids";
 import type { Point } from "@repo/types";
 import { mergeAreas } from "@repo/world-generator/areas";
 import { roomBounds } from "@repo/world-generator/geometry";
@@ -110,7 +110,7 @@ describe("the repo example", () => {
     expect(back.teleport).toEqual(call.returnPoint);
     const across = navigator.step(entered.state, {
       type: "portal",
-      portalId: "module:src/server.ts>src/util/log.ts",
+      portalId: modulePortalId("src/server.ts", "src/util/log.ts"),
     });
     expect(across.state).toEqual({ frames: [], roomId: "src/util/log.ts" });
   });

@@ -10,7 +10,7 @@ import type {
 import { demoGraph, fixtureGraph } from "./fixture";
 import { branch, fnWith, step } from "./flow-fixture";
 import { layoutFlow, planFlow } from "./flow-layout";
-import { parseFlowNodeId } from "./ids";
+import { modulePortalId, parseFlowNodeId } from "./ids";
 import { packageOf, portalSubject, roomSubject } from "./subjects";
 import { toWorldGraph } from "./world-graph";
 
@@ -102,12 +102,14 @@ describe("portalSubject", () => {
       { path: "a.ts", functions: [] },
       { path: "b.ts", functions: [] }
     );
-    expect(portalSubject(linked, "module:a.ts>b.ts")).toMatchObject({
-      kind: "module",
-      from: { path: "a.ts" },
-      module: { path: "b.ts" },
-    });
-    expect(portalSubject(linked, "module:a.ts>c.ts")).toBeNull();
+    expect(portalSubject(linked, modulePortalId("a.ts", "b.ts"))).toMatchObject(
+      {
+        kind: "module",
+        from: { path: "a.ts" },
+        module: { path: "b.ts" },
+      }
+    );
+    expect(portalSubject(linked, modulePortalId("a.ts", "c.ts"))).toBeNull();
   });
 
   it("returns null for anything else", () => {

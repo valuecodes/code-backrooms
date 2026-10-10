@@ -134,15 +134,18 @@ describe("portal ids", () => {
     });
   });
 
-  it("round-trips module portals at the first >", () => {
+  it("round-trips module portals, whatever their paths hold", () => {
     const portal = modulePortalId("src/index.ts", "src/a>b.ts");
-    expect(portal).toBe("module:src/index.ts>src/a>b.ts");
+    expect(portal).toBe('module:["src/index.ts","src/a>b.ts"]');
     expect(parsePortalId(portal)).toEqual({
       kind: "module",
       from: "src/index.ts",
       to: "src/a>b.ts",
     });
+    expect(modulePortalId("a>b", "c")).not.toBe(modulePortalId("a", "b>c"));
     expect(parsePortalId("module:src/index.ts")).toBeNull();
+    expect(parsePortalId('module:["a"]')).toBeNull();
+    expect(parsePortalId('module:["a",1]')).toBeNull();
   });
 
   it("rejects ids that are not portals", () => {

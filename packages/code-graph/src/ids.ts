@@ -208,11 +208,32 @@ const markerPortalId = (roomId: string): string =>
 
 /**
  * A module portal is named by the hub it stands on and the module it leads
- * to: `module:src/index.ts>src/server.ts`. Read back at the first `>`, so
- * a hub id with a `>` in it would not round-trip.
+ * to, as a JSON pair so that any path round-trips and no two pairs share an
+ * id: `module:["src/index.ts","src/server.ts"]`.
  */
 const modulePortalId = (fromHub: string, toModule: string): string =>
-  `${MODULE_PORTAL_PREFIX}${fromHub}>${toModule}`;
+  `${MODULE_PORTAL_PREFIX}${JSON.stringify([fromHub, toModule])}`;
+
+/** The hub and module of a module portal id, or null if it is not one. */
+const parseModulePair = (
+  text: string
+): { readonly from: string; readonly to: string } | null => {
+  let pair: unknown;
+  try {
+    pair = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (
+    !Array.isArray(pair) ||
+    pair.length !== 2 ||
+    typeof pair[0] !== "string" ||
+    typeof pair[1] !== "string"
+  ) {
+    return null;
+  }
+  return { from: pair[0], to: pair[1] };
+};
 
 type PortalRef =
   | { readonly kind: "call"; readonly callSiteId: string }
@@ -236,15 +257,8 @@ const parsePortalId = (id: string): PortalRef | null => {
     return { kind: "marker", roomId: id.slice(MARKER_PORTAL_PREFIX.length) };
   }
   if (id.startsWith(MODULE_PORTAL_PREFIX)) {
-    const rest = id.slice(MODULE_PORTAL_PREFIX.length);
-    const split = rest.indexOf(">");
-    return split === -1
-      ? null
-      : {
-          kind: "module",
-          from: rest.slice(0, split),
-          to: rest.slice(split + 1),
-        };
+    const pair = parseModulePair(id.slice(MODULE_PORTAL_PREFIX.length));
+    return pair === null ? null : { kind: "module", ...pair };
   }
   return null;
 };

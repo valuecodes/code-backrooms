@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import type { CodeGraph } from "./code-graph";
 import { fixtureGraph, importOf } from "./fixture";
-import { parseFlowNodeId } from "./ids";
+import { modulePortalId, parseFlowNodeId } from "./ids";
 import { moduleLinks } from "./module-links";
 import { toWorldGraph } from "./world-graph";
 
@@ -47,8 +47,8 @@ describe("toWorldGraph across modules", () => {
       ["module", "a.ts", "c.ts", "c.ts"],
     ]);
     expect(world.portals?.filter(({ kind }) => kind === "module")).toEqual([
-      expect.objectContaining({ id: "module:a.ts>b.ts" }),
-      expect.objectContaining({ id: "module:a.ts>c.ts" }),
+      expect.objectContaining({ id: modulePortalId("a.ts", "b.ts") }),
+      expect.objectContaining({ id: modulePortalId("a.ts", "c.ts") }),
     ]);
     expect(world.external).toEqual(["b.ts", "b.ts::two", "c.ts"]);
     expect(() => validateGraph(world)).not.toThrow();
