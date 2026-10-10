@@ -41,8 +41,13 @@ const entryScore = (
   return name + Math.min(api, MAX_API_SCORE) - depth;
 };
 
-const byPath = (a: ModuleNode, b: ModuleNode): number =>
-  a.path.localeCompare(b.path, undefined, { numeric: true });
+/** Code-unit order of module ids, as the parser sorts files: no locale. */
+const byPath = (a: ModuleNode, b: ModuleNode): number => {
+  if (a.id === b.id) {
+    return 0;
+  }
+  return a.id < b.id ? -1 : 1;
+};
 
 /**
  * The modules the entrance leads to, best first. Every module nobody

@@ -78,8 +78,10 @@ lead elsewhere: `graph.external` lists units of other areas that its `call`
 and `module` portals may name (a `module` portal stands on a hub and leads
 to another hub; entering it empties the stack like entering a hub).
 `buildWorld(layout, external)` leaves such a portal's `arrival` null and
-lists every unit's landing in `built.entries`. A start room without a
-doorway (a hall of portals) starts the player facing its first portal.
+lists every unit's landing in `built.entries`. A start room with portals
+that is entered at its centre (no cluster entry, no return portal) starts
+the player facing its first portal rather than its first doorway: the way
+on from a hall of portals, even one chained to more of the hall.
 `assembleAreas(seed, entry,
 parts)` packs the areas on shelves, the entry first at the origin, each
 other one 32 m beyond the last (past the fog) and rows 512 m wide, moves

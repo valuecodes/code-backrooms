@@ -145,8 +145,7 @@ const centreFacing = (
  * Where a teleport into a room lands: just inside the wall its unit is
  * entered through (facing along the flow), else just inside its first
  * return portal (so turning round leads back out), else the centre facing
- * the first doorway, or for a room without one its first portal, which is
- * also how the start room is entered.
+ * the first doorway.
  */
 const roomEntry = ({ room, openings }: BuiltRoom): Placement => {
   if (room.entry !== undefined) {
@@ -161,14 +160,26 @@ const roomEntry = ({ room, openings }: BuiltRoom): Placement => {
   if (exit !== undefined) {
     return placementInside(room, exit.wall, exit.along);
   }
-  const portal = room.portals?.[0];
-  return centreFacing(
-    room,
-    openings[0] ??
-      (portal === undefined
-        ? undefined
-        : pointInside(room, portal.wall, portal.along, 0))
-  );
+  return centreFacing(room, openings[0]);
+};
+
+/**
+ * Where the player starts: as the start room is entered, except that a room
+ * entered at its centre faces its first portal rather than its first
+ * doorway: the way on from a hall of portals such as a repository entrance,
+ * even when a doorway leads to more of the hall.
+ */
+const startPlacement = (built: BuiltRoom): Placement => {
+  const { entry, portals = [] } = built.room;
+  const portal = portals[0];
+  const atCentre =
+    entry === undefined && !portals.some(({ kind }) => kind === "return");
+  return portal === undefined || !atCentre
+    ? roomEntry(built)
+    : centreFacing(
+        built.room,
+        pointInside(built.room, portal.wall, portal.along, 0)
+      );
 };
 
 /**
@@ -330,8 +341,7 @@ const buildWorld = (
     )
   );
   const startBuilt = rooms.find((built) => built.room.id === startRoom.id);
-  const entry =
-    startBuilt === undefined ? null : (entryOf.get(startBuilt.room.id) ?? null);
+  const entry = startBuilt === undefined ? null : startPlacement(startBuilt);
   const start = entry?.position ?? {
     x: startRoom.position[0],
     z: startRoom.position[2],
