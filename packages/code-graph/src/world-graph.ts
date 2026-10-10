@@ -17,7 +17,8 @@ import type {
   ModuleNode,
 } from "./code-graph";
 import { layoutFlow, planFlow } from "./flow-layout";
-import { modulePortalId, resolveSpecifier } from "./ids";
+import { modulePortalId } from "./ids";
+import { moduleLinks } from "./module-links";
 import { hubDimensions } from "./room-size";
 import { columnJitter, hubRatio } from "./variation";
 
@@ -116,6 +117,20 @@ const planModule = (
  * for walls it cannot have.
  */
 const MAX_HUB_DOORS = 5;
+
+/**
+ * Module portals per hub: a hub stops growing at 20 x 20 m, about eight
+ * openings of wall, so a module importing more files spreads its module
+ * portals along the hub chain, chaining further hubs when it runs out.
+ */
+const MODULE_PORTALS_PER_HUB = 8;
+
+/** How many of `links` module portals stand on the hub at `index`. */
+const linksOn = (index: number, links: number): number =>
+  Math.max(
+    0,
+    Math.min(MODULE_PORTALS_PER_HUB, links - index * MODULE_PORTALS_PER_HUB)
+  );
 
 /**
  * Splits the roots over hubs so that no hub exceeds MAX_HUB_DOORS once its
@@ -243,7 +258,10 @@ const sitesByCaller = (
   return groups;
 };
 
-/** `links`: module portals on the first hub, which widen it but are not doors. */
+/**
+ * `links`: module portals on the hubs, MODULE_PORTALS_PER_HUB to each from
+ * the first on, which widen them but are not doors.
+ */
 const moduleWorld = (
   graph: CodeGraph,
   module: ModuleNode,
@@ -323,7 +341,19 @@ const moduleWorld = (
     jumps.push(...realised.jumps);
     markers.push(...realised.markers);
   }
-  const groups = hubGroups(attached);
+  const rootGroups = hubGroups(attached);
+  const groups = [
+    ...rootGroups,
+    ...Array.from(
+      {
+        length: Math.max(
+          0,
+          Math.ceil(links / MODULE_PORTALS_PER_HUB) - rootGroups.length
+        ),
+      },
+      (): readonly FunctionNode[] => []
+    ),
+  ];
   const hubs = groups.map((group, index): GraphRoom => {
     const chain = (index > 0 ? 1 : 0) + (index < groups.length - 1 ? 1 : 0);
     const id = index === 0 ? module.id : `${module.id}#${index + 1}`;
@@ -332,7 +362,7 @@ const moduleWorld = (
       label: module.path,
       hub: true,
       ...hubDimensions(
-        group.length + chain + (index === 0 ? links : 0),
+        group.length + chain + linksOn(index, links),
         hubRatio(seed, id)
       ),
     };
@@ -364,36 +394,6 @@ const moduleWorld = (
     connections,
     portals: [...calls, ...returns, ...jumps, ...markers],
   };
-};
-
-/**
- * The files of the graph `module` imports (its linked imports) and then
- * the ones it re-exports from (`export … from`, so a barrel leads on to
- * what it gathers), each once, in source order, never itself.
- */
-const moduleLinks = (
-  graph: CodeGraph,
-  module: ModuleNode
-): readonly string[] => {
-  const ids = new Set(graph.modules.map((candidate) => candidate.id));
-  const links: string[] = [];
-  const reExported = module.exports.flatMap(({ specifier }) =>
-    specifier === null ? [] : [resolveSpecifier(module.id, specifier, ids)]
-  );
-  for (const moduleId of [
-    ...module.imports.map((record) => record.moduleId),
-    ...reExported,
-  ]) {
-    if (
-      moduleId !== null &&
-      moduleId !== module.id &&
-      ids.has(moduleId) &&
-      !links.includes(moduleId)
-    ) {
-      links.push(moduleId);
-    }
-  }
-  return links;
 };
 
 const EMPTY_LINKS: readonly string[] = [];
@@ -431,13 +431,17 @@ const toWorldGraph = (
   const rooms = [...world.hubs, ...world.rooms];
   const portals = [
     ...world.portals,
-    ...links.map((to): Portal => ({
-      id: modulePortalId(module.id, to),
-      kind: "module",
-      from: module.id,
-      to,
-      label: pathOf(to),
-    })),
+    ...links.map((to, index): Portal => {
+      const from =
+        world.hubs[Math.floor(index / MODULE_PORTALS_PER_HUB)]?.id ?? module.id;
+      return {
+        id: modulePortalId(from, to),
+        kind: "module",
+        from,
+        to,
+        label: pathOf(to),
+      };
+    }),
   ];
   // Only calls and module portals leave the module; the rest stay inside.
   const ids = new Set(rooms.map((room) => room.id));
@@ -458,4 +462,4 @@ const toWorldGraph = (
   };
 };
 
-export { edgeKey, moduleLinks, toWorldGraph };
+export { edgeKey, toWorldGraph };

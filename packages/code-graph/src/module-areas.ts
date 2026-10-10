@@ -4,7 +4,8 @@ import { assembleAreas } from "@repo/world-generator/areas";
 import { LayoutError } from "@repo/world-generator/layout";
 
 import type { CodeGraph, ModuleNode } from "./code-graph";
-import { edgeKey, moduleLinks, toWorldGraph } from "./world-graph";
+import { moduleLinks } from "./module-links";
+import { edgeKey, toWorldGraph } from "./world-graph";
 
 /** How one module's area is laid out. */
 type AreaInput = {

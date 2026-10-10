@@ -1,11 +1,13 @@
 import type { Portal } from "@repo/types";
+import { generateWorld } from "@repo/world-generator";
 import { validateGraph } from "@repo/world-generator/graph";
 import { describe, expect, it } from "vitest";
 
 import type { CodeGraph } from "./code-graph";
 import { fixtureGraph, importOf } from "./fixture";
 import { parseFlowNodeId } from "./ids";
-import { moduleLinks, toWorldGraph } from "./world-graph";
+import { moduleLinks } from "./module-links";
+import { toWorldGraph } from "./world-graph";
 
 /** A portal by kind, owning function, target and label; its room varies. */
 const shape = (portal: Portal) => [
@@ -110,5 +112,38 @@ describe("toWorldGraph across modules", () => {
     ]);
     expect(linked.external).toEqual(["b.ts"]);
     expect(() => validateGraph(linked)).not.toThrow();
+  });
+
+  it("spreads the module portals of a file importing many along its hubs", () => {
+    const targets = Array.from({ length: 20 }, (_, index) => `m${index}.ts`);
+    const graph = fixtureGraph(
+      {
+        path: "a.ts",
+        functions: [{ name: "one" }],
+        imports: targets.map((target) => importOf(target)),
+      },
+      ...targets.map((path) => ({ path, functions: [] }))
+    );
+    const world = toWorldGraph(graph);
+    const hubs = world.rooms.filter((room) => room.hub === true);
+    expect(hubs.map((hub) => hub.id)).toEqual(["a.ts", "a.ts#2", "a.ts#3"]);
+    const perHub = hubs.map(
+      (hub) =>
+        world.portals?.filter(
+          (portal) => portal.kind === "module" && portal.from === hub.id
+        ).length
+    );
+    expect(perHub).toEqual([8, 8, 4]);
+    expect(world.connections).toEqual(
+      expect.arrayContaining([
+        { from: "a.ts", to: "a.ts#2" },
+        { from: "a.ts#2", to: "a.ts#3" },
+      ])
+    );
+    expect(() => validateGraph(world)).not.toThrow();
+    for (let seed = 1; seed <= 8; seed += 1) {
+      const generated = generateWorld({ seed, graph: world });
+      expect(generated.layout.unplacedPortals, `seed ${seed}`).toEqual([]);
+    }
   });
 });
