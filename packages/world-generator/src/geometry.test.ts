@@ -217,6 +217,22 @@ describe("buildWorld", () => {
     expect(buildWorld(alone).facing).toEqual({ x: 1, z: 0 });
   });
 
+  it("faces the first portal when the start room has no door", () => {
+    const portal: PortalData = {
+      id: "module:hall",
+      kind: "module",
+      from: "lobby",
+      to: "x.ts",
+      wall: "north",
+      along: 1,
+    };
+    const rooms = [{ ...lobby, doors: [], portals: [portal] }];
+    const hall = buildWorld({ startRoomId: "lobby", rooms }, new Set(["x.ts"]));
+    expect(hall.start).toEqual({ x: 0, z: 0 });
+    // The middle of the portal on the north wall's edge.
+    expect(hall.facing).toEqual({ x: 1, z: -4 });
+  });
+
   it("rejects a door with no door back", () => {
     const oneWay: WorldData = {
       startRoomId: "lobby",

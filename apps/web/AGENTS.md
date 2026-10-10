@@ -106,15 +106,21 @@ external, x.render(…) ambiguous: A.render() | B.render()`). Choosing
   file is a portal into that file's function and Backspace returns across
   files. A call into a package stays a marker that names it
   (`closed · format(…) package "node:util"`). Modules are sorted by path.
-- Milestone 15 (current): module areas. Every file is laid out on its own,
+- Milestone 15: module areas. Every file is laid out on its own,
   as an area 32 m from the next (out of sight past the fog), and areas are
   joined by portals only: a call portal into another file's function, and a
   green module portal on a hub to every file it imports or re-exports from
   (`→ src/server.ts`), which empties the breadcrumb like walking into a hub.
-  The world starts in the first file nobody imports (`src/index.ts` in
-  `repo`), whose hub also leads to any file its imports never reach; the HUD
-  counts the modules. Areas are still built all at once and merged for the
-  renderer; generating them on approach comes later.
+  The HUD counts the modules. Areas are still built all at once and merged
+  for the renderer; generating them on approach comes later.
+- Milestone 16 (current): repository entrance. Every code world starts in
+  an entrance hall named after the repository's directory (`src`), facing
+  a module portal to its first entry module: every file nobody imports,
+  ranked by name (`index`, `main`, `server`, `app`, `cli`), unused exports
+  and depth, plus one way into any import cycle nothing else reaches, so
+  every file can be walked to. `repo` has one, `→ src/index.ts`; a
+  single-file example has its file. R returns to the entrance; the source
+  panel shows nothing there.
 
 ---
 

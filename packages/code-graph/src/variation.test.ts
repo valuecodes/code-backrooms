@@ -158,17 +158,13 @@ describe("seeded proportions", () => {
         const world = generateCodeWorld(graph, seed, { variation: false });
         for (const area of world.areas) {
           const module = graph.modules.find(({ id }) => id === area.id);
-          // Two modules that import nothing: the second is reached from the first.
-          const extra = area.id === world.entry ? ["b.ts"] : [];
+          // The entrance is not a module: entrance.test.ts covers it.
+          if (module === undefined) {
+            continue;
+          }
           const old = generateWorld({
             seed,
-            graph: toWorldGraph(
-              graph,
-              new Set(),
-              null,
-              module,
-              graph.modules.length > 1 ? extra : []
-            ),
+            graph: toWorldGraph(graph, new Set(), null, module),
             variation: false,
             corridorPrefix: `${area.id}/corridor-`,
           });

@@ -151,9 +151,21 @@ wall only and that side may be taken, so `generateCodeWorld(graph, seed)`
 (`LayoutError`), marks that edge portal-only (`toWorldGraph(graph,
 portalOnly)`), which turns the call into a portal and attaches the callee
 elsewhere, and tries again: a program that parses always becomes a world.
-The areas are then set apart and joined by portals only (`assembleAreas`);
-the player starts in the first module nobody imports, whose hub also leads
-to every module its imports never reach, so every area can be walked to.
+The areas are then set apart and joined by portals only (`assembleAreas`).
+The player starts in the repository entrance (`src/entrance.ts`, area and hub
+id `ENTRANCE_ID = "//entrance"`, which no normalised path can equal): a
+hub named after the directory every module lies in (`src`), else
+`repository`, with a module portal to each entry module, eight to a hub,
+further hubs chained on (`//entrance#2`). `entryModules(graph)`
+(`src/entrypoints.ts`) picks them, best first: every module nobody imports
+(nothing else leads there), ranked +3 for an `index`/`main`/`server`/`app`/
+`cli` basename, +1 per exported function nobody calls (at most 3) and -1
+per directory below a leading `src/`, ties by path; then, for modules only
+cycles reach, the best of what is still out of reach until imports from
+the entries reach every module. Every area can therefore be walked to,
+and `R` returns to the entrance. `roomSubject` names the entrance
+`{ kind: "entrance", name, modules }`; a module portal's subject has
+`from: null` there.
 `generateCodeWorld(graph, seed, { variation })` (variation on by default) also
 lets the seed vary proportions without changing what is connected: each
 function's column is 0, 0.5 or 1 m wider, added after budget folding so its
