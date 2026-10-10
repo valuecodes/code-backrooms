@@ -23,10 +23,12 @@ const FIXTURE_SIZE = [1.2, 0.08, 0.3] as const;
 const wallShade = (roomId: string): number =>
   1 + ((hashString(roomId) % 81) - 40) / 1000;
 
+// Not clamped at 1: plain walls are white, and vertex colours just above 1
+// brighten the wallpaper texture, so lighter rooms differ as darker ones do.
 const shaded = ([r, g, b]: Rgb, shade: number): Rgb => [
-  Math.min(1, r * shade),
-  Math.min(1, g * shade),
-  Math.min(1, b * shade),
+  r * shade,
+  g * shade,
+  b * shade,
 ];
 
 /**
