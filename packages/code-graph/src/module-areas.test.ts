@@ -5,6 +5,7 @@ import { containsPoint } from "@repo/world-generator/locate";
 import { describe, expect, it } from "vitest";
 
 import { demoGraph, fixtureGraph, importOf } from "./fixture";
+import { modulePortalId } from "./ids";
 import { generateCodeWorld } from "./module-areas";
 
 /** `main.ts` imports `lib.ts` and calls into it; `lib.ts` calls back. */
@@ -89,7 +90,10 @@ describe("generateCodeWorld", () => {
       .filter((portal) => portal.kind === "module")
       .map((portal) => portal.id);
     // c.ts reaches b.ts itself, so the entry needs no portal to b.ts.
-    expect(modulePortals).toEqual(["module:a.ts>c.ts", "module:c.ts>b.ts"]);
+    expect(modulePortals).toEqual([
+      modulePortalId("a.ts", "c.ts"),
+      modulePortalId("c.ts", "b.ts"),
+    ]);
     expect(checkAreas(world)).toEqual([]);
   });
 
