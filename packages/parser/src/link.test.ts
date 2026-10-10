@@ -113,6 +113,30 @@ describe("linkModules", () => {
     expect(callEdges(graph)).toEqual([]);
   });
 
+  it("marks a namespace member two stars export as ambiguous too", () => {
+    const graph = graphOf({
+      "a.ts": 'import * as ns from "./barrel";\nfunction one() { ns.two(); }',
+      "barrel.ts": 'export * from "./b";\nexport * from "./c";',
+      "b.ts": two,
+      "c.ts": two,
+    });
+    expect(siteOf(graph, "ns.two")).toMatchObject({
+      resolution: "ambiguous",
+      candidateIds: ["b.ts::two", "c.ts::two"],
+    });
+  });
+
+  it("never resolves a name stars bind to a function and a non-function", () => {
+    const graph = graphOf({
+      "a.ts": 'import { two } from "./barrel";\nfunction one() { two(); }',
+      "barrel.ts": 'export * from "./b";\nexport * from "./c";',
+      "b.ts": two,
+      "c.ts": "export const two = 2;",
+    });
+    expect(siteOf(graph, "two").resolution).toBe("unresolved");
+    expect(callEdges(graph)).toEqual([]);
+  });
+
   it("lets a named export win over a star", () => {
     const graph = graphOf({
       "a.ts": 'import { two } from "./barrel";\nfunction one() { two(); }',
