@@ -31,7 +31,7 @@ type PlayerProps = {
   /**
    * Called from the render loop whenever the player crosses into another
    * room (or corridor), with its id, or null outside every room. Fires once
-   * for the start room after the world changes.
+   * for the start room after the world's start changes.
    */
   readonly onRoomChange?: (roomId: string | null) => void;
   /** Applied when it changes: the player is put there, looking at `facing`. */
@@ -113,14 +113,17 @@ const Player = ({
     [camera]
   );
 
+  // Keyed on the start, not the world: a world that grew (another area
+  // joined in) keeps its start objects, and the player stays where they are.
+  const { start, facing } = world;
   useLayoutEffect(() => {
-    place({ position: world.start, facing: world.facing });
+    place({ position: start, facing });
     // Forget the room too, so the first frame reports the new start room.
     roomId.current = null;
     armed.current = true;
     // The near-target key is kept on purpose: the next frame compares the
     // new world's answer against it and so reports a prompt that went away.
-  }, [place, world]);
+  }, [place, start, facing]);
 
   useLayoutEffect(() => {
     if (placement !== null && placement !== undefined) {

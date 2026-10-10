@@ -12,9 +12,12 @@ import { openingCentre, roomBounds } from "@repo/world-generator/geometry";
 // the player has stood in, the rooms seen through their doors, and the doors
 // and portals of the rooms stood in.
 
-/** The rooms stood in, for one world; another world starts an empty set. */
+/**
+ * The rooms stood in, for one world: its seed, which stays the same while
+ * the world grows area by area; another seed starts an empty set.
+ */
 type Visits = {
-  readonly world: BuiltWorld | null;
+  readonly seed: number | null;
   readonly rooms: ReadonlySet<string>;
 };
 
@@ -51,32 +54,30 @@ type MapModel = {
 
 const NO_ROOMS: ReadonlySet<string> = new Set();
 
-const EMPTY_VISITS: Visits = { world: null, rooms: NO_ROOMS };
+const EMPTY_VISITS: Visits = { seed: null, rooms: NO_ROOMS };
 
-/** The visited rooms of `world`, or none when `visits` belongs to another. */
-const visitedIn = (
-  visits: Visits,
-  world: BuiltWorld | null
-): ReadonlySet<string> => (visits.world === world ? visits.rooms : NO_ROOMS);
+/** The visited rooms of the world of `seed`, or none when `visits` belongs to another. */
+const visitedIn = (visits: Visits, seed: number | null): ReadonlySet<string> =>
+  visits.seed === seed ? visits.rooms : NO_ROOMS;
 
 /**
- * Records that the player stands in `roomId` of `world`. Unchanged (the same
- * object) outside every room or in a room already recorded, so a React state
- * update with it does not re-render.
+ * Records that the player stands in `roomId` of the world of `seed`.
+ * Unchanged (the same object) outside every room or in a room already
+ * recorded, so a React state update with it does not re-render.
  */
 const visit = (
   visits: Visits,
-  world: BuiltWorld | null,
+  seed: number | null,
   roomId: string | null
 ): Visits => {
-  const rooms = visitedIn(visits, world);
+  const rooms = visitedIn(visits, seed);
   if (roomId === null) {
-    return visits.world === world ? visits : { world, rooms };
+    return visits.seed === seed ? visits : { seed, rooms };
   }
-  if (rooms.has(roomId) && visits.world === world) {
+  if (rooms.has(roomId) && visits.seed === seed) {
     return visits;
   }
-  return { world, rooms: new Set([...rooms, roomId]) };
+  return { seed, rooms: new Set([...rooms, roomId]) };
 };
 
 /** Doors on a shared wall are reported by both rooms at the same point. */

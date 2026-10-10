@@ -138,7 +138,7 @@ const assembleAreas = (
       area.graph.rooms.map((room) => [room.id, area.id] as const)
     )
   );
-  return { seed, entry, areas, areaOf };
+  return { seed, entry, areas, pending: [], areaOf };
 };
 
 /** Where a portal into another area's unit lands, or null if nothing has it. */
@@ -204,6 +204,7 @@ export {
   layoutBounds,
   mergeAreas,
   packOffsets,
+  placeArea,
   SHELF_WIDTH,
   translateLayout,
 };

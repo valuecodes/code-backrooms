@@ -151,7 +151,11 @@ wall only and that side may be taken, so `generateCodeWorld(graph, seed)`
 (`LayoutError`), marks that edge portal-only (`toWorldGraph(graph,
 portalOnly)`), which turns the call into a portal and attaches the callee
 elsewhere, and tries again: a program that parses always becomes a world.
-The areas are then set apart and joined by portals only (`assembleAreas`).
+The areas are then set apart and joined by portals only. `codeAreaStore(graph,
+seed, { variation, eager })` does the same on demand (`createAreaStore`):
+the entrance at once, each module on its first `ensure`, its units known
+before from its world graph alone, since demoting a call door and varying
+proportions change no room; `generateCodeWorld` is the eager store's world.
 The player starts in the repository entrance (`src/entrance.ts`, area and hub
 id `ENTRANCE_ID = "//entrance"`, which no normalised path can equal): a
 hub named after the directory every module lies in (`src`), else

@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/world-generator.ts",
     "./area-checks": "./src/area-checks.ts",
+    "./area-store": "./src/area-store.ts",
     "./areas": "./src/areas.ts",
     "./collision": "./src/collision.ts",
     "./config": "./src/config.ts",

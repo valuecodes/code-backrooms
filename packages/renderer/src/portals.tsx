@@ -20,24 +20,35 @@ type PortalsProps = {
 /** Keeps the void plane clear of the wall's inner face. */
 const LIFT = 0.01;
 
-const KINDS: readonly PortalKind[] = [
+/** How a portal's plane looks: by its kind, or dim while it leads nowhere yet. */
+type Look = PortalKind | "pending";
+
+const LOOKS: readonly Look[] = [
   "call",
   "return",
   "jump",
   "marker",
   "module",
+  "pending",
 ];
 
 /**
- * One plane per portal of a kind, standing on the wall's inner face and
+ * A portal into an area that is not generated yet has no arrival; a marker
+ * never leads anywhere and keeps its board.
+ */
+const lookOf = ({ portal, arrival }: BuiltPortal): Look =>
+  arrival === null && portal.kind !== "marker" ? "pending" : portal.kind;
+
+/**
+ * One plane per portal of a look, standing on the wall's inner face and
  * facing into the room, merged into a single geometry.
  */
 const voidPlanes = (
   portals: readonly BuiltPortal[],
-  kind: PortalKind
+  look: Look
 ): BufferGeometry | null => {
   const parts = portals
-    .filter((portal) => portal.portal.kind === kind)
+    .filter((portal) => lookOf(portal) === look)
     .map((portal) => {
       const [x, y, z] = portal.frame.center;
       const { normal } = portal;
@@ -63,7 +74,8 @@ const voidPlanes = (
 /**
  * Every portal in the world: the frames as one mesh (the same dark wood as
  * the doorways) and one plane mesh per kind, dark and faintly glowing, or
- * for a marker a dull board that closes the frame.
+ * for a marker a dull board that closes the frame. A portal into an area
+ * not generated yet stays dark until it is.
  */
 const Portals = ({ portals }: PortalsProps) => {
   const surfaces = useSurfaces();
@@ -76,7 +88,7 @@ const Portals = ({ portals }: PortalsProps) => {
     [portals]
   );
   const voids = useMemo(
-    () => KINDS.map((kind) => [kind, voidPlanes(portals, kind)] as const),
+    () => LOOKS.map((look) => [look, voidPlanes(portals, look)] as const),
     [portals]
   );
   useEffect(
@@ -94,7 +106,8 @@ const Portals = ({ portals }: PortalsProps) => {
     jump: surfaces.voidJump,
     marker: surfaces.markerPanel,
     module: surfaces.voidModule,
-  } satisfies Record<PortalKind, unknown>;
+    pending: surfaces.voidPending,
+  } satisfies Record<Look, unknown>;
   return (
     <group>
       {frames !== null && (
@@ -105,12 +118,12 @@ const Portals = ({ portals }: PortalsProps) => {
           dispose={null}
         />
       )}
-      {voids.map(([kind, geometry]) =>
+      {voids.map(([look, geometry]) =>
         geometry === null ? null : (
           <mesh
-            key={kind}
+            key={look}
             geometry={geometry}
-            material={materialOf[kind]}
+            material={materialOf[look]}
             dispose={null}
           />
         )

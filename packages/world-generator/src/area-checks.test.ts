@@ -50,6 +50,21 @@ describe("checkAreas", () => {
     );
   });
 
+  it("accepts a portal into an area not generated yet", () => {
+    const world = areaWorld();
+    const pending = {
+      ...world,
+      areas: world.areas.filter((area) => area.id !== "three"),
+      pending: ["three"],
+    };
+    expect(checkAreas(pending)).toEqual([]);
+    expect(checkAreas({ ...pending, pending: [] })).toEqual(
+      expect.arrayContaining([
+        "portal module:hub2>hub3 leads to unknown unit hub3",
+      ])
+    );
+  });
+
   it("names an area no placed portal reaches", () => {
     const [, two, three] = areaGraphs;
     if (two === undefined || three === undefined) {

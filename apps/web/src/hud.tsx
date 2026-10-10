@@ -2,8 +2,10 @@ type HudProps = {
   readonly locked: boolean;
   readonly seed: number;
   readonly rooms: number;
-  /** Modules of a code world, each its own area. */
-  readonly modules: number;
+  /** Modules of a code world generated so far and in all, each its own area. */
+  readonly modules: { readonly built: number; readonly total: number };
+  /** Milliseconds the last module generated on the way took, or null. */
+  readonly lastMs: number | null;
   readonly preset: string | null;
   readonly code: string | null;
   /** Where the player is: `file · fn()` for code worlds, else the room id. */
@@ -33,20 +35,36 @@ const codeHints: readonly (readonly [string, string])[] = [
   ["Wheel", "scroll the source"],
 ];
 
+/** `6 modules` once all are generated, `2/6 modules · last 14 ms` on the way. */
+const modulesOf = ({
+  modules: { built, total },
+  lastMs,
+}: Pick<HudProps, "modules" | "lastMs">): string | null => {
+  if (total <= 1) {
+    return null;
+  }
+  const count = built < total ? `${built}/${total}` : `${total}`;
+  return lastMs === null
+    ? `${count} modules`
+    : `${count} modules · last ${Math.round(lastMs)} ms`;
+};
+
 const whereOf = ({
   seed,
   rooms,
   modules,
+  lastMs,
   preset,
   code,
 }: Pick<
   HudProps,
-  "seed" | "rooms" | "modules" | "preset" | "code"
+  "seed" | "rooms" | "modules" | "lastMs" | "preset" | "code"
 >): string => {
   if (code !== null) {
-    return modules > 1
-      ? `seed ${seed} · code ${code} · ${modules} modules`
-      : `seed ${seed} · code ${code}`;
+    const count = modulesOf({ modules, lastMs });
+    return count === null
+      ? `seed ${seed} · code ${code}`
+      : `seed ${seed} · code ${code} · ${count}`;
   }
   return `seed ${seed} · ${preset ?? `${rooms} rooms`}`;
 };

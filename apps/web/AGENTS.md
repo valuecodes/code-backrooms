@@ -121,11 +121,19 @@ external, x.render(…) ambiguous: A.render() | B.render()`). Choosing
   every file can be walked to. `repo` has one, `→ src/index.ts`; a
   single-file example has its file. R returns to the entrance; the source
   panel shows nothing there.
-- Milestone 17 (current): class lobbies. The methods of a top-level class
+- Milestone 17: class lobbies. The methods of a top-level class
   that hang off the hub open off a lobby of their own instead (`class
 UserService`), one door of the module hub; methods reached by a call door
   keep it. The HUD reads `service.ts · class UserService` and the source
   panel shows the whole class.
+- Milestone 18 (current): lazy areas. A code world generates its entrance
+  only; a module's area is generated when the player faces a portal into
+  it (or steps into one first), placed after the areas so far, so nothing
+  already there moves, and the player, the breadcrumb and the map carry on.
+  A portal into a file not generated yet is dark until it is; one whose
+  file could not be laid out stays dark and reads `closed · <file> could
+not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
+  `?eager=1` generates every module up front, as before.
 
 ---
 

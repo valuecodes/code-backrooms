@@ -16,16 +16,26 @@ describe("parseWorldParams", () => {
       rooms: 15,
       preset: null,
       code: null,
+      eager: false,
     });
   });
 
   it("reads seed, rooms, a known preset and a known example", () => {
-    expect(parseWorldParams("?seed=42&rooms=20&graph=hub&code=demo")).toEqual({
+    expect(
+      parseWorldParams("?seed=42&rooms=20&graph=hub&code=demo&eager=1")
+    ).toEqual({
       seed: 42,
       rooms: 20,
       preset: "hub",
       code: "demo",
+      eager: true,
     });
+  });
+
+  it("is eager only for eager=1", () => {
+    expect(parseWorldParams("?eager=0").eager).toBe(false);
+    expect(parseWorldParams("?eager=true").eager).toBe(false);
+    expect(parseWorldParams("?eager").eager).toBe(false);
   });
 
   it("clamps rooms and ignores junk", () => {
@@ -36,6 +46,7 @@ describe("parseWorldParams", () => {
       rooms: 40,
       preset: null,
       code: null,
+      eager: false,
     });
     expect(parseWorldParams("?rooms=-5")).toMatchObject({ rooms: 1 });
     expect(parseWorldParams("?rooms=20junk&seed=1.5")).toMatchObject({

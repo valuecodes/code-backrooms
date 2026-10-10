@@ -15,7 +15,8 @@ list of failures for tests), `./geometry` (`buildWorld`), `./collision`,
 (the exploration stack), `./interaction` (what the player can step into or is
 facing), `./random`, `./config`, `./presets` (hand-written graphs: `lobby`,
 `linear`, `branching`, `hub`, `cycle`), `./areas` (`assembleAreas`,
-`mergeAreas`), `./area-checks` (`checkAreas`).
+`mergeAreas`), `./area-store` (`createAreaStore`: areas generated on
+demand), `./area-checks` (`checkAreas`).
 
 Supported graphs: unique ids, dimensions on the 0.5 m grid and at least 2 m,
 undirected connections without duplicates, one connected component. Rooms
@@ -92,3 +93,16 @@ area, so `checkLayout` does not apply to it. `checkAreas` does: every area's
 own `checkLayout`, ids unique across areas, areas 32 m apart, each start
 room at its offset, cross-area portals landing in their unit, and every area
 reachable from the entry over placed portals.
+`createAreaStore({ seed, entry, specs })` generates areas when they are
+first needed: each spec names its units up front (so `areaOf` knows where
+every portal leads) and generates its world on demand. The entry is
+generated at once; `ensure(id)` generates another, idempotently, placing it
+after those so far. The packing depends only on the sequence placed before,
+so an area never moves and a world that grows keeps every room, portal and
+landing it had: lazily, areas are placed in the order the player reaches
+them; `ensureAll()` gives what `assembleAreas` does. `snapshot()` is the same
+object until something changes: `world` (an `AreaWorld` whose `pending`
+lists the areas not generated yet; `checkAreas` accepts a portal into one),
+`errors` (an area whose generation threw, kept and not retried) and `lastMs`
+(how long the last generating `ensure` took). `subscribe` fits React's
+`useSyncExternalStore`.
