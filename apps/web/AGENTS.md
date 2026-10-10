@@ -75,7 +75,7 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   file for a hub, the whole function for a function, and the function with
   the room's own code marked for a flow room (a merge, test or end room
   marks its whole `if`, loop or switch; a room the budget folded marks
-  everything folded into it).
+  everything folded into it). The mouse wheel scrolls it.
 
 ---
 
@@ -132,7 +132,7 @@ WASD and the mouse move and look, Shift sprints. Walking into a call door or
 a call portal enters that function; Backspace (or the room's return portal)
 goes back to where it was entered, or to the file hub when nothing was; R
 returns to the world start with an empty stack; N takes the next seed; E
-shows or hides the source panel in a code world.
+shows or hides the source panel in a code world, and the wheel scrolls it.
 
 ### The pipeline
 
