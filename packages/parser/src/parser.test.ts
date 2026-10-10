@@ -144,6 +144,14 @@ describe("function discovery", () => {
         "  class InCallback {}",
         "});",
         "const Expr = class {};",
+        "class Host {",
+        "  static {",
+        "    class InStatic { run() {} }",
+        "  }",
+        "}",
+        "namespace Space {",
+        "  class InSpace {}",
+        "}",
         "export default class {}",
       ].join("\n")
     );
@@ -160,6 +168,9 @@ describe("function discovery", () => {
       ["t.ts//class:Local~2", "Local", false, true],
       ["t.ts//class:Inner", "Inner", false, false],
       ["t.ts//class:InCallback", "InCallback", false, false],
+      ["t.ts//class:Host", "Host", false, true],
+      ["t.ts//class:InStatic", "InStatic", false, false],
+      ["t.ts//class:InSpace", "InSpace", false, false],
       ["t.ts//class:default", "default", true, true],
     ]);
     // The declaration itself, after `export `.
