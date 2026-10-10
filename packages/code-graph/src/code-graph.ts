@@ -14,12 +14,49 @@ type SourceSpan = {
 
 type Language = "typescript" | "javascript";
 
+/**
+ * One binding an `import` declaration introduces, or for a declaration with
+ * no bindings (`import "./polyfill"`) one record with both names null: the
+ * module still depends on it. Type-only imports are not recorded.
+ */
+type ImportRecord = {
+  /** `x` in `import { a as x }`, `ns` in `import * as ns`, `d` in `import d`. */
+  readonly localName: string | null;
+  /** `a` for a named import, `"*"` for a namespace, `"default"` for a default. */
+  readonly importedName: string | null;
+  /** As written: `"./a"`, `"lodash"`, `"node:fs"`. */
+  readonly specifier: string;
+  /** The imported module, once linked; null for packages and before linking. */
+  readonly moduleId: string | null;
+  readonly span: SourceSpan;
+};
+
+/**
+ * One name a module exports. A local export has a `localName` and no
+ * `specifier`; a re-export (`export … from`) has a `specifier` and no
+ * `localName`. Type-only exports are not recorded.
+ */
+type ExportRecord = {
+  /** The public name: `"default"` for a default export, `"*"` for `export *`. */
+  readonly exportedName: string;
+  /** The local binding; null for re-exports and a default expression. */
+  readonly localName: string | null;
+  /** `"./b"` for `export … from "./b"`, else null. */
+  readonly specifier: string | null;
+  /** For re-exports: `x` in `export { x as y } from`, `"*"` for a star. */
+  readonly importedName: string | null;
+};
+
 type ModuleNode = {
   /** The normalised path doubles as the id: "src/demo.ts". */
   readonly id: string;
   readonly path: string;
   readonly language: Language;
   readonly lineCount: number;
+  /** Import bindings in source order. */
+  readonly imports: readonly ImportRecord[];
+  /** Exported names in source order. */
+  readonly exports: readonly ExportRecord[];
 };
 
 type FunctionKind =
@@ -185,12 +222,25 @@ type FunctionNode = {
  * dynamic: the callee is computed at run time (a parameter or callback,
  * `obj[key]()`, `f()()`); external: a known runtime global such as
  * `console.log`; unresolved: anything else the analysis cannot follow
- * (imports, variables, `obj.method()` on an unknown receiver, `super`).
+ * (imports, variables, `obj.method()` on an unknown receiver, `super`). A
+ * call through an import stays unresolved within its file and carries `via`.
  */
 type CallResolution =
   "resolved" | "ambiguous" | "dynamic" | "unresolved" | "external";
 
 type CallKind = "call" | "optional-call" | "new";
+
+/**
+ * How a call reaches an import binding of its module: `helper()` and
+ * `new Svc()` name it directly (`member` null), `ns.run()` and `Svc.make()`
+ * through one member access. Deeper chains (`ns.a.b()`) carry none.
+ */
+type ImportVia = {
+  /** The import binding's local name. */
+  readonly localName: string;
+  readonly member: string | null;
+  readonly isNew: boolean;
+};
 
 type CallSite = {
   /**
@@ -211,6 +261,8 @@ type CallSite = {
   /** The call is the direct operand of an `await`. */
   readonly awaited: boolean;
   readonly span: SourceSpan;
+  /** Set when the callee is an import binding (see ImportVia). */
+  readonly via?: ImportVia;
 };
 
 /**
@@ -252,11 +304,14 @@ export type {
   CodeGraph,
   ContainmentEdge,
   ContinueNode,
+  ExportRecord,
   FlowNode,
   FlowStep,
   FunctionKind,
   FunctionNode,
   GraphEdge,
+  ImportRecord,
+  ImportVia,
   Language,
   LoopKind,
   LoopNode,

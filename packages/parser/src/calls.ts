@@ -66,7 +66,7 @@ const visitCalls = (
   }
   const call = callOf(node);
   if (call !== null) {
-    const { calleeName, target, resolution, candidates } = resolveCallee(
+    const { calleeName, target, resolution, candidates, via } = resolveCallee(
       call.kind,
       call.callee,
       scope,
@@ -85,6 +85,7 @@ const visitCalls = (
       kind: call.kind,
       awaited,
       span,
+      ...(via === undefined ? {} : { via }),
     });
   }
   for (const child of childrenOf(node)) {

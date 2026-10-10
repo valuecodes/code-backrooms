@@ -218,7 +218,14 @@ describe("markers", () => {
     const fn = fnWith([stepIn(100, 120)]);
     const graph: CodeGraph = {
       modules: [
-        { id: "m.ts", path: "m.ts", language: "typescript", lineCount: 1 },
+        {
+          id: "m.ts",
+          path: "m.ts",
+          language: "typescript",
+          lineCount: 1,
+          imports: [],
+          exports: [],
+        },
       ],
       functions: [fn],
       callSites: [open(105)],

@@ -241,6 +241,8 @@ describe("parseModule", () => {
       path: "src/a.ts",
       language: "typescript",
       lineCount: 3,
+      imports: [],
+      exports: [],
     });
   });
 

@@ -37,9 +37,29 @@ its own class) is ambiguous when two or more classes of the file declare an
 instance member `x`. With one or none it stays unresolved, since one candidate
 would still be a guess. Computed callees (`obj[k]()`), call results
 (`f()()`), `(a || b)()` and the like are dynamic. Imports, `super.x()` and
-IIFEs are unresolved; cross-file resolution is a later milestone. A call that
+IIFEs are unresolved; cross-file resolution is a later milestone. A call
+through an import binding (`helper()`, `new Svc()`, `ns.run()`, `Svc.make()`)
+stays unresolved but carries `via: { localName, member, isNew }` for the
+linker; an inner binding of the same name shadows it and carries none, and
+deeper chains (`ns.a.b()`) carry none either. A call that
 starts where an inner one does (`f()()`) is told apart by its end:
 `main@12-20`.
+
+Each module records its imports and exports (`ModuleNode.imports`,
+`ModuleNode.exports`). An import record is one binding: `localName`,
+`importedName` (`"default"`, `"*"` for a namespace, else the name), the
+`specifier` as written and `moduleId` (null until cross-file linking). A
+side-effect import (`import "./setup"`, `import {} from "./x"`) is one record
+with both names null. An export record is `exportedName` with either a
+`localName` (declarations, destructured variables included, and `export {
+a as b }`) or, for `export … from`, a `specifier` and `importedName` (`"*"`
+for `export *` and `export * as ns`). `export default` names its target: a
+named function or class by its name, an anonymous one, an arrow or a
+function expression by `"default"`, an identifier by itself, any other
+expression by null. Type-only imports and exports, `import x = require()`
+and `export =` are not recorded. `FunctionNode.exported` is true for a
+function declared with `export`, or for a top-level one whose name a local
+export record names.
 
 Each function also carries its body as control flow (`FunctionNode.flow`, a
 `SequenceNode`), built after the calls are resolved so every statement can

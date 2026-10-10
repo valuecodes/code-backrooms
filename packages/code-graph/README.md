@@ -13,9 +13,10 @@ const world = generateWorld({ seed: 1, graph: toWorldGraph(graph) });
 roomSubject(graph, world.layout.startRoomId); // { kind: "module", module }
 ```
 
-`.` holds only types: modules, functions (with spans, kinds, qualified names,
-stable ids and their control flow), call sites with a resolution status, and
-call/containment edges. `./ids` builds the ids (`demo.ts`,
+`.` holds only types: modules (with their import and export records),
+functions (with spans, kinds, qualified names, stable ids and their control
+flow), call sites with a resolution status (a call through an import also
+names the binding in `via`), and call/containment edges. `./ids` builds the ids (`demo.ts`,
 `demo.ts::UserService.load`, `~2` on repeats).
 
 A function's `flow` is a `SequenceNode` of steps: `step` (folded plain

@@ -82,6 +82,64 @@ describe("call resolution", () => {
       ["t.ts::run", "fetch", "unresolved", null],
       ["t.ts::block", "target", "unresolved", null],
     ]);
+    expect(
+      parse(source).callSites.map((site) => [site.calleeName, site.via])
+    ).toEqual([
+      ["factory", undefined],
+      ["target", undefined],
+      ["console.log", undefined],
+      ["fetch", { localName: "fetch", member: null, isNew: false }],
+      ["target", undefined],
+    ]);
+  });
+
+  it("marks calls through imports with how they reach the binding", () => {
+    const source = [
+      'import { helper, Svc } from "./h";',
+      'import * as ns from "./ns";',
+      'import { console } from "./log";',
+      "function run() {",
+      "  helper(); ns.run(); new Svc(); Svc.make(); ns.a.b();",
+      "  helper?.(); console.log();",
+      "}",
+      "function shadow() { const helper = 1 as never; helper(); }",
+    ].join("\n");
+    expect(
+      parse(source).callSites.map((site) => [
+        site.calleeName,
+        site.resolution,
+        site.via,
+      ])
+    ).toEqual([
+      [
+        "helper",
+        "unresolved",
+        { localName: "helper", member: null, isNew: false },
+      ],
+      [
+        "ns.run",
+        "unresolved",
+        { localName: "ns", member: "run", isNew: false },
+      ],
+      ["Svc", "unresolved", { localName: "Svc", member: null, isNew: true }],
+      [
+        "Svc.make",
+        "unresolved",
+        { localName: "Svc", member: "make", isNew: false },
+      ],
+      ["ns.a.b", "unresolved", undefined],
+      [
+        "helper",
+        "unresolved",
+        { localName: "helper", member: null, isNew: false },
+      ],
+      [
+        "console.log",
+        "unresolved",
+        { localName: "console", member: "log", isNew: false },
+      ],
+      ["helper", "unresolved", undefined],
+    ]);
   });
 
   it("keeps callback and object-method parameters in their own scope", () => {
