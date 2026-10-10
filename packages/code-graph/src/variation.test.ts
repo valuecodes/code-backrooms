@@ -32,9 +32,35 @@ const twoModules = (): CodeGraph =>
     }
   );
 
+/**
+ * Crowded enough that a call door fails to place and is demoted to a
+ * portal; at seed 10 the varied footprints used to demote other calls than
+ * the plain ones (PR #13 review).
+ */
+const crowded = (): CodeGraph =>
+  fixtureGraph({
+    path: "x.ts",
+    functions: [
+      { name: "f0", calls: ["f0", "f6", "f12"] },
+      { name: "f1", calls: ["f3", "f7", "f9", "f5", "f12"] },
+      { name: "f2", calls: ["f6", "f1"] },
+      { name: "f3", calls: ["f3", "f2"] },
+      { name: "f4", calls: ["f0", "f5"] },
+      { name: "f5", calls: ["f3", "f2", "f0", "f5"] },
+      { name: "f6", calls: ["f10", "f3", "f2"] },
+      { name: "f7", calls: ["f7", "f9", "f2"] },
+      { name: "f8", calls: ["f5", "f10", "f12", "f3"] },
+      { name: "f9", calls: ["f1", "f4", "f5", "f3"] },
+      { name: "f10", calls: [] },
+      { name: "f11", calls: ["f7", "f1", "f3", "f0"] },
+      { name: "f12", calls: ["f11", "f3", "f12"] },
+    ],
+  });
+
 const graphs: readonly (readonly [string, () => CodeGraph])[] = [
   ["demo", demoGraph],
   ["two modules", twoModules],
+  ["a crowded module", crowded],
 ];
 
 /** A world graph with every footprint dropped: what variation may not change. */

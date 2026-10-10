@@ -403,28 +403,26 @@ const toWorldGraph = (
     : { rooms, connections, portals, start };
 };
 
+type Plain = {
+  readonly world: GeneratedWorld;
+  /** The call edges demoted to portals, which fix the door/portal plan. */
+  readonly portalOnly: ReadonlySet<string>;
+};
+
 /**
- * The code graph laid out; the seed only changes the placement. A call
- * door the layout cannot place (a call inside a lane offers one wall only,
- * and that side may be taken) is demoted to a portal and the layout tried
- * again, so a program that parses always becomes a world: tree calls are
- * walkable where the walls allow, the rest teleport. `variation` (on by
- * default) lets the seed vary proportions too: column and hub widths here,
- * corridor widths in the layout.
+ * The plain world: a call door the layout cannot place is demoted to a
+ * portal and the layout tried again, until everything fits.
  */
-const generateCodeWorld = (
-  graph: CodeGraph,
-  seed: number,
-  { variation = true }: { readonly variation?: boolean } = {}
-): GeneratedWorld => {
+const plainWorld = (graph: CodeGraph, seed: number): Plain => {
   const portalOnly = new Set<string>();
   for (;;) {
     try {
-      return generateWorld({
+      const world = generateWorld({
         seed,
-        graph: toWorldGraph(graph, portalOnly, variation ? seed : null),
-        variation,
+        graph: toWorldGraph(graph, portalOnly),
+        variation: false,
       });
+      return { world, portalOnly };
     } catch (error) {
       const failed =
         error instanceof LayoutError && error.connection.kind === "call"
@@ -435,6 +433,48 @@ const generateCodeWorld = (
       }
       portalOnly.add(failed);
     }
+  }
+};
+
+/** Ids of what a layout left out: unresolved connections, unplaced portals. */
+const gapsOf = ({ layout }: GeneratedWorld): string =>
+  JSON.stringify([
+    ...layout.unresolved.map(({ from, to }) => `${from}->${to}`).toSorted(),
+    ...layout.unplacedPortals.map(({ id }) => id).toSorted(),
+  ]);
+
+/**
+ * The code graph laid out; the seed only changes the placement. A call
+ * door the layout cannot place (a call inside a lane offers one wall only,
+ * and that side may be taken) is demoted to a portal and the layout tried
+ * again, so a program that parses always becomes a world: tree calls are
+ * walkable where the walls allow, the rest teleport. `variation` (on by
+ * default) lets the seed vary proportions too: column and hub widths here,
+ * corridor widths in the layout. Which calls are doors is decided on the
+ * plain world first and kept; a varied layout that cannot realise exactly
+ * that plan gives way to the plain world, so variation never changes what
+ * is connected.
+ */
+const generateCodeWorld = (
+  graph: CodeGraph,
+  seed: number,
+  { variation = true }: { readonly variation?: boolean } = {}
+): GeneratedWorld => {
+  const plain = plainWorld(graph, seed);
+  if (!variation) {
+    return plain.world;
+  }
+  try {
+    const varied = generateWorld({
+      seed,
+      graph: toWorldGraph(graph, plain.portalOnly, seed),
+    });
+    return gapsOf(varied) === gapsOf(plain.world) ? varied : plain.world;
+  } catch (error) {
+    if (error instanceof LayoutError) {
+      return plain.world;
+    }
+    throw error;
   }
 };
 

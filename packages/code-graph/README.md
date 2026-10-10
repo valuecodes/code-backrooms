@@ -134,7 +134,9 @@ lets the seed vary proportions without changing what is connected: each
 function's column is 0, 0.5 or 1 m wider, added after budget folding so its
 rooms stay the same, each hub starts 1, 1.25 or 1.5 times wider than deep
 (`toWorldGraph(graph, portalOnly, seed)`; a null seed keeps both plain), and
-the layout varies corridor widths. Inside a column a door that only leads on
+the layout varies corridor widths. Which calls are doors is settled on the
+plain world first and kept for the varied one; a varied layout that cannot
+realise exactly that plan gives way to the plain world. Inside a column a door that only leads on
 (to the next room, into a merge, a loop's test or back round to its head) is a
 passage (`opening: "passage"`), as wide as the rooms allow; a door into a lane
 stays a door. Functions a
