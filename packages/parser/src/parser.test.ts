@@ -126,6 +126,50 @@ describe("function discovery", () => {
     ]);
   });
 
+  it("records class declarations with spans, export flags and scope", () => {
+    const { classes } = parse(
+      [
+        "export class Svc {",
+        "  load() {}",
+        "}",
+        "if (flag) {",
+        "  class Local {}",
+        "} else {",
+        "  class Local {}",
+        "}",
+        "function make() {",
+        "  class Inner {}",
+        "}",
+        "run(() => {",
+        "  class InCallback {}",
+        "});",
+        "const Expr = class {};",
+        "export default class {}",
+      ].join("\n")
+    );
+    expect(
+      classes.map(({ id, name, exported, topLevel }) => [
+        id,
+        name,
+        exported,
+        topLevel,
+      ])
+    ).toEqual([
+      ["t.ts//class:Svc", "Svc", true, true],
+      ["t.ts//class:Local", "Local", false, true],
+      ["t.ts//class:Local~2", "Local", false, true],
+      ["t.ts//class:Inner", "Inner", false, false],
+      ["t.ts//class:InCallback", "InCallback", false, false],
+      ["t.ts//class:default", "default", true, true],
+    ]);
+    // The declaration itself, after `export `.
+    expect(classes[0]?.span).toMatchObject({
+      start: 7,
+      startLine: 1,
+      endLine: 3,
+    });
+  });
+
   it("qualifies nested named functions and links them to their parent", () => {
     const { functions, edges } = parse(
       "function outer() {\n  function inner() { deep(); }\n  const deep = () => {};\n  inner();\n}"
@@ -254,11 +298,15 @@ describe("parseModule", () => {
 describe("buildCodeGraph", () => {
   it("sorts modules by path and rejects duplicate paths", () => {
     const graph = buildCodeGraph([
-      { path: "b.ts", source: "function b() {}" },
-      { path: "./a.ts", source: "function a() {}" },
+      { path: "b.ts", source: "function b() {}\nclass B {}" },
+      { path: "./a.ts", source: "function a() {}\nclass A {}" },
     ]);
     expect(graph.modules.map((module) => module.id)).toEqual(["a.ts", "b.ts"]);
     expect(graph.functions.map((fn) => fn.id)).toEqual(["a.ts::a", "b.ts::b"]);
+    expect(graph.classes.map((cls) => cls.id)).toEqual([
+      "a.ts//class:A",
+      "b.ts//class:B",
+    ]);
     expect(() =>
       buildCodeGraph([
         { path: "a.ts", source: "" },

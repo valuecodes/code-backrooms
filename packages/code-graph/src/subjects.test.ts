@@ -10,7 +10,7 @@ import type {
 import { demoGraph, fixtureGraph, importOf } from "./fixture";
 import { branch, fnWith, step } from "./flow-fixture";
 import { layoutFlow, planFlow } from "./flow-layout";
-import { ENTRANCE_ID, modulePortalId, parseFlowNodeId } from "./ids";
+import { classId, ENTRANCE_ID, modulePortalId, parseFlowNodeId } from "./ids";
 import { packageOf, portalSubject, roomSubject } from "./subjects";
 import { toWorldGraph } from "./world-graph";
 
@@ -74,6 +74,27 @@ describe("roomSubject", () => {
     };
     expect(roomSubject(repo, ENTRANCE_ID)).toMatchObject(expected);
     expect(roomSubject(repo, `${ENTRANCE_ID}#2`)).toMatchObject(expected);
+  });
+
+  it("names a lobby by its class and members", () => {
+    const graph = fixtureGraph({
+      path: "m.ts",
+      functions: [
+        { name: "a", className: "Svc" },
+        { name: "main" },
+        { name: "b", className: "Svc" },
+      ],
+    });
+    const expected = {
+      kind: "class",
+      module: { path: "m.ts" },
+      node: { id: "m.ts//class:Svc", name: "Svc" },
+      methods: [{ qualifiedName: "Svc.a" }, { qualifiedName: "Svc.b" }],
+    };
+    expect(roomSubject(graph, "m.ts//class:Svc")).toMatchObject(expected);
+    expect(roomSubject(graph, "m.ts//class:Svc#2")).toMatchObject(expected);
+    expect(roomSubject(graph, classId("m.ts", "Other"))).toBeNull();
+    expect(roomSubject(graph, classId("x.ts", "Svc"))).toBeNull();
   });
 });
 
@@ -181,6 +202,7 @@ const graphWith = (fn: FunctionNode): CodeGraph => ({
     },
   ],
   functions: [fn],
+  classes: [],
   callSites: [],
   edges: [],
 });

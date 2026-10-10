@@ -17,10 +17,10 @@ import type {
   ModuleNode,
 } from "./code-graph";
 import { layoutFlow, planFlow } from "./flow-layout";
+import { MODULE_PORTALS_PER_HUB, planHubs } from "./hub-plan";
 import { modulePortalId } from "./ids";
 import { moduleLinks } from "./module-links";
-import { hubDimensions } from "./room-size";
-import { columnJitter, hubRatio } from "./variation";
+import { columnJitter } from "./variation";
 
 /** Functions nobody else calls, from the directed edges, in source order. */
 const rootsOf = (
@@ -110,50 +110,6 @@ const planModule = (
   };
 };
 
-/**
- * Doors per hub, links to other hubs included: what the layout places
- * reliably (the random generator's MAX_DEGREE). A module with more roots
- * chains further hubs (`demo.ts`, `demo.ts#2`, ...) instead of asking one
- * for walls it cannot have.
- */
-const MAX_HUB_DOORS = 5;
-
-/**
- * Module portals per hub: a hub stops growing at 20 x 20 m, about eight
- * openings of wall, so a module importing more files spreads its module
- * portals along the hub chain, chaining further hubs when it runs out.
- */
-const MODULE_PORTALS_PER_HUB = 8;
-
-/** How many of `links` module portals stand on the hub at `index`. */
-const linksOn = (index: number, links: number): number =>
-  Math.max(
-    0,
-    Math.min(MODULE_PORTALS_PER_HUB, links - index * MODULE_PORTALS_PER_HUB)
-  );
-
-/**
- * Splits the roots over hubs so that no hub exceeds MAX_HUB_DOORS once its
- * links to the previous and next hub count. Module portals are not doors,
- * so they do not count. Always at least one group, possibly empty.
- */
-const hubGroups = (
-  attached: readonly FunctionNode[]
-): readonly (readonly FunctionNode[])[] => {
-  const groups: (readonly FunctionNode[])[] = [];
-  let remaining = attached;
-  do {
-    const links = groups.length > 0 ? 1 : 0;
-    let take = Math.max(1, MAX_HUB_DOORS - links);
-    if (remaining.length > take) {
-      take = Math.max(1, take - 1);
-    }
-    groups.push(remaining.slice(0, take));
-    remaining = remaining.slice(take);
-  } while (remaining.length > 0);
-  return groups;
-};
-
 type Realised = {
   readonly cluster: RoomCluster;
   readonly calls: readonly Portal[];
@@ -238,6 +194,8 @@ const realise = (
 type ModuleWorld = {
   /** The module's hubs, chained in order; the first is its entrance. */
   readonly hubs: readonly GraphRoom[];
+  /** Its classes' lobbies. */
+  readonly lobbies: readonly GraphRoom[];
   readonly rooms: readonly GraphRoom[];
   readonly connections: readonly Connection[];
   readonly portals: readonly Portal[];
@@ -341,46 +299,18 @@ const moduleWorld = (
     jumps.push(...realised.jumps);
     markers.push(...realised.markers);
   }
-  const rootGroups = hubGroups(attached);
-  const groups = [
-    ...rootGroups,
-    ...Array.from(
-      {
-        length: Math.max(
-          0,
-          Math.ceil(links / MODULE_PORTALS_PER_HUB) - rootGroups.length
-        ),
-      },
-      (): readonly FunctionNode[] => []
-    ),
-  ];
-  const hubs = groups.map((group, index): GraphRoom => {
-    const chain = (index > 0 ? 1 : 0) + (index < groups.length - 1 ? 1 : 0);
-    const id = index === 0 ? module.id : `${module.id}#${index + 1}`;
-    return {
-      id,
-      label: module.path,
-      hub: true,
-      ...hubDimensions(
-        group.length + chain + linksOn(index, links),
-        hubRatio(seed, id)
-      ),
-    };
+  const {
+    hubs,
+    lobbies,
+    connections: hubConnections,
+  } = planHubs({
+    module,
+    attached,
+    classes: graph.classes.filter((cls) => cls.moduleId === module.id),
+    links,
+    seed,
   });
-  const connections: Connection[] = [];
-  groups.forEach((group, index) => {
-    const hub = hubs[index];
-    const next = hubs[index + 1];
-    if (hub === undefined) {
-      return;
-    }
-    if (next !== undefined) {
-      connections.push({ from: hub.id, to: next.id });
-    }
-    for (const fn of group) {
-      connections.push({ from: hub.id, to: fn.id });
-    }
-  });
+  const connections = [...hubConnections];
   connections.push(
     ...tree.map((edge): Connection => ({
       from: edge.source,
@@ -390,6 +320,7 @@ const moduleWorld = (
   );
   return {
     hubs,
+    lobbies,
     rooms,
     connections,
     portals: [...calls, ...returns, ...jumps, ...markers],
@@ -400,7 +331,8 @@ const moduleWorld = (
  * The spatial grammar for one module (the first by default): one cluster
  * per function (a column of flow rooms with a return portal at its end),
  * a hub that opens onto the module's roots (more hubs chained when there
- * are many), a door for each call on the breadth-first tree from those
+ * are many; a top-level class's root methods open off a lobby of their
+ * own, which takes one door of the hub), a door for each call on the breadth-first tree from those
  * roots through the rooms' ports, a call portal for every other resolved
  * call, and a closed marker in every room holding calls the world cannot
  * follow (ambiguous, dynamic, external or unresolved; never a portal to a
@@ -423,7 +355,7 @@ const toWorldGraph = (
   const world = moduleWorld(graph, module, links.length, portalOnly, seed);
   const pathOf = (id: string): string =>
     graph.modules.find((candidate) => candidate.id === id)?.path ?? id;
-  const rooms = [...world.hubs, ...world.rooms];
+  const rooms = [...world.hubs, ...world.lobbies, ...world.rooms];
   const portals = [
     ...world.portals,
     ...links.map((to, index): Portal => {
@@ -457,4 +389,4 @@ const toWorldGraph = (
   };
 };
 
-export { edgeKey, linksOn, MODULE_PORTALS_PER_HUB, toWorldGraph };
+export { edgeKey, toWorldGraph };

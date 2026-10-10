@@ -113,7 +113,7 @@ external, x.render(…) ambiguous: A.render() | B.render()`). Choosing
   (`→ src/server.ts`), which empties the breadcrumb like walking into a hub.
   The HUD counts the modules. Areas are still built all at once and merged
   for the renderer; generating them on approach comes later.
-- Milestone 16 (current): repository entrance. Every code world starts in
+- Milestone 16: repository entrance. Every code world starts in
   an entrance hall named after the repository's directory (`src`), facing
   a module portal to its first entry module: every file nobody imports,
   ranked by name (`index`, `main`, `server`, `app`, `cli`), unused exports
@@ -121,6 +121,11 @@ external, x.render(…) ambiguous: A.render() | B.render()`). Choosing
   every file can be walked to. `repo` has one, `→ src/index.ts`; a
   single-file example has its file. R returns to the entrance; the source
   panel shows nothing there.
+- Milestone 17 (current): class lobbies. The methods of a top-level class
+  that hang off the hub open off a lobby of their own instead (`class
+UserService`), one door of the module hub; methods reached by a call door
+  keep it. The HUD reads `service.ts · class UserService` and the source
+  panel shows the whole class.
 
 ---
 

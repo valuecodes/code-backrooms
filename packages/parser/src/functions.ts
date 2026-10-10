@@ -17,13 +17,14 @@ import {
   isImportDeclaration,
   isVariableDeclaration,
 } from "@babel/types";
-import type { ClassBody, Node, Program } from "@babel/types";
+import type { ClassDeclaration, Node, Program } from "@babel/types";
 import type {
+  ClassNode,
   ContainmentEdge,
   FunctionKind,
   ImportRecord,
 } from "@repo/code-graph";
-import { functionId, uniqueNames } from "@repo/code-graph/ids";
+import { classId, functionId, uniqueNames } from "@repo/code-graph/ids";
 
 import {
   bindingNames,
@@ -56,11 +57,15 @@ type Discovered = {
   readonly moduleScope: Scope;
   /** Every class declared in the module, in source order, whatever its scope. */
   readonly classes: ClassTable[];
+  /** The same classes as graph nodes. */
+  readonly classNodes: ClassNode[];
 };
 
 type Context = {
   readonly moduleId: string;
   readonly nextName: (qualifiedName: string) => string;
+  /** The same for class names, kept apart so function ids never move. */
+  readonly nextClassName: (name: string) => string;
   /** Local names exported by any form (see `exportedLocalNames`). */
   readonly exportedNames: ReadonlySet<string>;
   readonly out: Discovered;
@@ -125,7 +130,7 @@ const visitClassBody = (
   context: Context,
   scope: Scope,
   name: string,
-  body: ClassBody,
+  node: ClassDeclaration,
   exported: boolean,
   depth: number
 ): void => {
@@ -137,7 +142,15 @@ const visitClassBody = (
   };
   scope.classes.set(name, table);
   context.out.classes.push(table);
-  for (const member of body.body) {
+  context.out.classNodes.push({
+    id: classId(context.moduleId, context.nextClassName(name)),
+    moduleId: context.moduleId,
+    name,
+    span: spanOf(node),
+    exported,
+    topLevel: scope.parent === null,
+  });
+  for (const member of node.body.body) {
     const field = fieldFunction(member);
     if (isClassMethod(member) || isClassPrivateMethod(member)) {
       const method = memberName(member);
@@ -276,7 +289,7 @@ const visit = (
       context,
       scope,
       name,
-      node.body,
+      node,
       isExported(context, scope, name, exported),
       depth + 1
     );
@@ -328,10 +341,12 @@ const discover = (
     scopeAt: new Map(),
     moduleScope,
     classes: [],
+    classNodes: [],
   };
   const context: Context = {
     moduleId,
     nextName: uniqueNames(),
+    nextClassName: uniqueNames(),
     exportedNames,
     out,
   };

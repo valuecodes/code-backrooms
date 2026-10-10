@@ -78,6 +78,13 @@ and `export =` are not recorded. `FunctionNode.exported` is true for a
 function declared with `export`, or for a top-level one whose name a local
 export record names.
 
+Each class declaration becomes a `ClassNode` in `CodeGraph.classes`: id
+`file.ts//class:Name` (suffixed `~2`, `~3` when one module declares the name
+again, say in two branches), its span, whether it is exported and whether it
+is `topLevel` (declared in module scope, blocks included, not inside any
+function or callback). Class expressions are not recorded. A member is a
+function inside its span whose `className` is its name.
+
 Each function also carries its body as control flow (`FunctionNode.flow`, a
 `SequenceNode`), built after the calls are resolved so every statement can
 name the call sites inside it. Plain statements fold into one `step`; a

@@ -217,6 +217,24 @@ type FunctionNode = {
 };
 
 /**
+ * A class declaration (`class Svc {}`); class expressions are not recorded.
+ * Its members are the FunctionNodes inside its span whose `className` is
+ * its name (the innermost such class).
+ */
+type ClassNode = {
+  /** `${moduleId}//class:${name}`, suffixed `~2`, `~3` on repeats. */
+  readonly id: string;
+  readonly moduleId: string;
+  /** `"default"` for `export default class {}`. */
+  readonly name: string;
+  /** The whole declaration. */
+  readonly span: SourceSpan;
+  readonly exported: boolean;
+  /** Declared in module scope (blocks included), not inside any function. */
+  readonly topLevel: boolean;
+};
+
+/**
  * resolved: one function in the graph, possibly in another module (linked
  * through relative imports); ambiguous: the name may refer to several
  * functions in the graph (`candidateIds`), so no one is followed; dynamic:
@@ -291,6 +309,8 @@ type GraphEdge = CallEdge | ContainmentEdge;
 type CodeGraph = {
   readonly modules: readonly ModuleNode[];
   readonly functions: readonly FunctionNode[];
+  /** Class declarations, per module in source order. */
+  readonly classes: readonly ClassNode[];
   readonly callSites: readonly CallSite[];
   readonly edges: readonly GraphEdge[];
 };
@@ -304,6 +324,7 @@ export type {
   CallNode,
   CallResolution,
   CallSite,
+  ClassNode,
   CodeGraph,
   ContainmentEdge,
   ContinueNode,

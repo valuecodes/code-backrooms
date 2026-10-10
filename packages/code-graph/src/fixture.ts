@@ -5,6 +5,7 @@
 import type {
   CallEdge,
   CallSite,
+  ClassNode,
   CodeGraph,
   ExportRecord,
   FlowStep,
@@ -13,19 +14,25 @@ import type {
   ModuleNode,
   SourceSpan,
 } from "./code-graph";
-import { callSiteId, flowNodeId, functionId } from "./ids";
+import { callSiteId, classId, flowNodeId, functionId } from "./ids";
 
 type FixtureFunction = {
   readonly name: string;
   /** Lines the function spans; defaults to 3. */
   readonly lines?: number;
   /**
-   * Callee names in this module, in source order, or function ids
+   * Callee names (or qualified names) in this module, in source order, or function ids
    * (`b.ts::two`) of any module of the graph. Repeats allowed.
    */
   readonly calls?: readonly string[];
   /** Whether the module exports it; defaults to false. */
   readonly exported?: boolean;
+  /**
+   * The top-level class it is a method of: its qualified name becomes
+   * `Class.name` and the class spans its first method to its last.
+   */
+  readonly className?: string;
+  readonly isStatic?: boolean;
 };
 
 type FixtureModule = {
@@ -87,25 +94,56 @@ const functionsOf = (module: FixtureModule): readonly FunctionNode[] => {
   let line = 1;
   for (const fn of module.functions) {
     const lines = fn.lines ?? 3;
-    const id = functionId(module.path, fn.name);
+    const className = fn.className ?? null;
+    const qualifiedName =
+      className === null ? fn.name : `${className}.${fn.name}`;
+    const id = functionId(module.path, qualifiedName);
     const span = spanAt(line, lines);
     functions.push({
       id,
       moduleId: module.path,
       name: fn.name,
-      qualifiedName: fn.name,
-      kind: "declaration",
+      qualifiedName,
+      kind: className === null ? "declaration" : "method",
       span,
       exported: fn.exported ?? false,
       async: false,
-      isStatic: false,
+      isStatic: fn.isStatic ?? false,
       parentId: null,
-      className: null,
+      className,
       flow: flowOf(id, span, line, lines, fn.calls ?? []),
     });
     line += lines + 1;
   }
   return functions;
+};
+
+/** One top-level class per class name, from its first method to its last. */
+const classesOf = (
+  path: string,
+  functions: readonly FunctionNode[]
+): readonly ClassNode[] => {
+  const classes = new Map<string, ClassNode>();
+  for (const fn of functions) {
+    if (fn.className === null) {
+      continue;
+    }
+    const found = classes.get(fn.className);
+    classes.set(fn.className, {
+      id: classId(path, fn.className),
+      moduleId: path,
+      name: fn.className,
+      span: {
+        ...(found?.span ?? fn.span),
+        end: fn.span.end,
+        endLine: fn.span.endLine,
+        endColumn: fn.span.endColumn,
+      },
+      exported: false,
+      topLevel: true,
+    });
+  }
+  return [...classes.values()];
 };
 
 /** `functions`: this module's; `all`: every module's, for calls by id. */
@@ -124,7 +162,8 @@ const fixtureModule = (
     (fn.calls ?? []).forEach((callee, offset) => {
       const target = callee.includes("::")
         ? all.find((candidate) => candidate.id === callee)
-        : functions.find((candidate) => candidate.name === callee);
+        : (functions.find((candidate) => candidate.qualifiedName === callee) ??
+          functions.find((candidate) => candidate.name === callee));
       if (target === undefined) {
         throw new Error(`Fixture calls unknown function "${callee}"`);
       }
@@ -163,6 +202,7 @@ const fixtureModule = (
   return {
     modules: [node],
     functions,
+    classes: classesOf(module.path, functions),
     callSites,
     edges: [
       ...functions.map((fn) => ({
@@ -185,6 +225,7 @@ const fixtureGraph = (...modules: readonly FixtureModule[]): CodeGraph => {
   return {
     modules: graphs.flatMap((graph) => graph.modules),
     functions: graphs.flatMap((graph) => graph.functions),
+    classes: graphs.flatMap((graph) => graph.classes),
     callSites: graphs.flatMap((graph) => graph.callSites),
     edges: graphs.flatMap((graph) => graph.edges),
   };

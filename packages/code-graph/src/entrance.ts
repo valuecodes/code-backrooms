@@ -4,9 +4,9 @@
 import type { Connection, GraphRoom, Portal, WorldGraph } from "@repo/types";
 
 import type { CodeGraph, ModuleNode } from "./code-graph";
+import { linksOn, MODULE_PORTALS_PER_HUB } from "./hub-plan";
 import { ENTRANCE_ID, modulePortalId } from "./ids";
 import { hubDimensions } from "./room-size";
-import { linksOn, MODULE_PORTALS_PER_HUB } from "./world-graph";
 
 /**
  * The repository's name: the directory every module lies in (`src` for
