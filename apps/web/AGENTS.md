@@ -92,7 +92,7 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   through wide passages (up to 4 m); doors into a lane stay 1.2 m doors so
   the choice reads. Each room's wallpaper is a shade lighter or darker,
   and the ceiling lights buzz out of step.
-- Milestone 13 (current): resolution kinds. A call is resolved, ambiguous
+- Milestone 13: resolution kinds. A call is resolved, ambiguous
   (the name may mean several functions: two branches declaring it, two
   classes with that method on an unknown receiver), dynamic (a callback or
   parameter, `obj[k]()`, `f()()`), external or unresolved. Only resolved calls
@@ -100,6 +100,13 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   marker: a boarded frame whose prompt names the calls (`closed · fetch(…)
 external, x.render(…) ambiguous: A.render() | B.render()`). Choosing
   between an ambiguous call's candidates is left for Phase 6.
+- Milestone 14 (current): cross-file calls. An example may hold several
+  files (`?code=repo`, a seven-file repository); the parser links calls
+  through relative imports, barrels and re-exports, so a call into another
+  file is a portal into that file's function and Backspace returns across
+  files. A call into a package stays a marker that names it
+  (`closed · format(…) package "node:util"`). Modules are sorted by path; the
+  world still starts at the first one's hub until the repository entrance.
 
 ---
 

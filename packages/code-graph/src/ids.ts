@@ -5,13 +5,90 @@ import type { FlowNode } from "./code-graph";
 
 const FUNCTION_SEPARATOR = "::";
 
-/** Forward slashes, no leading `./`, no doubled separators: "src/demo.ts". */
-const moduleId = (path: string): string => {
-  let normalised = path.replaceAll("\\", "/").replaceAll(/\/{2,}/g, "/");
-  while (normalised.startsWith("./")) {
-    normalised = normalised.slice(2);
+/**
+ * Forward slashes, no `.` segments or doubled separators, `x/..` collapsed:
+ * `./src//a/../demo.ts` → `src/demo.ts`. A `..` with nothing left to
+ * collapse stays, so a path that climbs out of the root is still visible.
+ */
+const normalisePath = (path: string): string => {
+  const segments: string[] = [];
+  const absolute = path.startsWith("/") || path.startsWith("\\");
+  for (const segment of path.replaceAll("\\", "/").split("/")) {
+    if (segment === "" || segment === ".") {
+      continue;
+    }
+    const last = segments.at(-1);
+    if (segment === ".." && last !== undefined && last !== "..") {
+      segments.pop();
+    } else {
+      segments.push(segment);
+    }
   }
-  return normalised;
+  return `${absolute ? "/" : ""}${segments.join("/")}`;
+};
+
+/** The normalised path doubles as the module id: "src/demo.ts". */
+const moduleId = (path: string): string => normalisePath(path);
+
+/** `./a`, `../b`, `.` and `..`: the specifiers that name a file of this repository. */
+const isRelativeSpecifier = (specifier: string): boolean =>
+  specifier === "." ||
+  specifier === ".." ||
+  specifier.startsWith("./") ||
+  specifier.startsWith("../");
+
+const SOURCE_EXTENSIONS = [
+  ".ts",
+  ".tsx",
+  ".mts",
+  ".cts",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+] as const;
+
+/** TypeScript lets `./a.js` name `a.ts`: each JS extension and its TS twin. */
+const TS_TWINS: readonly (readonly [string, string])[] = [
+  [".js", ".ts"],
+  [".js", ".tsx"],
+  [".jsx", ".tsx"],
+  [".mjs", ".mts"],
+  [".cjs", ".cts"],
+];
+
+/** Where a relative specifier may point, most specific first. */
+const candidatePaths = (path: string): readonly string[] => [
+  path,
+  ...SOURCE_EXTENSIONS.map((extension) => `${path}${extension}`),
+  ...TS_TWINS.flatMap(([js, ts]) =>
+    path.endsWith(js) ? [`${path.slice(0, -js.length)}${ts}`] : []
+  ),
+  ...SOURCE_EXTENSIONS.map((extension) => `${path}/index${extension}`),
+];
+
+/**
+ * The module a specifier imports, among `moduleIds`, or null: packages
+ * (`lodash`, `node:fs`, `@repo/x`), absolute paths, paths that climb out of
+ * the root and files that are not in the set. Tries the exact path, then
+ * each source extension, then a `.js` swapped for its TypeScript twin, then
+ * `<path>/index.<ext>`; the first hit wins.
+ */
+const resolveSpecifier = (
+  fromModuleId: string,
+  specifier: string,
+  moduleIds: ReadonlySet<string>
+): string | null => {
+  if (!isRelativeSpecifier(specifier)) {
+    return null;
+  }
+  const slash = fromModuleId.lastIndexOf("/");
+  const directory = slash === -1 ? "" : fromModuleId.slice(0, slash + 1);
+  const path = normalisePath(`${directory}${specifier}`);
+  if (path === "" || path === ".." || path.startsWith("../")) {
+    return null;
+  }
+  return candidatePaths(path).find((id) => moduleIds.has(id)) ?? null;
 };
 
 const functionId = (module: string, qualifiedName: string): string =>
@@ -174,11 +251,14 @@ export {
   functionId,
   hubModuleId,
   isFunctionId,
+  isRelativeSpecifier,
   jumpPortalId,
   markerPortalId,
   moduleId,
+  normalisePath,
   parseFlowNodeId,
   parsePortalId,
+  resolveSpecifier,
   returnPortalId,
   taggedFlowNodeId,
   uniqueNames,

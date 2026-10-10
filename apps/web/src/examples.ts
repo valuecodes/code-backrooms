@@ -1,5 +1,7 @@
 import type { SourceFile } from "@repo/parser";
 
+import { repo } from "~/examples-repo";
+
 // Bundled programs the app can turn into rooms with `?code=<name>`. Editing a
 // source here regenerates the world on reload, which is the whole point:
 // the rooms come from the code, not the other way round.
@@ -302,18 +304,20 @@ function settle() {}
 `,
 };
 
+/** Every example as its files: one for most, several for a repository. */
 const examples = {
-  demo,
-  chain,
-  pair,
-  service,
-  external,
-  portals,
-  branches,
-  switches,
-  loops,
-  resolution,
-} as const;
+  demo: [demo],
+  chain: [chain],
+  pair: [pair],
+  service: [service],
+  external: [external],
+  portals: [portals],
+  branches: [branches],
+  switches: [switches],
+  loops: [loops],
+  resolution: [resolution],
+  repo,
+} as const satisfies Readonly<Record<string, readonly SourceFile[]>>;
 
 type ExampleName = keyof typeof examples;
 

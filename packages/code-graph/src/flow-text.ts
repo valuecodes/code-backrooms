@@ -166,27 +166,35 @@ const loopEndText = (node: LoopNode): string =>
 /**
  * What a marker stands for: one entry per callee and resolution in source
  * order, `×n` when repeated, an ambiguous call's candidates by name
- * (`nameOf` a function id): `fetch(…) external, cb(…) ×2 dynamic,
- * x.render(…) ambiguous: A.render() | B.render()`.
+ * (`nameOf` a function id), a package call by its package (`packageOf` a
+ * site): `fetch(…) external, cb(…) ×2 dynamic, x.render(…) ambiguous:
+ * A.render() | B.render(), format(…) package "node:util"`.
  */
 const markerText = (
   sites: readonly CallSite[],
-  nameOf: (functionId: string) => string
+  nameOf: (functionId: string) => string,
+  packageOf: (site: CallSite) => string | null = () => null
 ): string => {
-  const entries = new Map<string, { site: CallSite; count: number }>();
+  const entries = new Map<
+    string,
+    { site: CallSite; pkg: string | null; count: number }
+  >();
   for (const site of sites) {
-    const key = JSON.stringify([site.calleeName, site.resolution]);
+    const pkg = packageOf(site);
+    const key = JSON.stringify([site.calleeName, site.resolution, pkg]);
     const entry = entries.get(key);
-    entries.set(
-      key,
-      entry === undefined
-        ? { site, count: 1 }
-        : { site: entry.site, count: entry.count + 1 }
-    );
+    entries.set(key, {
+      site: entry?.site ?? site,
+      pkg,
+      count: (entry?.count ?? 0) + 1,
+    });
   }
   return [...entries.values()]
-    .map(({ site, count }) => {
+    .map(({ site, pkg, count }) => {
       const times = count > 1 ? ` ×${count}` : "";
+      if (pkg !== null) {
+        return `${callee(site)}${times} package ${JSON.stringify(pkg)}`;
+      }
       const candidates =
         site.candidateIds === undefined
           ? ""

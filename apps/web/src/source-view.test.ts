@@ -51,10 +51,14 @@ describe("sourceView", () => {
   it("keeps every example's source by its module id", () => {
     for (const name of Object.keys(examples) as readonly ExampleName[]) {
       const result = codeGraphOf(name);
-      const id = result.codeGraph?.modules[0]?.id ?? "";
-      expect(result.error === null ? result.sources.get(id) : null).toBe(
-        examples[name].source
-      );
+      const files = examples[name];
+      expect(result.codeGraph?.modules.length).toBe(files.length);
+      for (const module of result.codeGraph?.modules ?? []) {
+        const file = files.find((item) => item.path === module.path);
+        expect(
+          result.error === null ? result.sources.get(module.id) : null
+        ).toBe(file?.source);
+      }
     }
   });
 
@@ -70,7 +74,7 @@ describe("sourceView", () => {
 
   it("shows a hub's whole file, nothing marked", () => {
     const view = sourceView(demo.codeGraph, demo.sources, "demo.ts");
-    const lineCount = examples.demo.source.trimEnd().split("\n").length;
+    const lineCount = examples.demo[0].source.trimEnd().split("\n").length;
     expect(view).toMatchObject({
       path: "demo.ts",
       fn: null,
@@ -79,7 +83,7 @@ describe("sourceView", () => {
     });
     expect(view?.code).toHaveLength(lineCount);
     expect(markedLines(view)).toEqual([]);
-    expectWholeLines(view, examples.demo.source);
+    expectWholeLines(view, examples.demo[0].source);
   });
 
   it("shows a function room's whole function, nothing marked", () => {
@@ -108,7 +112,7 @@ describe("sourceView", () => {
       marked: "if (user) {",
       after: "",
     });
-    expectWholeLines(view, examples.demo.source);
+    expectWholeLines(view, examples.demo[0].source);
   });
 
   it("marks a loop's whole ring from its end room", () => {
@@ -116,6 +120,6 @@ describe("sourceView", () => {
     const view = sourceView(loops.codeGraph, loops.sources, `${ring.id}:end`);
     expect(view).toMatchObject({ fn: "main()", lines: "3–8" });
     expect(markedLines(view)).toEqual([3, 4, 5, 6, 7, 8]);
-    expectWholeLines(view, examples.loops.source);
+    expectWholeLines(view, examples.loops[0].source);
   });
 });
