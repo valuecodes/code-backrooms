@@ -1,6 +1,7 @@
 import { parseFlowNodeId } from "@repo/code-graph/ids";
 import { buildCodeGraph } from "@repo/parser";
 import type { GeneratedWorld } from "@repo/types";
+import { checkAreas } from "@repo/world-generator/area-checks";
 import { checkLayout } from "@repo/world-generator/layout-checks";
 import type { Frame } from "@repo/world-generator/navigation";
 import { describe, expect, it } from "vitest";
@@ -8,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { examples } from "./examples";
 import type { ExampleName } from "./examples";
 import {
+  areasFromCode,
   breadcrumbOf,
   codeGraphOf,
   describeRoom,
@@ -50,13 +52,14 @@ describe("worldFromCode", () => {
     (name) => {
       const codeGraph = graphOf(name);
       for (let seed = 1; seed <= 30; seed += 1) {
-        const world = worldFromCode(codeGraph, seed);
-        expect(world.built.rooms.length).toBeGreaterThan(0);
-        expect(world.layout.unresolved, `seed ${seed}`).toEqual([]);
-        expect(world.layout.unplacedPortals, `seed ${seed}`).toEqual([]);
-        expect(checkLayout(world.graph, world.layout), `seed ${seed}`).toEqual(
-          []
-        );
+        const areas = areasFromCode(codeGraph, seed);
+        expect(areas.areas).toHaveLength(codeGraph.modules.length);
+        for (const area of areas.areas) {
+          expect(area.built.rooms.length).toBeGreaterThan(0);
+          expect(area.layout.unresolved, `seed ${seed}`).toEqual([]);
+          expect(area.layout.unplacedPortals, `seed ${seed}`).toEqual([]);
+        }
+        expect(checkAreas(areas), `seed ${seed}`).toEqual([]);
       }
     }
   );

@@ -315,27 +315,6 @@ describe("toWorldGraph", () => {
     laysOutCleanly(graph);
   });
 
-  it("chains the hubs of several modules and starts at the first", () => {
-    const graph = fixtureGraph(
-      { path: "a.ts", functions: [{ name: "one" }] },
-      { path: "b.ts", functions: [{ name: "two" }] },
-      { path: "c.ts", functions: [] }
-    );
-    const world = toWorldGraph(graph);
-    expect(world.start).toBe("a.ts");
-    expect(world.connections).toEqual([
-      { from: "a.ts", to: "a.ts::one" },
-      { from: "a.ts", to: "b.ts" },
-      { from: "b.ts", to: "b.ts::two" },
-      { from: "b.ts", to: "c.ts" },
-    ]);
-    expect(world.portals?.map(shape)).toEqual([
-      returnShape("a.ts::one", "a.ts"),
-      returnShape("b.ts::two", "b.ts"),
-    ]);
-    expect(() => validateGraph(world)).not.toThrow();
-  });
-
   it("chains extra hubs when a module has many roots", () => {
     const functions = Array.from({ length: 40 }, (_, index) => ({
       name: `f${index}`,

@@ -188,15 +188,16 @@ const jumpArrival = (
 /**
  * A portal's frame sits on the wall's inner face (the wall behind stays
  * solid, so there is no opening); its trigger is a shallow strip of floor
- * in front of it.
+ * in front of it. A portal to a unit of another area has no arrival yet.
  */
 const buildPortal = (
   room: RoomData,
   portal: PortalData,
-  entryOf: ReadonlyMap<string, Placement>
+  entryOf: ReadonlyMap<string, Placement>,
+  external: ReadonlySet<string>
 ): BuiltPortal => {
-  const arrival = entryOf.get(portal.to);
-  if (arrival === undefined) {
+  const arrival = entryOf.get(portal.to) ?? null;
+  if (arrival === null && !external.has(portal.to)) {
     throw new Error(
       `Portal "${portal.id}" leads to unknown room "${portal.to}"`
     );
@@ -266,7 +267,17 @@ const buildRoom = (
   return { room, openings, segments: wallSegments(room, openings) };
 };
 
-const buildWorld = (data: WorldData): BuiltWorld => {
+const NO_UNITS: ReadonlySet<string> = new Set();
+
+/**
+ * Walls, openings, colliders and portals for a layout. `external` names the
+ * units of other areas its portals may lead to (`WorldGraph.external`);
+ * any other unknown target throws.
+ */
+const buildWorld = (
+  data: WorldData,
+  external: ReadonlySet<string> = NO_UNITS
+): BuiltWorld => {
   const byId = new Map(data.rooms.map((room) => [room.id, room]));
   const startRoom = byId.get(data.startRoomId);
   if (startRoom === undefined) {
@@ -305,7 +316,8 @@ const buildWorld = (data: WorldData): BuiltWorld => {
       buildPortal(
         built.room,
         portal,
-        portal.kind === "jump" ? jumpEntryOf : entryOf
+        portal.kind === "jump" ? jumpEntryOf : entryOf,
+        external
       )
     )
   );
@@ -317,7 +329,15 @@ const buildWorld = (data: WorldData): BuiltWorld => {
     z: startRoom.position[2],
   };
   const facing = entry?.facing ?? { x: start.x + 1, z: start.z };
-  return { rooms, doorways, portals, colliders, start, facing };
+  return {
+    rooms,
+    doorways,
+    portals,
+    colliders,
+    start,
+    facing,
+    entries: entryOf,
+  };
 };
 
 export { buildWorld, doorOpening, openingCentre, placementInside };

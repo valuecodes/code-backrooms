@@ -150,8 +150,10 @@ type Connection = {
  * pops the stack, or lands in `to` (the module hub) when it is empty. `jump`:
  * a plain teleport to `to` that leaves the stack alone. `marker`: a closed
  * frame that cannot be entered, standing for calls the world cannot follow.
+ * `module`: from a module's hub to another module's hub; it empties the
+ * stack, as entering a hub does.
  */
-type PortalKind = "call" | "return" | "jump" | "marker";
+type PortalKind = "call" | "return" | "jump" | "marker" | "module";
 
 /**
  * A directed jump drawn as a door-like frame on a wall of `from`. Not part of
@@ -165,7 +167,8 @@ type Portal = {
   /**
    * Where it leads: for `call` and `return`, a graph room (a unit lands at
    * its entry), possibly `from`'s own; for `jump`, a room of the same
-   * cluster as `from`; for `marker`, `from` itself.
+   * cluster as `from`; for `marker`, `from` itself. A `call` or `module`
+   * portal may instead name a unit of another area (`WorldGraph.external`).
    */
   readonly to: string;
   /** Free text, like GraphRoom.label (the callee's name). */
@@ -179,6 +182,11 @@ type WorldGraph = {
   readonly portals?: readonly Portal[];
   /** Defaults to the first room. */
   readonly start?: string;
+  /**
+   * Units of other areas that `call` and `module` portals may lead to. None
+   * is a room of this graph; their arrival is resolved once areas are joined.
+   */
+  readonly external?: readonly string[];
 };
 
 // ---------------------------------------------------------------------------
@@ -303,8 +311,11 @@ type BuiltPortal = {
   readonly normal: Point;
   /** Floor rect just inside the frame: a player centre in it can enter. */
   readonly trigger: Rect;
-  /** Where the portal takes the player: inside `portal.to`. */
-  readonly arrival: Placement;
+  /**
+   * Where the portal takes the player: inside `portal.to`. Null when `to`
+   * is a unit of another area (`WorldGraph.external`).
+   */
+  readonly arrival: Placement | null;
   /** Just inside this portal, facing into its room: where a return lands. */
   readonly returnPoint: Placement;
 };
@@ -324,6 +335,8 @@ type BuiltWorld = {
   readonly start: Point;
   /** A point the player faces at first: the start room's first doorway. */
   readonly facing: Point;
+  /** Where a teleport into each unit lands (a cluster at its entry room). */
+  readonly entries: ReadonlyMap<string, Placement>;
 };
 
 type GeneratedWorld = {
@@ -333,7 +346,30 @@ type GeneratedWorld = {
   readonly built: BuiltWorld;
 };
 
+// ---------------------------------------------------------------------------
+// Areas: worlds laid out and built on their own (one per module), then set
+// apart on the plane and joined by portals only.
+
+type BuiltArea = GeneratedWorld & {
+  readonly id: string;
+  /** Where the area's origin (its start room's centre) was moved to. */
+  readonly offset: Point;
+  /** The footprint of its rooms, once moved. */
+  readonly bounds: Rect;
+};
+
+type AreaWorld = {
+  readonly seed: number;
+  /** The area the player starts in. */
+  readonly entry: string;
+  readonly areas: readonly BuiltArea[];
+  /** The area of every unit (graph room) of every area. */
+  readonly areaOf: ReadonlyMap<string, string>;
+};
+
 export type {
+  AreaWorld,
+  BuiltArea,
   BuiltPortal,
   BuiltRoom,
   BuiltWorld,

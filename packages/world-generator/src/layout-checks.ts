@@ -182,7 +182,7 @@ const checkLayout = (graph: WorldGraph, layout: WorldLayout): Failure[] => {
   // Built geometry: openings clear of corners and of each other, walkable.
   let built;
   try {
-    built = buildWorld(layout);
+    built = buildWorld(layout, new Set(graph.external ?? []));
   } catch (error) {
     failures.push(`buildWorld failed: ${String(error)}`);
     return failures;
@@ -229,6 +229,7 @@ const checkLayout = (graph: WorldGraph, layout: WorldLayout): Failure[] => {
   return failures;
 };
 
+/** A player standing at `point` would touch a wall. */
 const blocked = (colliders: readonly Rect[], point: Point): boolean => {
   const foot: Rect = {
     minX: point.x - PLAYER_RADIUS,
@@ -335,17 +336,22 @@ const checkPortals = (
       rects.set(room.cluster, roomBounds(room));
     }
   }
+  const external = new Set(graph.external ?? []);
   for (const portal of built.portals) {
     const own = rects.get(portal.portal.from);
     const target = rects.get(portal.portal.to);
     if (own === undefined || !within(own, portal.trigger)) {
       failures.push(`portal ${portal.portal.id} trigger leaves its room`);
     }
-    const landing = portal.arrival.position;
+    // Another area's unit: `checkAreas` follows it once areas are joined.
+    const landing = portal.arrival?.position;
+    const elsewhere = landing === undefined && external.has(portal.portal.to);
     if (
-      target === undefined ||
-      !containsPoint(target, landing) ||
-      blocked(built.colliders, landing)
+      !elsewhere &&
+      (landing === undefined ||
+        target === undefined ||
+        !containsPoint(target, landing) ||
+        blocked(built.colliders, landing))
     ) {
       failures.push(`portal ${portal.portal.id} lands somewhere unwalkable`);
     }
@@ -356,4 +362,4 @@ const checkPortals = (
   return failures;
 };
 
-export { checkLayout };
+export { blocked, checkLayout };

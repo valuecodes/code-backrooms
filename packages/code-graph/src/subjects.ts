@@ -210,6 +210,13 @@ type PortalSubject =
       readonly roomId: string;
       /** The calls in that room the world cannot follow, in source order. */
       readonly sites: readonly CallSite[];
+    }
+  | {
+      readonly kind: "module";
+      /** The module whose hub holds it. */
+      readonly from: ModuleNode;
+      /** The module it leads to: one this one imports. */
+      readonly module: ModuleNode;
     };
 
 /** What a portal stands for, or null for ids not from this graph. */
@@ -220,6 +227,15 @@ const portalSubject = (
   const ref = parsePortalId(portalId);
   if (ref === null) {
     return null;
+  }
+  if (ref.kind === "module") {
+    const from = graph.modules.find(
+      (candidate) => candidate.id === hubModuleId(ref.from)
+    );
+    const module = graph.modules.find((candidate) => candidate.id === ref.to);
+    return from === undefined || module === undefined
+      ? null
+      : { kind: "module", from, module };
   }
   if (ref.kind === "return") {
     const functionId = parseFlowNodeId(ref.roomId)?.functionId ?? ref.roomId;

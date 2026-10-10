@@ -137,6 +137,7 @@ describe("loops", () => {
       const target = byId.get(portal.to);
       expect(
         target !== undefined &&
+          arrival !== null &&
           containsPoint(roomBounds(target), arrival.position)
       ).toBe(true);
       return generated.layout.rooms
@@ -144,6 +145,7 @@ describe("loops", () => {
           (room) =>
             room.cluster === "loops.ts::main" &&
             room.id !== portal.to &&
+            arrival !== null &&
             containsPoint(roomBounds(room), arrival.facing)
         )
         .map((room) => room.role);
@@ -192,6 +194,7 @@ describe("loops", () => {
         (room) =>
           room.id !== test?.id &&
           jump !== undefined &&
+          jump.arrival !== null &&
           containsPoint(roomBounds(room), jump.arrival.facing)
       );
       expect(facing.map((room) => room.role)).toEqual(["loop-end"]);

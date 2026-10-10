@@ -158,16 +158,25 @@ const createNavigator = (world: World): Navigator => {
 
   const enterPortal = (state: NavigationState, portal: BuiltPortal): Step => {
     const { kind, from, to } = portal.portal;
+    const { arrival } = portal;
     if (kind === "marker") {
       return stay(state);
     }
     if (kind === "return") {
-      return state.frames.length === 0
-        ? {
-            state: { frames: [], roomId: unitOf(to) },
-            teleport: portal.arrival,
-          }
-        : pop(state);
+      if (state.frames.length > 0) {
+        return pop(state);
+      }
+      return arrival === null
+        ? stay(state)
+        : { state: { frames: [], roomId: unitOf(to) }, teleport: arrival };
+    }
+    // A unit of another area that was never joined in: nowhere to go.
+    if (arrival === null) {
+      return stay(state);
+    }
+    // Another module's hub: like walking into a hub, the stack empties.
+    if (kind === "module") {
+      return { state: { frames: [], roomId: unitOf(to) }, teleport: arrival };
     }
     const frames =
       kind === "call"
@@ -181,7 +190,7 @@ const createNavigator = (world: World): Navigator => {
             },
           ]
         : state.frames;
-    return { state: { frames, roomId: unitOf(to) }, teleport: portal.arrival };
+    return { state: { frames, roomId: unitOf(to) }, teleport: arrival };
   };
 
   const moveTo = (state: NavigationState, roomId: string): Step => {

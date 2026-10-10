@@ -5,11 +5,11 @@ Language-independent CodeGraph types and the CodeGraph → WorldGraph spatial gr
 ```ts
 import type { CodeGraph } from "@repo/code-graph";
 import { roomSubject } from "@repo/code-graph/subjects";
-import { toWorldGraph } from "@repo/code-graph/world-graph";
-import { generateWorld } from "@repo/world-generator";
+import { generateCodeWorld } from "@repo/code-graph/module-areas";
+import { mergeAreas } from "@repo/world-generator/areas";
 
 const graph: CodeGraph = ...; // from @repo/parser
-const world = generateWorld({ seed: 1, graph: toWorldGraph(graph) });
+const world = mergeAreas(generateCodeWorld(graph, 1)); // one area per module
 roomSubject(graph, world.layout.startRoomId); // { kind: "module", module }
 ```
 
@@ -133,9 +133,13 @@ into `collapsed` ones first. Depths come from the room's role and
 statements, at least 3 m wherever a call needs wall for a door or a portal,
 4 m for the entry room.
 
-`./world-graph` is the grammar: one cluster per function, one hub room per
-module that opens onto the module's root functions, and calls as doors or
-portals. Per module, a breadth-first walk of the call graph from the roots
+`./world-graph` is the grammar, one module at a time (`toWorldGraph(graph,
+portalOnly, seed, module)`, the first module by default): one cluster per
+function, a hub room that opens onto the module's root functions, calls as
+doors or portals, and a `module` portal on the hub to every file the module
+imports or re-exports from (`moduleLinks`). A call or module portal into
+another module names a unit of that module's area, listed in the graph's
+`external`. Per module, a breadth-first walk of the call graph from the roots
 gives each function one physical door (`kind: "call"` on the connection)
 through a port of the caller that first reaches it in that walk; every other
 reserved port, recursion and extra callers of a shared function included,
@@ -143,10 +147,13 @@ becomes a `call` portal at the port's centre, and the column's `return` portal
 leads back to the module hub when nothing is on the navigation stack. The
 physical graph of units is therefore a tree. A call inside a lane offers one
 wall only and that side may be taken, so `generateCodeWorld(graph, seed)`
-lays the world out and, when the layout reports a call door it cannot place
+(`./module-areas`) lays each module out as its own area and, when the layout reports a call door it cannot place
 (`LayoutError`), marks that edge portal-only (`toWorldGraph(graph,
 portalOnly)`), which turns the call into a portal and attaches the callee
 elsewhere, and tries again: a program that parses always becomes a world.
+The areas are then set apart and joined by portals only (`assembleAreas`);
+the player starts in the first module nobody imports, whose hub also leads
+to every module its imports never reach, so every area can be walked to.
 `generateCodeWorld(graph, seed, { variation })` (variation on by default) also
 lets the seed vary proportions without changing what is connected: each
 function's column is 0, 0.5 or 1 m wider, added after budget folding so its
@@ -160,9 +167,11 @@ passage (`opening: "passage"`), as wide as the rooms allow; a door into a lane
 stays a door. Functions a
 directed walk from the roots cannot reach (mutual recursion with no outside
 caller) are attached to the hub in source order. A hub has at most five doors,
-links to the neighbouring hubs included, so a module whose roots need more
-chains further hubs (`demo.ts`, `demo.ts#2`, ...). Portals sit on flow rooms
-(`from`), lead to units (`to`), and are listed calls first, then returns.
+links to the neighbouring hubs included (module portals are not doors but
+widen the first hub), so a module whose roots need more chains further hubs
+(`demo.ts`, `demo.ts#2`, ...). Portals sit on flow rooms (`from`), lead to
+units (`to`), and are listed calls first, then returns, jumps, markers and
+module portals.
 
 `./subjects` maps world ids back to the code: `roomSubject` gives a module, a
 function, or a flow room (`{ kind: "flow", fn, module, node, ancestors, text,
@@ -170,7 +179,7 @@ span }`, `text` being the HUD's words such as `await fetch(…)` or `if (user) �
 2 statements · 2 calls`, and `span` the room's code: a tagged room's composite,
 and for a room the budget folded from several, its first node to its last);
 `portalSubject` gives a call site with both functions,
-or the function a return portal belongs to.
+the function a return portal belongs to, or both modules of a module portal.
 
 `./cfg` derives a function's control-flow graph from its flow tree, as a test
 oracle and a debugging aid (`toDot(cfg)` gives Graphviz source); the layout

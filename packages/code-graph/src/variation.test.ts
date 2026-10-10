@@ -1,13 +1,15 @@
 import type { GeneratedWorld, WorldGraph } from "@repo/types";
 import { generateWorld } from "@repo/world-generator";
-import { checkLayout } from "@repo/world-generator/layout-checks";
+import { checkAreas } from "@repo/world-generator/area-checks";
+import { translateLayout } from "@repo/world-generator/areas";
 import { describe, expect, it } from "vitest";
 
 import type { CodeGraph } from "./code-graph";
 import { demoGraph, fixtureGraph } from "./fixture";
+import { generateCodeWorld } from "./module-areas";
 import { hubDimensions } from "./room-size";
 import { columnJitter, hubRatio } from "./variation";
-import { generateCodeWorld, toWorldGraph } from "./world-graph";
+import { toWorldGraph } from "./world-graph";
 
 /** Two modules, a fan-out, a repeated call and recursion. */
 const twoModules = (): CodeGraph =>
@@ -153,14 +155,26 @@ describe("seeded proportions", () => {
     (_, graphOf) => {
       const graph = graphOf();
       for (let seed = 1; seed <= 5; seed += 1) {
-        const old = generateWorld({
-          seed,
-          graph: toWorldGraph(graph),
-          variation: false,
-        });
-        expect(generateCodeWorld(graph, seed, { variation: false })).toEqual(
-          old
-        );
+        const world = generateCodeWorld(graph, seed, { variation: false });
+        for (const area of world.areas) {
+          const module = graph.modules.find(({ id }) => id === area.id);
+          // Two modules that import nothing: the second is reached from the first.
+          const extra = area.id === world.entry ? ["b.ts"] : [];
+          const old = generateWorld({
+            seed,
+            graph: toWorldGraph(
+              graph,
+              new Set(),
+              null,
+              module,
+              graph.modules.length > 1 ? extra : []
+            ),
+            variation: false,
+            corridorPrefix: `${area.id}/corridor-`,
+          });
+          expect(area.graph).toEqual(old.graph);
+          expect(area.layout).toEqual(translateLayout(old.layout, area.offset));
+        }
       }
     }
   );
@@ -172,10 +186,14 @@ describe("seeded proportions", () => {
       for (let seed = 1; seed <= 10; seed += 1) {
         const on = generateCodeWorld(graph, seed);
         const off = generateCodeWorld(graph, seed, { variation: false });
-        expect(connectivity(on), `seed ${seed}`).toEqual(connectivity(off));
-        expect(on.layout.unresolved, `seed ${seed}`).toEqual([]);
-        expect(on.layout.unplacedPortals, `seed ${seed}`).toEqual([]);
-        expect(checkLayout(on.graph, on.layout), `seed ${seed}`).toEqual([]);
+        expect(on.areas.map(connectivity), `seed ${seed}`).toEqual(
+          off.areas.map(connectivity)
+        );
+        for (const area of on.areas) {
+          expect(area.layout.unresolved, `seed ${seed}`).toEqual([]);
+          expect(area.layout.unplacedPortals, `seed ${seed}`).toEqual([]);
+        }
+        expect(checkAreas(on), `seed ${seed}`).toEqual([]);
       }
     }
   );

@@ -1,12 +1,13 @@
 import type { BuiltPortal, GeneratedWorld, Point } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
+import { mergeAreas } from "./areas";
 import { clusterWorld } from "./cluster-world";
 import { roomBounds } from "./geometry";
 import { containsPoint } from "./locate";
 import { createNavigator } from "./navigation";
 import type { NavigationEvent, NavigationState, Navigator } from "./navigation";
-import { portalWorld } from "./portal-world";
+import { areaWorld, portalWorld } from "./portal-world";
 
 const world = portalWorld();
 const navigator = createNavigator(world);
@@ -295,5 +296,48 @@ describe("createNavigator", () => {
     navigator.step(state, room("validate"));
     navigator.step(state, { type: "home" });
     expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("empties the stack through a module portal into another area", () => {
+    const areas = areaWorld();
+    const merged = mergeAreas(areas);
+    const nav = createNavigator(merged);
+    const called = run(nav, [room("hub"), room("main"), room("login")]);
+    expect(called.state.frames).toHaveLength(1);
+    const step = nav.step(called.state, portal("module:hub>hub2"));
+    expect(step.state).toEqual({ frames: [], roomId: "hub2" });
+    const two = areas.areas[1];
+    expect(
+      two !== undefined &&
+        step.teleport !== null &&
+        inRoom(two, "hub2", step.teleport.position)
+    ).toBe(true);
+  });
+
+  it("calls into another area and returns from it", () => {
+    const merged = mergeAreas(areaWorld());
+    const nav = createNavigator(merged);
+    const { state } = run(nav, [room("hub"), room("main")]);
+    const call = nav.step(state, portal("portal:main>work"));
+    expect(call.state.roomId).toBe("work");
+    expect(call.state.frames.at(-1)?.callerRoomId).toBe("main");
+    const back = nav.step(call.state, { type: "back" });
+    expect(back.state).toEqual(state);
+    expect(
+      inRoom(merged, "main", back.teleport?.position ?? { x: 0, z: 0 })
+    ).toBe(true);
+  });
+
+  it("stays put at a portal whose area was never joined", () => {
+    const one = areaWorld().areas[0];
+    if (one === undefined) {
+      throw new Error("Expected an area");
+    }
+    const nav = createNavigator(one);
+    const { state } = run(nav, [room("hub"), room("main")]);
+    expect(nav.step(state, portal("portal:main>work"))).toEqual({
+      state,
+      teleport: null,
+    });
   });
 });

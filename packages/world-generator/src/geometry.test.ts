@@ -396,3 +396,34 @@ describe("buildWorld clusters", () => {
     ).toBe(true);
   });
 });
+
+const portalTo = (to: string): PortalData => ({
+  id: "p",
+  kind: "call",
+  from: "lobby",
+  to,
+  wall: "north",
+  along: 0,
+});
+
+describe("buildWorld and other areas", () => {
+  const withPortal = (to: string): WorldData => ({
+    ...worldData,
+    rooms: [{ ...lobby, portals: [portalTo(to)] }, annex],
+  });
+
+  it("leaves a portal into an external unit without an arrival", () => {
+    const built = buildWorld(withPortal("x.ts::run"), new Set(["x.ts::run"]));
+    expect(built.portals[0]?.arrival).toBeNull();
+    expect([...built.entries.keys()]).toEqual(["lobby", "annex"]);
+    expect(buildWorld(withPortal("annex")).portals[0]?.arrival).toEqual(
+      built.entries.get("annex")
+    );
+  });
+
+  it("still throws for a target that is neither a room nor external", () => {
+    expect(() => buildWorld(withPortal("x.ts::run"))).toThrow(
+      /unknown room "x.ts::run"/
+    );
+  });
+});
