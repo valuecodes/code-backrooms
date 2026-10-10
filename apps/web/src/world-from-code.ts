@@ -146,10 +146,9 @@ const promptOf = (
   }
   // A marker leads nowhere: it names the calls the world cannot follow.
   if (subject.kind === "marker") {
-    const names = new Map(
-      codeGraph?.functions.map((fn) => [fn.id, fn.qualifiedName])
-    );
-    return `closed · ${markerText(subject.sites, (id) => names.get(id) ?? id)}`;
+    const nameOf = (id: string): string =>
+      codeGraph?.functions.find((fn) => fn.id === id)?.qualifiedName ?? id;
+    return `closed · ${markerText(subject.sites, nameOf)}`;
   }
   // A jump reads like a door within the function: `→ again?`, `→ end for`.
   if (subject.kind === "jump") {
