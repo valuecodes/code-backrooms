@@ -20,6 +20,7 @@ import type {
 import { isTerminal, jumpsTo } from "./flow";
 import { BODY_LANE } from "./flow-composite";
 import type { FlowTree, ForkSpec, LaneSpec, LoopSpec } from "./flow-composite";
+import { headerMarkerSites, withStrays } from "./flow-markers";
 import { calleesOf, depthOf, emptyBodySpec, specOf } from "./flow-measure";
 import type { FlowRoomSpec } from "./flow-measure";
 import {
@@ -112,16 +113,22 @@ const tagged = (
   tag: string
 ): string => taggedFlowNodeId(node.id, tag);
 
-/** A room of a composite holding the calls of its header or condition. */
+/**
+ * A room of a composite holding the calls of its header or condition:
+ * `callSiteIds` the resolved ones, `markers` the ones the world cannot
+ * follow.
+ */
 const headerSpec = (
   id: string,
   role: FlowRole,
   label: string,
   callSiteIds: readonly string[],
+  markerIds: readonly string[],
   sites: SiteIndex,
   entry: boolean
 ): FlowRoomSpec => {
   const callees = calleesOf(callSiteIds, sites);
+  const markers = withStrays(markerIds, sites, entry);
   return {
     kind: "room",
     id,
@@ -130,7 +137,8 @@ const headerSpec = (
     statements: 1,
     calls: resolvedSites(callSiteIds, sites).length,
     callees,
-    depth: depthOf(role, 1, callees.length, entry),
+    markers,
+    depth: depthOf(role, 1, callees.length, entry, markers.length > 0),
     floor: depthOf(role, 1, 0, entry),
     terminal: false,
   };
@@ -148,6 +156,7 @@ const plainSpec = (
   statements: 0,
   calls: 0,
   callees: [],
+  markers: [],
   depth: FLOW_LEAF_DEPTH,
   floor: FLOW_LEAF_DEPTH,
   terminal: false,
@@ -253,6 +262,7 @@ const forkOf = (
       node.kind === "branch" ? "fork" : "switch",
       forkText(node),
       node.callSiteIds,
+      headerMarkerSites(node, measure.sites),
       measure.sites,
       entry
     ),
@@ -266,11 +276,12 @@ const forkOf = (
 };
 
 /**
- * A loop's ring. The header's calls hang off the room that shows it: the
- * head, or for a do-while (tested at the end) the test room.
+ * A loop's ring. The header's calls (and its marker) hang off the room that
+ * shows it: the head, or for a do-while (tested at the end) the test room.
  */
 const loopOf = (node: LoopNode, measure: Measure, entry: boolean): LoopSpec => {
   const tested = node.loopKind === "do-while";
+  const markers = headerMarkerSites(node, measure.sites);
   const header = (
     id: string,
     role: FlowRole,
@@ -283,6 +294,7 @@ const loopOf = (node: LoopNode, measure: Measure, entry: boolean): LoopSpec => {
       role,
       label,
       owns ? node.callSiteIds : [],
+      owns ? markers : [],
       measure.sites,
       isEntry
     );
@@ -334,7 +346,7 @@ const measureTree = (
     { sites, quota: forkQuota(FORK_QUOTA) },
     true
   );
-  return items.length > 0 ? items : [emptyBodySpec(fn)];
+  return items.length > 0 ? items : [emptyBodySpec(fn, sites)];
 };
 
 export { FORK_QUOTA, measureTree };

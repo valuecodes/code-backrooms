@@ -201,6 +201,14 @@ type PortalSubject =
       readonly roomId: string;
       /** The room it leads to: a loop's test or end room, a switch's merge. */
       readonly targetRoomId: string;
+    }
+  | {
+      readonly kind: "marker";
+      readonly fn: FunctionNode;
+      /** The room whose wall holds it. */
+      readonly roomId: string;
+      /** The calls in that room the world cannot follow, in source order. */
+      readonly sites: readonly CallSite[];
     };
 
 /** What a portal stands for, or null for ids not from this graph. */
@@ -216,6 +224,28 @@ const portalSubject = (
     const functionId = parseFlowNodeId(ref.roomId)?.functionId ?? ref.roomId;
     const fn = functionSubject(graph, functionId)?.fn;
     return fn === undefined ? null : { kind: "return", fn };
+  }
+  if (ref.kind === "marker") {
+    const functionId = parseFlowNodeId(ref.roomId)?.functionId;
+    const fn =
+      functionId === undefined
+        ? undefined
+        : functionSubject(graph, functionId)?.fn;
+    const ids =
+      fn === undefined ? undefined : planOf(graph, fn).markers.get(ref.roomId);
+    if (fn === undefined || ids === undefined) {
+      return null;
+    }
+    const byId = new Map(graph.callSites.map((site) => [site.id, site]));
+    return {
+      kind: "marker",
+      fn,
+      roomId: ref.roomId,
+      sites: ids.flatMap((id) => {
+        const site = byId.get(id);
+        return site === undefined ? [] : [site];
+      }),
+    };
   }
   if (ref.kind === "jump") {
     const functionId = parseFlowNodeId(ref.roomId)?.functionId;

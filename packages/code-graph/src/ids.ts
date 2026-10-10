@@ -101,6 +101,7 @@ const taggedFlowNodeId = (id: string, tag: string): string => {
 const CALL_PORTAL_PREFIX = "portal:";
 const RETURN_PORTAL_PREFIX = "return:";
 const JUMP_PORTAL_PREFIX = "jump:";
+const MARKER_PORTAL_PREFIX = "marker:";
 
 /** A call portal is named by the call site it stands for: `portal:demo.ts::main@42`. */
 const callPortalId = (callSiteId: string): string =>
@@ -120,10 +121,18 @@ const returnPortalId = (roomId: string): string =>
 const jumpPortalId = (roomId: string): string =>
   `${JUMP_PORTAL_PREFIX}${roomId}`;
 
+/**
+ * A room's one marker, standing for every call in it the world cannot
+ * follow: `marker:demo.ts::main@12:step`.
+ */
+const markerPortalId = (roomId: string): string =>
+  `${MARKER_PORTAL_PREFIX}${roomId}`;
+
 type PortalRef =
   | { readonly kind: "call"; readonly callSiteId: string }
   | { readonly kind: "return"; readonly roomId: string }
-  | { readonly kind: "jump"; readonly roomId: string };
+  | { readonly kind: "jump"; readonly roomId: string }
+  | { readonly kind: "marker"; readonly roomId: string };
 
 /** What a portal id names, or null for ids that are not portals of this grammar. */
 const parsePortalId = (id: string): PortalRef | null => {
@@ -135,6 +144,9 @@ const parsePortalId = (id: string): PortalRef | null => {
   }
   if (id.startsWith(JUMP_PORTAL_PREFIX)) {
     return { kind: "jump", roomId: id.slice(JUMP_PORTAL_PREFIX.length) };
+  }
+  if (id.startsWith(MARKER_PORTAL_PREFIX)) {
+    return { kind: "marker", roomId: id.slice(MARKER_PORTAL_PREFIX.length) };
   }
   return null;
 };
@@ -163,6 +175,7 @@ export {
   hubModuleId,
   isFunctionId,
   jumpPortalId,
+  markerPortalId,
   moduleId,
   parseFlowNodeId,
   parsePortalId,

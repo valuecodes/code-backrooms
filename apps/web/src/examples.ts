@@ -267,6 +267,41 @@ function finish() {}
 `,
 };
 
+/**
+ * Calls the world cannot follow, gathered on a closed marker in their
+ * room: a method two classes declare, called on an unknown receiver
+ * (ambiguous), a computed member, a call through a call result and a
+ * callback (dynamic), and a runtime global (external). `pick` and `settle`
+ * resolve.
+ */
+const resolution: SourceFile = {
+  path: "resolution.ts",
+  source: `class Circle {
+  render() {}
+}
+
+class Square {
+  render() {}
+}
+
+function main(shape: Circle | Square, onDone: () => void) {
+  shape.render();
+  const handlers: Record<string, () => void> = { done: onDone };
+  handlers["done"]();
+  pick(true)();
+  settle();
+  onDone();
+}
+
+function pick(fast: boolean) {
+  console.log(fast);
+  return settle;
+}
+
+function settle() {}
+`,
+};
+
 const examples = {
   demo,
   chain,
@@ -277,6 +312,7 @@ const examples = {
   branches,
   switches,
   loops,
+  resolution,
 } as const;
 
 type ExampleName = keyof typeof examples;

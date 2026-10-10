@@ -21,6 +21,8 @@ type Surfaces = {
   readonly voidReturn: MeshStandardMaterial;
   /** The dark plane filling a jump portal: neutral. */
   readonly voidJump: MeshStandardMaterial;
+  /** The dull, unlit board closing a marker: a call the world cannot follow. */
+  readonly markerPanel: MeshStandardMaterial;
   readonly tile: typeof TILE;
   readonly dispose: () => void;
 };
@@ -68,6 +70,12 @@ const createSurfaces = (anisotropy: number): Surfaces => {
   const voidCall = voidMaterial("#1b2a4a");
   const voidReturn = voidMaterial("#4a1f12");
   const voidJump = voidMaterial("#2a2a2a");
+  const markerPanel = new MeshStandardMaterial({
+    color: "#4a4036",
+    roughness: 0.9,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+  });
   const materials = [
     wall,
     floor,
@@ -77,6 +85,7 @@ const createSurfaces = (anisotropy: number): Surfaces => {
     voidCall,
     voidReturn,
     voidJump,
+    markerPanel,
   ];
   return {
     wall,
@@ -87,6 +96,7 @@ const createSurfaces = (anisotropy: number): Surfaces => {
     voidCall,
     voidReturn,
     voidJump,
+    markerPanel,
     tile: TILE,
     dispose: () => {
       for (const material of materials) {

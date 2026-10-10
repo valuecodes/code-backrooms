@@ -96,8 +96,8 @@ const bodyWidth = (body: readonly FlowTree[]): number =>
 
 /**
  * The one room of a lane with a fallthrough door on both side walls: the
- * lane before falls into it and it falls into the next. Its calls can only
- * be portals on its south wall.
+ * lane before falls into it and it falls into the next. Its calls (and its
+ * marker) can only be portals on its south wall.
  */
 const boxedRoom = (lane: LaneSpec): FlowRoomSpec | null => {
   const [only] = lane.body;
@@ -120,11 +120,17 @@ const southWidth = (count: number): number =>
         (2 * PORTAL_MARGIN + (count - 1) * FLOW_PORTAL_PITCH) / GRID - 1e-9
       ) * GRID;
 
-const laneWidth = (lane: LaneSpec): number =>
-  Math.max(
+/** The portals on a room's walls: one per callee beyond its ports, a marker. */
+const portalSlots = (room: FlowRoomSpec): number =>
+  room.callees.length + (room.markers.length > 0 ? 1 : 0);
+
+const laneWidth = (lane: LaneSpec): number => {
+  const boxed = boxedRoom(lane);
+  return Math.max(
     bodyWidth(lane.body),
-    southWidth(boxedRoom(lane)?.callees.length ?? 0)
+    southWidth(boxed === null ? 0 : portalSlots(boxed))
   );
+};
 
 /** A fork's lanes side by side; a loop's body beside its back corridor. */
 const compositeWidth = (item: CompositeSpec): number =>
@@ -254,6 +260,30 @@ const labelsOf = (items: readonly FlowTree[]): ReadonlyMap<string, string> => {
   return labels;
 };
 
+/** Rooms with a marker, mapped to the calls it stands for (site ids). */
+const markersOf = (
+  items: readonly FlowTree[]
+): ReadonlyMap<string, readonly string[]> => {
+  const markers = new Map<string, readonly string[]>();
+  const visit = (current: readonly FlowTree[]) => {
+    for (const item of current) {
+      const rooms = item.kind === "room" ? [item] : ownRooms(item);
+      for (const room of rooms) {
+        if (room.markers.length > 0) {
+          markers.set(room.id, room.markers);
+        }
+      }
+      if (item.kind !== "room") {
+        for (const body of bodiesOf(item)) {
+          visit(body);
+        }
+      }
+    }
+  };
+  visit(items);
+  return markers;
+};
+
 export {
   BACK_LANE,
   BODY_LANE,
@@ -262,6 +292,7 @@ export {
   EXIT_LANE,
   labelsOf,
   laneWidth,
+  markersOf,
   ownRooms,
   roomCount,
   treeWidth,

@@ -149,6 +149,8 @@ type Realised = {
   readonly returns: readonly Portal[];
   /** `break` and `continue`, each to a room of the same cluster. */
   readonly jumps: readonly Portal[];
+  /** Closed frames, each on and "to" its own room. */
+  readonly markers: readonly Portal[];
 };
 
 /**
@@ -158,8 +160,8 @@ type Realised = {
  * reserved port becomes a call portal at its centre (recursion, extra
  * callers of a shared function, a second room calling the same callee),
  * one per call site. Portals get their graph form, `from` the flow room
- * and `to` the callee, the module hub, or for a jump a room of the same
- * cluster.
+ * and `to` the callee, the module hub, for a jump a room of the same
+ * cluster, or for a marker its own room.
  */
 const realise = (
   cluster: RoomCluster,
@@ -210,7 +212,7 @@ const realise = (
     id: portal.id,
     kind: portal.kind,
     from: portal.roomId,
-    to: portal.target ?? hubId,
+    to: portal.kind === "marker" ? portal.roomId : (portal.target ?? hubId),
     ...(portal.label === undefined ? {} : { label: portal.label }),
   });
   return {
@@ -218,6 +220,7 @@ const realise = (
     calls: portals.filter((portal) => portal.kind === "call").map(toPortal),
     returns: portals.filter((portal) => portal.kind === "return").map(toPortal),
     jumps: portals.filter((portal) => portal.kind === "jump").map(toPortal),
+    markers: portals.filter((portal) => portal.kind === "marker").map(toPortal),
   };
 };
 
@@ -299,6 +302,7 @@ const moduleWorld = (
   const calls: Portal[] = [];
   const returns: Portal[] = [];
   const jumps: Portal[] = [];
+  const markers: Portal[] = [];
   for (const fn of functions) {
     const cluster = clusters.get(fn.id);
     if (cluster === undefined) {
@@ -320,6 +324,7 @@ const moduleWorld = (
     calls.push(...realised.calls);
     returns.push(...realised.returns);
     jumps.push(...realised.jumps);
+    markers.push(...realised.markers);
   }
   const groups = hubGroups(attached, extraHubDegree);
   const hubs = groups.map((group, index): GraphRoom => {
@@ -360,7 +365,7 @@ const moduleWorld = (
     hubs,
     rooms,
     connections,
-    portals: [...calls, ...returns, ...jumps],
+    portals: [...calls, ...returns, ...jumps, ...markers],
   };
 };
 
@@ -369,7 +374,9 @@ const moduleWorld = (
  * with a return portal at its end), one hub per module that opens onto the
  * module's roots (more hubs chained when there are many), a door for each
  * call on the breadth-first tree from those roots through the rooms' ports,
- * and a call portal for every other resolved call. The entrances of
+ * a call portal for every other resolved call, and a closed marker in every
+ * room holding calls the world cannot follow (ambiguous, dynamic,
+ * external or unresolved; never a portal to a guess). The entrances of
  * successive modules are chained too, so the world is one connected
  * component, and the first module's entrance is the start room. Edges in
  * `portalOnly` (`source->target`) never become doors. A `seed` varies the

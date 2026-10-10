@@ -7,6 +7,7 @@ import {
   functionId,
   isFunctionId,
   jumpPortalId,
+  markerPortalId,
   moduleId,
   parseFlowNodeId,
   parsePortalId,
@@ -64,6 +65,15 @@ describe("portal ids", () => {
     expect(taggedFlowNodeId("m.ts::f@12:loop", "again")).toBe(
       "m.ts::f@12:loop:again"
     );
+  });
+
+  it("round-trips marker portals", () => {
+    const marker = markerPortalId("m.ts::f@12:step");
+    expect(marker).toBe("marker:m.ts::f@12:step");
+    expect(parsePortalId(marker)).toEqual({
+      kind: "marker",
+      roomId: "m.ts::f@12:step",
+    });
   });
 
   it("rejects ids that are not portals", () => {

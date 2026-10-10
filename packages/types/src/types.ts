@@ -91,7 +91,8 @@ type ClusterDoor = {
  * A portal on a cluster room's wall. With `wall` and `along` it is placed
  * already (cluster coordinates); without, the layout finds free wall.
  * `target`: the unit entered for `call`, a room of this cluster for `jump`,
- * absent for `return` (the consumer decides where returns land).
+ * absent for `return` (the consumer decides where returns land) and for
+ * `marker` (it leads nowhere). A marker is always placed already.
  */
 type ClusterPortal = {
   readonly id: string;
@@ -147,9 +148,10 @@ type Connection = {
 /**
  * `call`: stepping in enters `to` and pushes a navigation frame. `return`:
  * pops the stack, or lands in `to` (the module hub) when it is empty. `jump`:
- * a plain teleport to `to` that leaves the stack alone.
+ * a plain teleport to `to` that leaves the stack alone. `marker`: a closed
+ * frame that cannot be entered, standing for calls the world cannot follow.
  */
-type PortalKind = "call" | "return" | "jump";
+type PortalKind = "call" | "return" | "jump" | "marker";
 
 /**
  * A directed jump drawn as a door-like frame on a wall of `from`. Not part of
@@ -163,7 +165,7 @@ type Portal = {
   /**
    * Where it leads: for `call` and `return`, a graph room (a unit lands at
    * its entry), possibly `from`'s own; for `jump`, a room of the same
-   * cluster as `from`.
+   * cluster as `from`; for `marker`, `from` itself.
    */
   readonly to: string;
   /** Free text, like GraphRoom.label (the callee's name). */

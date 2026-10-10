@@ -190,7 +190,7 @@ const clusterOf = (
 /**
  * Runs the world generator's contract over a cluster: it tiles its box, its
  * doors (and jumps) share edges and reach every room, its ports lie on the
- * boundary, its jump portals lead to its own rooms.
+ * boundary, its jump portals lead to its own rooms, its markers are placed.
  */
 const valid = (cluster: RoomCluster): RoomCluster => {
   const callees = new Set([
@@ -213,7 +213,7 @@ const valid = (cluster: RoomCluster): RoomCluster => {
       id: portal.id,
       kind: portal.kind,
       from: portal.roomId,
-      to: portal.target ?? FN,
+      to: portal.kind === "marker" ? portal.roomId : (portal.target ?? FN),
     })),
   };
   validateGraph(graph);

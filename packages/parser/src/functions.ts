@@ -51,6 +51,8 @@ type Discovered = {
   /** The scope inside each anonymous function, keyed by its node. */
   readonly scopeAt: Map<Node, Scope>;
   readonly moduleScope: Scope;
+  /** Every class declared in the module, in source order, whatever its scope. */
+  readonly classes: ClassTable[];
 };
 
 type Context = {
@@ -106,7 +108,7 @@ const register = (
   context.out.nodeOf.set(fn, node);
   context.out.byNode.set(node, fn);
   if (table === null) {
-    scope.locals.set(name, fn);
+    scope.locals.set(name, [...(scope.locals.get(name) ?? []), fn]);
   }
   const inner = functionScope(scope, node, fn, table, isStatic);
   context.out.scopeOf.set(fn, inner);
@@ -131,6 +133,7 @@ const visitClassBody = (
     ctor: null,
   };
   scope.classes.set(name, table);
+  context.out.classes.push(table);
   for (const member of body.body) {
     const field = fieldFunction(member);
     if (isClassMethod(member) || isClassPrivateMethod(member)) {
@@ -311,6 +314,7 @@ const discover = (moduleId: string, program: Program): Discovered => {
     scopeOf: new Map(),
     scopeAt: new Map(),
     moduleScope,
+    classes: [],
   };
   const context: Context = {
     moduleId,

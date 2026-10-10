@@ -97,6 +97,20 @@ before.
 `try` stays one collapsed room showing its source: exception edges are
 beyond the MVP.
 
+Calls the world cannot follow (ambiguous, dynamic, external, unresolved) get
+a closed **marker**: one framed, boarded panel per room, `marker:<room id>`,
+hung after the room's call portals as one more slot on its side walls. A room
+boxed in by fallthrough doors puts it on its south wall. It is never a portal
+to a guess, not even an ambiguous call's first candidate. Choosing between
+candidates is left to a later chooser. Every such site lands in exactly one
+room, decided as the specs are built so the budget counts the marker's wall
+and folding carries it. A leaf or a collapsed composite takes the sites in
+its span. An expanded composite's head takes those that no statement inside
+it holds (condition, discriminant, case tests, loop header; a do-while's go
+to its test room). Sites in no statement of the body at all (a default
+parameter, dropped dead code) go to the entry room. `FlowPlan.markers` maps
+each room to its sites. A marker alone makes a room 3 m deep.
+
 Calls hang off side walls. A room whose wall lies on the cluster boundary
 offers a port there: with both walls free the first callee gets a port on
 the wall used least recently and the second the other wall (a lone callee

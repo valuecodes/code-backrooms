@@ -20,6 +20,7 @@ import type {
   FunctionNode,
 } from "./code-graph";
 import { countStatements, escapingJumps, hasReturn, isTerminal } from "./flow";
+import { markerSitesOf, withStrays } from "./flow-markers";
 import { flowNodeText, resolvedSites, siteIdsUnder } from "./flow-text";
 import type { SiteIndex } from "./flow-text";
 import { flowNodeId, parseFlowNodeId, taggedFlowNodeId } from "./ids";
@@ -40,6 +41,11 @@ type FlowRoomSpec = {
   readonly calls: number;
   /** Distinct callees in site order. */
   readonly callees: readonly FlowCallee[];
+  /**
+   * Calls in the room the world cannot follow (site ids, source order):
+   * the room gets one marker for them all when there are any.
+   */
+  readonly markers: readonly string[];
   /** The depth with both side walls free for its calls: what the budget counts. */
   readonly depth: number;
   /** The depth its contents alone need; the placer grows it for the calls. */
@@ -113,31 +119,37 @@ const baseDepth = (role: FlowRole, statements: number): number => {
   }
 };
 
+/** Past the last portal on a wall: half a frame plus clearance from the corner. */
+const PORTAL_TAIL = 1.5;
+
 /**
  * Wall for the callees when both side walls are free: the first two get a
  * port each (one per side wall), the rest a pre-placed portal each below
- * the port, alternating walls, at FLOW_PORTAL_PITCH; 1.5 m after the last
- * keeps it clear of the corner.
+ * the port, alternating walls, at FLOW_PORTAL_PITCH, and a marker after
+ * them; PORTAL_TAIL after the last keeps it clear of the corner. A marker
+ * alone needs a tail on either side of it.
  */
-const sitesDepth = (callees: number): number => {
+const sitesDepth = (callees: number, marker: boolean): number => {
   if (callees === 0) {
-    return 0;
+    return marker ? 2 * PORTAL_TAIL : 0;
   }
-  const extrasPerWall = Math.ceil(Math.max(0, callees - 2) / 2);
+  const extras = Math.max(0, callees - 2) + (marker ? 1 : 0);
+  const extrasPerWall = Math.ceil(extras / 2);
   return extrasPerWall === 0
     ? FLOW_CALL_DEPTH
-    : FLOW_CALL_DEPTH + extrasPerWall * FLOW_PORTAL_PITCH + 1.5;
+    : FLOW_CALL_DEPTH + extrasPerWall * FLOW_PORTAL_PITCH + PORTAL_TAIL;
 };
 
 const depthOf = (
   role: FlowRole,
   statements: number,
   callees: number,
-  entry: boolean
+  entry: boolean,
+  marker = false
 ): number =>
   Math.max(
     baseDepth(role, statements),
-    sitesDepth(callees),
+    sitesDepth(callees, marker),
     entry ? FLOW_TOP_MIN_DEPTH : 0
   );
 
@@ -238,6 +250,7 @@ const specOf = (
   const role = roleOf(node);
   const ids = siteIdsUnder(node);
   const callees = calleesOf(ids, sites);
+  const markers = withStrays(markerSitesOf(node, sites), sites, entry);
   const statements = countStatements(node);
   const terminal = isTerminal(node);
   return {
@@ -248,26 +261,45 @@ const specOf = (
     statements,
     calls: resolvedSites(ids, sites).length,
     callees,
-    depth: depthOf(role, statements, callees.length, entry),
+    markers,
+    depth: depthOf(role, statements, callees.length, entry, markers.length > 0),
     floor: depthOf(role, statements, 0, entry),
     terminal,
     ...exitsOf(node, terminal),
   };
 };
 
-/** The one room of a function with nothing in its body. */
-const emptyBodySpec = (fn: FunctionNode): FlowRoomSpec => ({
-  kind: "room",
-  id: flowNodeId(fn.id, fn.flow.span.start, "step", "empty"),
-  role: "step",
-  label: "empty body",
-  statements: 0,
-  calls: 0,
-  callees: [],
-  depth: depthOf("step", 0, 0, true),
-  floor: depthOf("step", 0, 0, true),
-  terminal: false,
-});
+/**
+ * The one room of a function with nothing in its body; with `sites` it
+ * shows the function's strays (a default parameter's calls).
+ */
+const emptyBodySpec = (
+  fn: FunctionNode,
+  sites: SiteIndex | null = null
+): FlowRoomSpec => {
+  const markers = sites?.strays ?? [];
+  return {
+    kind: "room",
+    id: flowNodeId(fn.id, fn.flow.span.start, "step", "empty"),
+    role: "step",
+    label: "empty body",
+    statements: 0,
+    calls: 0,
+    callees: [],
+    markers,
+    depth: depthOf("step", 0, 0, true, markers.length > 0),
+    floor: depthOf("step", 0, 0, true),
+    terminal: false,
+  };
+};
 
-export { calleesOf, depthOf, emptyBodySpec, jumpTarget, PORT_PITCH, specOf };
+export {
+  calleesOf,
+  depthOf,
+  emptyBodySpec,
+  jumpTarget,
+  PORT_PITCH,
+  PORTAL_TAIL,
+  specOf,
+};
 export type { FlowCallee, FlowRoomSpec };

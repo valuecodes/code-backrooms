@@ -11,8 +11,9 @@ import {
   MIN_SHARED,
 } from "@repo/world-generator/config";
 
+import { PORTAL_TAIL } from "./flow-measure";
 import type { FlowCallee, FlowRoomSpec } from "./flow-measure";
-import { callPortalId } from "./ids";
+import { callPortalId, markerPortalId } from "./ids";
 
 type Side = "east" | "west";
 
@@ -23,9 +24,6 @@ type WallTracker = {
 };
 
 type Trackers = Record<Side, WallTracker>;
-
-/** Past the last portal on a wall: its half frame plus clearance from the corner. */
-const PORTAL_TAIL = 1.5;
 
 /**
  * Where the parent unit "ends" on both side walls: it sits above z = 0 and
@@ -108,10 +106,11 @@ const portHangs = (
  * past the previous port on its wall, so the room grows when the column is
  * busy on that side. Every other callee gets a pre-placed portal: below the
  * port at FLOW_PORTAL_PITCH on a wall that has one, from the top of the
- * room on a wall that does not, alternating walls. A `blocked` side wall
- * holds a fallthrough door, so it gets no portals; with both blocked they
- * go on the south wall, centred (a room walled in like that neither
- * rejoins nor ends, so nothing else is there).
+ * room on a wall that does not, alternating walls. A room with calls the
+ * world cannot follow gets one marker after them, placed the same way. A
+ * `blocked` side wall holds a fallthrough door, so it gets no portals; with
+ * both blocked they go on the south wall, centred (a room walled in like
+ * that neither rejoins nor ends, so nothing else is there).
  */
 const hangCallees = (
   spec: FlowRoomSpec,
@@ -130,8 +129,10 @@ const hangCallees = (
   const primary: Side =
     trackers.west.lastHi < trackers.east.lastHi ? "west" : "east";
   const hangs = portHangs(spec.callees, free, primary);
-  // One callee per free wall gets a port; the rest get portals.
+  // One callee per free wall gets a port; the rest get portals, then the
+  // marker takes one more slot.
   const extras = spec.callees.slice(Math.min(spec.callees.length, free.length));
+  const slots = extras.length + (spec.markers.length > 0 ? 1 : 0);
   const firstExtraWall: Side =
     free.length === 1 ? (free[0] ?? primary) : primary;
   const extraWall = (position: number): WallSide => {
@@ -141,8 +142,13 @@ const hangCallees = (
     }
     return only ?? "south";
   };
-  const extrasOn = (wall: Side): number =>
-    extras.filter((_, position) => extraWall(position) === wall).length;
+  const extrasOn = (wall: Side): number => {
+    let count = 0;
+    for (let position = 0; position < slots; position += 1) {
+      count += extraWall(position) === wall ? 1 : 0;
+    }
+    return count;
+  };
   const spans = new Map<Side, Span>();
   let depth = spec.floor;
   for (const { callee, wall } of hangs) {
@@ -199,9 +205,8 @@ const hangCallees = (
     west: 0,
   };
   // South-wall portals are centred on the room, FLOW_PORTAL_PITCH apart.
-  const southFirst =
-    (x0 + x1) / 2 - ((extras.length - 1) * FLOW_PORTAL_PITCH) / 2;
-  for (const [position, callee] of extras.entries()) {
+  const southFirst = (x0 + x1) / 2 - ((slots - 1) * FLOW_PORTAL_PITCH) / 2;
+  for (let position = 0; position < slots; position += 1) {
     const wall = extraWall(position);
     const span = wall === "east" || wall === "west" ? spans.get(wall) : null;
     let along: number;
@@ -213,14 +218,26 @@ const hangCallees = (
       along = span.hi + span.reach + FLOW_PORTAL_PITCH * (placedOn[wall] + 1);
     }
     placedOn[wall] += 1;
-    portals.push({
-      id: callPortalId(callee.siteId),
-      kind: "call",
-      roomId: spec.id,
-      wall,
-      along,
-      target: callee.unitId,
-    });
+    const callee = extras[position];
+    portals.push(
+      callee === undefined
+        ? {
+            id: markerPortalId(spec.id),
+            kind: "marker",
+            roomId: spec.id,
+            wall,
+            along,
+            label: `${spec.markers.length} call${spec.markers.length === 1 ? "" : "s"}`,
+          }
+        : {
+            id: callPortalId(callee.siteId),
+            kind: "call",
+            roomId: spec.id,
+            wall,
+            along,
+            target: callee.unitId,
+          }
+    );
   }
   return { depth, ports, portals };
 };

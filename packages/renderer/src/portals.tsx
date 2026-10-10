@@ -20,7 +20,7 @@ type PortalsProps = {
 /** Keeps the void plane clear of the wall's inner face. */
 const LIFT = 0.01;
 
-const KINDS: readonly PortalKind[] = ["call", "return", "jump"];
+const KINDS: readonly PortalKind[] = ["call", "return", "jump", "marker"];
 
 /**
  * One plane per portal of a kind, standing on the wall's inner face and
@@ -56,7 +56,8 @@ const voidPlanes = (
 
 /**
  * Every portal in the world: the frames as one mesh (the same dark wood as
- * the doorways) and one dark, faintly glowing plane mesh per kind.
+ * the doorways) and one plane mesh per kind, dark and faintly glowing, or
+ * for a marker a dull board that closes the frame.
  */
 const Portals = ({ portals }: PortalsProps) => {
   const surfaces = useSurfaces();
@@ -85,6 +86,7 @@ const Portals = ({ portals }: PortalsProps) => {
     call: surfaces.voidCall,
     return: surfaces.voidReturn,
     jump: surfaces.voidJump,
+    marker: surfaces.markerPanel,
   } satisfies Record<PortalKind, unknown>;
   return (
     <group>

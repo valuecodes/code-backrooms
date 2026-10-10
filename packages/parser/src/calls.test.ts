@@ -36,7 +36,7 @@ describe("call resolution", () => {
     ]);
   });
 
-  it("marks runtime globals external and the rest unresolved", () => {
+  it("marks runtime globals external, parameters dynamic and the rest unresolved", () => {
     const source = [
       'import { chunk } from "lodash";',
       "function run(obj: { method(): void }, cb?: () => void) {",
@@ -56,7 +56,7 @@ describe("call resolution", () => {
       ["unknown", "unresolved"],
       ["obj.method", "unresolved"],
       ["chunk", "unresolved"],
-      ["cb", "unresolved"],
+      ["cb", "dynamic"],
       ["Thing", "unresolved"],
     ]);
     expect(parse(source).callSites.map((site) => site.kind)).toContain(
@@ -96,8 +96,8 @@ describe("call resolution", () => {
     ].join("\n");
     expect(sites(source)).toEqual([
       ["t.ts::run", "xs.map", "unresolved", null],
-      ["t.ts::run", "target", "unresolved", null],
-      ["t.ts::run", "target", "unresolved", null],
+      ["t.ts::run", "target", "dynamic", null],
+      ["t.ts::run", "target", "dynamic", null],
       ["t.ts::run", "target", "resolved", "t.ts::target"],
     ]);
   });
@@ -135,7 +135,8 @@ describe("call resolution", () => {
     ]);
     expect(sites(source)).toEqual([
       ["t.ts::S.run", "this.x", "resolved", "t.ts::S.x"],
-      ["t.ts::S.run.inner", "this.x", "unresolved", null],
+      // `this` is dynamic in a plain function; both classes S declare x.
+      ["t.ts::S.run.inner", "this.x", "ambiguous", null],
       ["t.ts::S.run.arrow", "this.x", "resolved", "t.ts::S.x"],
       ["t.ts::S.run", "inner", "resolved", "t.ts::S.run.inner"],
       ["t.ts::S.run", "arrow", "resolved", "t.ts::S.run.arrow"],
@@ -192,6 +193,132 @@ describe("call resolution", () => {
         target: "t.ts::a",
         callSiteIds: ["t.ts::a@25"],
       },
+    ]);
+  });
+});
+
+describe("resolution kinds", () => {
+  const kinds = (source: string) =>
+    parse(source).callSites.map((site) => [site.calleeName, site.resolution]);
+
+  it("marks calls computed at run time dynamic", () => {
+    const source = [
+      "function helper() { return helper; }",
+      "type F = () => void;",
+      "function run(cb: () => void, obj: Record<string, F>, k: string, a?: F, b?: F) {",
+      "  cb(); cb!(); obj[k](); helper()(); (a || b)!(); (helper as F)();",
+      "  [1].forEach((each: F) => each());",
+      "}",
+    ].join("\n");
+    expect(kinds(source)).toEqual([
+      ["cb", "dynamic"],
+      ["cb", "dynamic"],
+      ["obj[…]", "dynamic"],
+      ["helper", "resolved"],
+      ["helper(…)", "dynamic"],
+      ["<LogicalExpression>", "dynamic"],
+      ["helper", "resolved"],
+      ["<ArrayExpression>.forEach", "unresolved"],
+      ["each", "dynamic"],
+    ]);
+  });
+
+  it("tells apart the calls of a chain that start at one offset", () => {
+    const graph = parse("function a() { b()(); }\nfunction b() { return b; }");
+    expect(
+      graph.callSites.map((site) => [site.id, site.calleeName, site.resolution])
+    ).toEqual([
+      ["t.ts::a@15", "b", "resolved"],
+      ["t.ts::a@15-20", "b(…)", "dynamic"],
+    ]);
+    expect(graph.edges.filter((edge) => edge.type === "call")).toEqual([
+      {
+        type: "call",
+        source: "t.ts::a",
+        target: "t.ts::b",
+        callSiteIds: ["t.ts::a@15"],
+      },
+    ]);
+  });
+
+  it("makes a name declared in several branches ambiguous, with no edge", () => {
+    const graph = parse(
+      [
+        "function run(flag: boolean) {",
+        "  if (flag) { function pick() { return 1; } } else { function pick() { return 2; } }",
+        "  return pick();",
+        "}",
+      ].join("\n")
+    );
+    const site = graph.callSites.find((each) => each.calleeName === "pick");
+    expect(site).toMatchObject({
+      resolution: "ambiguous",
+      calleeId: null,
+      candidateIds: ["t.ts::run.pick", "t.ts::run.pick~2"],
+    });
+    expect(graph.edges.filter((edge) => edge.type === "call")).toEqual([]);
+  });
+
+  it("makes an unknown receiver ambiguous only with two candidate classes", () => {
+    const source = [
+      "class A { render() {} }",
+      "class B { render() {} draw() {} }",
+      "function run(x: A | B) { x.render(); x.draw(); }",
+    ].join("\n");
+    expect(parse(source).callSites).toMatchObject([
+      {
+        calleeName: "x.render",
+        resolution: "ambiguous",
+        candidateIds: ["t.ts::A.render", "t.ts::B.render"],
+      },
+      { calleeName: "x.draw", resolution: "unresolved", calleeId: null },
+    ]);
+    expect(parse(source).callSites[1]).not.toHaveProperty("candidateIds");
+  });
+
+  it("looks for this.m() missing on its own class among the others", () => {
+    const source = [
+      "class A { m() {} }",
+      "class B { m() {} }",
+      "class C { run() { this.m(); this.#p(); } #p() {} }",
+      "class D { #p() {} }",
+    ].join("\n");
+    expect(kinds(source)).toEqual([
+      ["this.m", "ambiguous"],
+      ["this.#p", "resolved"],
+    ]);
+  });
+
+  it("resolves through TypeScript overload signatures", () => {
+    const source = [
+      "function f(a: string): void;",
+      "function f(a: number): void;",
+      "function f(a: unknown) {}",
+      "class S {",
+      "  m(a: string): void;",
+      "  m(a: unknown) {}",
+      "  run() { this.m(1); }",
+      "}",
+      "function main() { f(1); }",
+    ].join("\n");
+    expect(sites(source)).toEqual([
+      ["t.ts::S.run", "this.m", "resolved", "t.ts::S.m"],
+      ["t.ts::main", "f", "resolved", "t.ts::f"],
+    ]);
+  });
+
+  it("keeps super and IIFEs unresolved; import() is no call site", () => {
+    const source = [
+      "class A { m() {} }",
+      "class B extends A { constructor() { super(); } m() { super.m(); } }",
+      "class C extends A { m() { super.m(); } }",
+      "async function run() { (() => 1)(); await import('./x'); }",
+    ].join("\n");
+    expect(kinds(source)).toEqual([
+      ["super", "unresolved"],
+      ["super.m", "unresolved"],
+      ["super.m", "unresolved"],
+      ["<ArrowFunctionExpression>", "unresolved"],
     ]);
   });
 });

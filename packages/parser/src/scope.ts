@@ -54,12 +54,18 @@ type Scope = {
   /** The class `this` refers to here; null where `this` is dynamic or unknown. */
   readonly classTable: ClassTable | null;
   readonly isStatic: boolean;
-  /** Named functions declared directly in this scope, resolvable by name. */
-  readonly locals: Map<string, DiscoveredFunction>;
+  /**
+   * Named functions declared directly in this scope, resolvable by name.
+   * Block scopes are folded into their function, so one name may hold
+   * several (one per branch that declares it), in source order.
+   */
+  readonly locals: Map<string, DiscoveredFunction[]>;
   /** Classes declared directly in this scope, resolvable by name. */
   readonly classes: Map<string, ClassTable>;
   /** Every other binding (params, variables, imports): shadows outer names. */
   readonly bindings: Set<string>;
+  /** The bindings that are parameters: a call to one is dynamic. */
+  readonly params: Set<string>;
   readonly parent: Scope | null;
 };
 
@@ -86,6 +92,7 @@ const newScope = (
   locals: new Map(),
   classes: new Map(),
   bindings: new Set(),
+  params: new Set(),
   parent,
 });
 
@@ -146,14 +153,17 @@ const functionScope = (
   for (const param of node.params) {
     bindingNames(
       isTSParameterProperty(param) ? param.parameter : param,
-      scope.bindings
+      scope.params
     );
+  }
+  for (const name of scope.params) {
+    scope.bindings.add(name);
   }
   if (isFunctionExpression(node) && node.id !== null && node.id !== undefined) {
     if (fn === null) {
       scope.bindings.add(node.id.name);
     } else {
-      scope.locals.set(node.id.name, fn);
+      scope.locals.set(node.id.name, [fn]);
     }
   }
   return scope;
