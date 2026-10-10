@@ -180,23 +180,33 @@ type FunctionNode = {
 };
 
 /**
- * resolved: a function in the graph; external: a known runtime global such as
- * `console.log`; unresolved: anything the analysis cannot follow (imports,
- * `obj.method()`, callbacks, shadowed names).
+ * resolved: one function in the graph; ambiguous: the name may refer to
+ * several functions in the graph (`candidateIds`), so no one is followed;
+ * dynamic: the callee is computed at run time (a parameter or callback,
+ * `obj[key]()`, `f()()`); external: a known runtime global such as
+ * `console.log`; unresolved: anything else the analysis cannot follow
+ * (imports, variables, `obj.method()` on an unknown receiver, `super`).
  */
-type CallResolution = "resolved" | "unresolved" | "external";
+type CallResolution =
+  "resolved" | "ambiguous" | "dynamic" | "unresolved" | "external";
 
 type CallKind = "call" | "optional-call" | "new";
 
 type CallSite = {
-  /** `${callerId}@${span.start}`: offsets are unique within a module. */
+  /**
+   * `${callerId}@${span.start}`; a call enclosing another that starts at the
+   * same offset (`f()()`) adds its end: `${callerId}@${start}-${end}`.
+   */
   readonly id: string;
   /** A FunctionNode id, or the ModuleNode id for top-level calls. */
   readonly callerId: string;
   /** As written: "getUser", "this.load", "console.log", "Svc" for `new Svc()`. */
   readonly calleeName: string;
+  /** Set for `resolved` only: an ambiguous call is never followed. */
   readonly calleeId: string | null;
   readonly resolution: CallResolution;
+  /** For `ambiguous`: every function it may call, at least two, in source order. */
+  readonly candidateIds?: readonly string[];
   readonly kind: CallKind;
   /** The call is the direct operand of an `await`. */
   readonly awaited: boolean;

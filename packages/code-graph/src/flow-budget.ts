@@ -57,6 +57,8 @@ const merge = (
   const statements = a.statements + b.statements;
   const calls = a.calls + b.calls;
   const callees = distinctCallees([...a.callees, ...b.callees]);
+  // The entry room already carries the function's strays.
+  const markers = [...a.markers, ...b.markers];
   return {
     kind: "room",
     id: a.id,
@@ -65,7 +67,14 @@ const merge = (
     statements,
     calls,
     callees,
-    depth: depthOf("collapsed", statements, callees.length, entry),
+    markers,
+    depth: depthOf(
+      "collapsed",
+      statements,
+      callees.length,
+      entry,
+      markers.length > 0
+    ),
     floor: depthOf("collapsed", statements, 0, entry),
     terminal: b.terminal,
     // A pair ending in a room that jumps out still jumps out, and keeps

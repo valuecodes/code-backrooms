@@ -1,5 +1,5 @@
 import type { CodeGraph } from "@repo/code-graph";
-import { laneText } from "@repo/code-graph/flow-text";
+import { laneText, markerText } from "@repo/code-graph/flow-text";
 import { portalSubject, roomSubject } from "@repo/code-graph/subjects";
 import type { RoomSubject } from "@repo/code-graph/subjects";
 import { generateCodeWorld } from "@repo/code-graph/world-graph";
@@ -143,6 +143,13 @@ const promptOf = (
   }
   if (subject.kind === "call") {
     return `→ ${subject.callee.qualifiedName}()`;
+  }
+  // A marker leads nowhere: it names the calls the world cannot follow.
+  if (subject.kind === "marker") {
+    const names = new Map(
+      codeGraph?.functions.map((fn) => [fn.id, fn.qualifiedName])
+    );
+    return `closed · ${markerText(subject.sites, (id) => names.get(id) ?? id)}`;
   }
   // A jump reads like a door within the function: `→ again?`, `→ end for`.
   if (subject.kind === "jump") {

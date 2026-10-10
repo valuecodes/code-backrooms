@@ -80,9 +80,9 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   map in the top-left corner, north up and centred on the player: the rooms
   stood in, filled with their lane's colour, the rooms seen through their
   doors drawn hollow, their doors, and their portals coloured by kind (call
-  amber, return pale, jump grey). It belongs to one world: N starts it over,
-  R does not.
-- Milestone 12 (current): aesthetic variation. A code world is seeded from
+  amber, return pale, jump grey, marker dark). It belongs to one world: N
+  starts it over, R does not.
+- Milestone 12: aesthetic variation. A code world is seeded from
   a hash of its source, so the same program always gives the same world
   and `?seed` / N are a dev override. The seed varies proportions only,
   never what is connected (a test compares every example with variation on
@@ -92,6 +92,14 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   through wide passages (up to 4 m); doors into a lane stay 1.2 m doors so
   the choice reads. Each room's wallpaper is a shade lighter or darker,
   and the ceiling lights buzz out of step.
+- Milestone 13 (current): resolution kinds. A call is resolved, ambiguous
+  (the name may mean several functions: two branches declaring it, two
+  classes with that method on an unknown receiver), dynamic (a callback or
+  parameter, `obj[k]()`, `f()()`), external or unresolved. Only resolved calls
+  become doors or portals. Each room holding any other kind gets one closed
+  marker: a boarded frame whose prompt names the calls (`closed · fetch(…)
+external, x.render(…) ambiguous: A.render() | B.render()`). Choosing
+  between an ambiguous call's candidates is left for Phase 6.
 
 ---
 
@@ -145,7 +153,8 @@ src/
   `hub`, `cycle`.
 - `?code=<example>` generates the rooms from a bundled program in
   `src/examples.ts` (`demo`, `chain`, `pair`, `service`, `external`,
-  `portals`) and wins over `graph`. Edit a source string there to change the
+  `portals`, `branches`, `switches`, `loops`, `resolution`) and wins over
+  `graph`. Edit a source string there to change the
   world.
 
 ### Keys while walking
@@ -162,8 +171,8 @@ M or Tab shows or hides the overview map.
 Code → graph → layout → rendering, each in its own package:
 
 - `@repo/parser` parses one file with `@babel/parser` into functions (each
-  with its body as a control-flow tree) and call sites (resolved, external
-  or unresolved).
+  with its body as a control-flow tree) and call sites (resolved, ambiguous,
+  dynamic, external or unresolved).
 - `@repo/code-graph` holds the language-independent `CodeGraph` types and the
   spatial grammar: one cluster per function (a column of flow rooms with
   ports on its side walls, `./flow-layout`), one hub room per file, one call

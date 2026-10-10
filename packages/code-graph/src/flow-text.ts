@@ -8,6 +8,8 @@ import type {
   FlowNode,
   FlowStep,
   LoopNode,
+  SequenceNode,
+  SourceSpan,
   SwitchNode,
 } from "./code-graph";
 import { countStatements, walkFlow } from "./flow";
@@ -35,18 +37,49 @@ const siteIdsUnder = (node: FlowNode): readonly string[] => {
   return ids;
 };
 
-/** Sites by id, built once per function so lookups stay cheap. */
-type SiteIndex = ReadonlyMap<string, CallSite>;
+/** One function's call sites, indexed once so measuring its rooms stays cheap. */
+type SiteIndex = {
+  readonly byId: ReadonlyMap<string, CallSite>;
+  /** Sites the world cannot follow (any but `resolved`), in source order. */
+  readonly open: readonly CallSite[];
+  /**
+   * Open sites in no statement of the body (default parameters, dropped
+   * dead code): the entry room shows them.
+   */
+  readonly strays: readonly string[];
+};
 
-const indexSites = (sites: readonly CallSite[]): SiteIndex =>
-  new Map(sites.map((site) => [site.id, site]));
+const within = (inner: SourceSpan, outer: SourceSpan): boolean =>
+  inner.start >= outer.start && inner.end <= outer.end;
+
+/** `flow`: the function's body, for its strays; without it there are none. */
+const indexSites = (
+  sites: readonly CallSite[],
+  flow: SequenceNode | null = null
+): SiteIndex => {
+  const open = sites
+    .filter((site) => site.resolution !== "resolved")
+    .toSorted((a, b) => a.span.start - b.span.start);
+  return {
+    byId: new Map(sites.map((site) => [site.id, site])),
+    open,
+    strays:
+      flow === null
+        ? []
+        : open
+            .filter(
+              (site) => !flow.steps.some((step) => within(site.span, step.span))
+            )
+            .map((site) => site.id),
+  };
+};
 
 const resolvedSites = (
   ids: readonly string[],
   sites: SiteIndex
 ): readonly CallSite[] =>
   ids.flatMap((id) => {
-    const site = sites.get(id);
+    const site = sites.byId.get(id);
     return site?.resolution === "resolved" ? [site] : [];
   });
 
@@ -73,7 +106,7 @@ const flowNodeText = (node: FlowStep, sites: SiteIndex): string => {
       return [...new Set(names)].join(", ");
     }
     case "await": {
-      const awaited = [...sites.values()].find(
+      const awaited = [...sites.byId.values()].find(
         (site) =>
           site.span.start >= node.span.start && site.span.end <= node.span.end
       );
@@ -130,6 +163,39 @@ const loopEndText = (node: LoopNode): string =>
     ? "end while"
     : "end for";
 
+/**
+ * What a marker stands for: one entry per callee and resolution in source
+ * order, `×n` when repeated, an ambiguous call's candidates by name
+ * (`nameOf` a function id): `fetch(…) external, cb(…) ×2 dynamic,
+ * x.render(…) ambiguous: A.render() | B.render()`.
+ */
+const markerText = (
+  sites: readonly CallSite[],
+  nameOf: (functionId: string) => string
+): string => {
+  const entries = new Map<string, { site: CallSite; count: number }>();
+  for (const site of sites) {
+    const key = JSON.stringify([site.calleeName, site.resolution]);
+    const entry = entries.get(key);
+    entries.set(
+      key,
+      entry === undefined
+        ? { site, count: 1 }
+        : { site: entry.site, count: entry.count + 1 }
+    );
+  }
+  return [...entries.values()]
+    .map(({ site, count }) => {
+      const times = count > 1 ? ` ×${count}` : "";
+      const candidates =
+        site.candidateIds === undefined
+          ? ""
+          : `: ${site.candidateIds.map((id) => `${nameOf(id)}()`).join(" | ")}`;
+      return `${callee(site)}${times} ${site.resolution}${candidates}`;
+    })
+    .join(", ");
+};
+
 /** A lane's own words: `true`, `false`, `case "x", case "y"`, `default`. */
 const laneText = (lane: LaneLabel): string => lane.text ?? lane.kind;
 
@@ -146,8 +212,10 @@ export {
   loopEndText,
   loopHeadText,
   loopTestText,
+  markerText,
   mergeText,
   resolvedSites,
   siteIdsUnder,
+  within,
 };
 export type { SiteIndex };

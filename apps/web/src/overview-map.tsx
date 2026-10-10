@@ -28,6 +28,7 @@ const PORTAL_COLOURS: Record<PortalKind, string> = {
   call: "#f59e0b",
   return: "#fef3c7",
   jump: "#9ca3af",
+  marker: "#57534e",
 };
 
 const roomFill = (room: MapRoom): string => {

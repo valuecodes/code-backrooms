@@ -32,7 +32,8 @@ const onGrid = (value: number): boolean =>
  * MIN_SHARED, undirected connections between distinct known rooms with no
  * duplicates, portals with unique ids from a known room (a cluster's rooms
  * included) to a known graph room (possibly its own; a jump's to a room of
- * the same cluster), clusters that satisfy
+ * the same cluster; a marker's to its own cluster room, which placed it and
+ * gave it no target), clusters that satisfy
  * `validateCluster` and whose reserved ports and placed portals name known
  * rooms and portals, and one connected component over the connections.
  */
@@ -63,6 +64,7 @@ const validateGraph = (graph: WorldGraph): void => {
   // every cluster jump portal, which the graph's must match.
   const unitOf = new Map<string, string>();
   const clusterJumps = new Map<string, string | undefined>();
+  const clusterMarkers = new Set<string>();
   const placedPortals = new Map<string, string>();
   for (const room of graph.rooms) {
     if (room.cluster === undefined) {
@@ -82,6 +84,18 @@ const validateGraph = (graph: WorldGraph): void => {
     for (const portal of room.cluster.portals) {
       if (portal.kind === "jump") {
         clusterJumps.set(portal.id, portal.target);
+      }
+      if (portal.kind === "marker") {
+        if (
+          portal.target !== undefined ||
+          portal.wall === undefined ||
+          portal.along === undefined
+        ) {
+          throw new Error(
+            `Marker "${portal.id}" must be placed by its cluster and lead nowhere`
+          );
+        }
+        clusterMarkers.add(portal.id);
       }
       if (portal.wall !== undefined) {
         if (placedPortals.has(portal.id)) {
@@ -119,11 +133,14 @@ const validateGraph = (graph: WorldGraph): void => {
       );
     }
     portalIds.add(portal.id);
-    const known =
-      portal.kind === "jump"
-        ? unitOf.has(portal.to) &&
-          unitOf.get(portal.to) === unitOf.get(portal.from)
-        : ids.has(portal.to);
+    let known = ids.has(portal.to);
+    if (portal.kind === "jump") {
+      known =
+        unitOf.has(portal.to) &&
+        unitOf.get(portal.to) === unitOf.get(portal.from);
+    } else if (portal.kind === "marker") {
+      known = unitOf.has(portal.from) && portal.to === portal.from;
+    }
     if (!roomIds.has(portal.from) || !known) {
       throw new Error(
         `Portal "${portal.id}" (${portal.from} -> ${portal.to}) references an unknown room`
@@ -137,6 +154,12 @@ const validateGraph = (graph: WorldGraph): void => {
     ) {
       throw new Error(
         `Portal "${portal.id}" (${portal.kind} to ${portal.to}) does not match its cluster's jump portal`
+      );
+    }
+    // A marker is one its cluster placed, so it never goes unplaced.
+    if (clusterMarkers.has(portal.id) !== (portal.kind === "marker")) {
+      throw new Error(
+        `Portal "${portal.id}" (${portal.kind}) does not match its cluster's marker`
       );
     }
     const placedOn = placedPortals.get(portal.id);

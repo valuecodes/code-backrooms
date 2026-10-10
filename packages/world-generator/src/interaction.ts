@@ -40,6 +40,10 @@ const MIN_APPROACH = 0.2;
 
 const dot = (a: Point, b: Point): number => a.x * b.x + a.z * b.z;
 
+/** Portals the player can step through: a marker is a closed frame. */
+const enterable = (portal: BuiltPortal): boolean =>
+  portal.portal.kind !== "marker";
+
 /**
  * The portal the player enters this frame: they are inside its trigger
  * strip, looking into the wall and moving into it, so neither strafing past
@@ -55,8 +59,9 @@ const portalToEnter = (
   if (!armed) {
     return null;
   }
-  const inside = portals.find((portal) =>
-    containsPoint(portal.trigger, motion.position)
+  const inside = portals.find(
+    (portal) =>
+      enterable(portal) && containsPoint(portal.trigger, motion.position)
   );
   if (inside === undefined) {
     return null;
@@ -68,11 +73,14 @@ const portalToEnter = (
     : null;
 };
 
-/** True while the player stands in some portal's trigger strip. */
+/** True while the player stands in some enterable portal's trigger strip. */
 const inAnyTrigger = (
   portals: readonly BuiltPortal[],
   position: Point
-): boolean => portals.some((portal) => containsPoint(portal.trigger, position));
+): boolean =>
+  portals.some(
+    (portal) => enterable(portal) && containsPoint(portal.trigger, position)
+  );
 
 /**
  * The nearest door or portal of the player's room within PROMPT_DISTANCE

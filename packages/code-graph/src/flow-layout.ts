@@ -9,7 +9,7 @@ import type { CallSite, FunctionNode } from "./code-graph";
 import { foldsOf, foldToBudget } from "./flow-budget";
 import { newColumn, placeItems } from "./flow-column";
 import type { ColumnRoom } from "./flow-column";
-import { labelsOf, treeWidth } from "./flow-composite";
+import { labelsOf, markersOf, treeWidth } from "./flow-composite";
 import type { FlowTree } from "./flow-composite";
 import { jumpsOf, keepJumpTargets } from "./flow-jumps";
 import { indexSites } from "./flow-text";
@@ -28,6 +28,8 @@ type FlowPlan = {
   readonly jumps: ReadonlyMap<string, string>;
   /** Rooms folded from several, mapped to the last node folded into each. */
   readonly folds: ReadonlyMap<string, string>;
+  /** Rooms with a marker, mapped to the calls it stands for (site ids). */
+  readonly markers: ReadonlyMap<string, readonly string[]>;
 };
 
 /**
@@ -36,7 +38,7 @@ type FlowPlan = {
  * function alone, so every function can be planned before any is placed.
  */
 const planFlow = (fn: FunctionNode, sites: readonly CallSite[]): FlowPlan => {
-  const index = indexSites(sites);
+  const index = indexSites(sites, fn.flow);
   const items = keepJumpTargets(
     foldToBudget(measureTree(fn, index), index),
     index
@@ -48,6 +50,7 @@ const planFlow = (fn: FunctionNode, sites: readonly CallSite[]): FlowPlan => {
     labels: labelsOf(items),
     jumps: jumpsOf(items),
     folds: foldsOf(items),
+    markers: markersOf(items),
   };
 };
 
@@ -86,7 +89,8 @@ const jumpPortal = (room: ColumnRoom, target: string): ClusterPortal => ({
  * a collapsed room ending in one), leading to a room of the same cluster.
  * A return portal sits on the south wall of every `return` room, of every
  * other collapsed room that ends the flow, and of the last room when the
- * body falls off its end, so a unit can always be left.
+ * body falls off its end, so a unit can always be left. A room holding
+ * calls the world cannot follow has a marker beside its call portals.
  */
 const layoutFlow = (
   plan: FlowPlan,

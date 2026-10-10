@@ -185,8 +185,14 @@ describe("worldFromCode", () => {
       to: "portals.ts::format",
       kind: "call",
     });
-    // Five functions end in a return portal; countdown's early return adds one.
-    expect(world.built.portals).toHaveLength(3 + 6);
+    // Five functions end in a return portal; countdown's early return adds
+    // one; format's `value.trim()` is a marker.
+    expect(world.built.portals).toHaveLength(3 + 6 + 1);
+    expect(
+      world.built.portals
+        .filter(({ portal }) => portal.kind === "marker")
+        .map(({ portal }) => [ownerOf(portal.from), portal.to === portal.from])
+    ).toEqual([["portals.ts::format", true]]);
     const countdown = roomsOf(world, "portals.ts::countdown");
     expect(countdown.map((room) => room.role)).toEqual([
       "fork",

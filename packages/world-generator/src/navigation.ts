@@ -158,6 +158,9 @@ const createNavigator = (world: World): Navigator => {
 
   const enterPortal = (state: NavigationState, portal: BuiltPortal): Step => {
     const { kind, from, to } = portal.portal;
+    if (kind === "marker") {
+      return stay(state);
+    }
     if (kind === "return") {
       return state.frames.length === 0
         ? {
