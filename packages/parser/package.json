@@ -13,7 +13,8 @@
   "dependencies": {
     "@babel/parser": "8.0.6",
     "@babel/types": "8.0.6",
-    "@repo/code-graph": "workspace:*"
+    "@repo/code-graph": "workspace:*",
+    "@repo/world-generator": "workspace:*"
   },
   "devDependencies": {
     "@repo/prettier": "workspace:*",

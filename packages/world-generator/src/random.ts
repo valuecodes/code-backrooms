@@ -60,5 +60,17 @@ const shuffle = <T>(rng: Rng, items: readonly T[]): T[] => {
   return result;
 };
 
-export { createRng, nextInt, pick, pickWeighted, shuffle };
+/**
+ * 32-bit FNV-1a over a string's UTF-16 code units, unsigned: a cheap,
+ * stable hash for seeds and per-room nuances derived from ids or source.
+ */
+const hashString = (text: string): number => {
+  let hash = 0x81_1c_9d_c5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = Math.imul(hash ^ text.charCodeAt(i), 0x01_00_01_93);
+  }
+  return hash >>> 0;
+};
+
+export { createRng, hashString, nextInt, pick, pickWeighted, shuffle };
 export type { Rng };

@@ -75,6 +75,15 @@ describe("loops", () => {
       ["1:loop:back", "1:loop", null],
       ["1:loop:again", "1:loop:end", "exit"],
     ]);
+    // Leading on (body to test, back round to the head) is a passage; the
+    // choices into the body, round again or out stay doors.
+    expect(cluster.doors.map((door) => door.opening ?? "door")).toEqual([
+      "door",
+      "passage",
+      "door",
+      "passage",
+      "door",
+    ]);
     // The body's call is on the cluster's west wall only; the end returns.
     expect(
       cluster.ports

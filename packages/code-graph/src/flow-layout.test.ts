@@ -49,9 +49,9 @@ describe("layoutFlow", () => {
     expect(cluster.depth).toBe(11);
     expect(cluster.entryRoomId).toBe(`${FN}@1:step`);
     expect(cluster.doors).toEqual([
-      { from: `${FN}@1:step`, to: `${FN}@5:call` },
-      { from: `${FN}@5:call`, to: `${FN}@9:await` },
-      { from: `${FN}@9:await`, to: `${FN}@12:return` },
+      { from: `${FN}@1:step`, to: `${FN}@5:call`, opening: "passage" },
+      { from: `${FN}@5:call`, to: `${FN}@9:await`, opening: "passage" },
+      { from: `${FN}@9:await`, to: `${FN}@12:return`, opening: "passage" },
     ]);
     expect(cluster.rooms.map((room) => room.label)).toEqual([
       "2 statements",

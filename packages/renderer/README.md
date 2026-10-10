@@ -33,7 +33,9 @@ for a loop's body, a deeper ochre for its corridor back) with the full
 colour on the lintel and frame of the door into the lane; a loop's exit
 door keeps a plain lintel and a wooden frame. `@repo/renderer/lane-tint`
 exports `laneColour(kind)`, the same colours as CSS hex, for drawing a lane
-outside the scene (the app's overview map). Lighting is a fixed
+outside the scene (the app's overview map). Each room's walls are shaded up
+to 4 % lighter or darker by a hash of its id. Lighting is a fixed
 pool of eight point lights that follow the player to the nearest fixtures, so
 shaders compile once, and a single static shadow map that re-renders only
-when the shadow light hops to another fixture.
+when the shadow light hops to another fixture. Every light buzzes with a
+phase fixed by its fixture's position, so neighbours never flicker in step.

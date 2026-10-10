@@ -67,11 +67,11 @@ describe("forks", () => {
       undefined,
     ]);
     expect(cluster.doors).toEqual([
-      { from: `${FN}@1:step`, to: `${FN}@2:branch` },
+      { from: `${FN}@1:step`, to: `${FN}@2:branch`, opening: "passage" },
       { from: `${FN}@2:branch`, to: `${FN}@3:call`, lane: { kind: "true" } },
       { from: `${FN}@2:branch`, to: `${FN}@6:call`, lane: { kind: "false" } },
-      { from: `${FN}@3:call`, to: `${FN}@2:branch:merge` },
-      { from: `${FN}@6:call`, to: `${FN}@2:branch:merge` },
+      { from: `${FN}@3:call`, to: `${FN}@2:branch:merge`, opening: "passage" },
+      { from: `${FN}@6:call`, to: `${FN}@2:branch:merge`, opening: "passage" },
     ]);
     expect(
       cluster.ports.map((port) => [port.roomId, port.wall, port.lo, port.hi])
@@ -134,7 +134,13 @@ describe("forks", () => {
     // The return room does not rejoin; the empty lane does.
     expect(
       cluster.doors.filter((door) => door.to === `${FN}@2:branch:merge`)
-    ).toEqual([{ from: `${FN}@2:sequence:else`, to: `${FN}@2:branch:merge` }]);
+    ).toEqual([
+      {
+        from: `${FN}@2:sequence:else`,
+        to: `${FN}@2:branch:merge`,
+        opening: "passage",
+      },
+    ]);
     expect(returnsOf(cluster)).toEqual([
       [`${FN}@3:return`, 1.5],
       [`${FN}@4:step`, 3],

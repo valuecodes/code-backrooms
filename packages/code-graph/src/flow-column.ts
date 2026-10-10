@@ -4,6 +4,7 @@
 // the deepest one so the rooms tile the rectangle; a case that falls through
 // has a door from its last room into the next lane's first. A loop is a
 // ring: head across, body beside a back corridor, test across, end across.
+// Doors that only lead on are wide passages; doors into a lane stay doors.
 
 import type { ClusterDoor, ClusterPortal, LaneLabel, Port } from "@repo/types";
 import {
@@ -46,6 +47,13 @@ type Edges = {
   readonly first: ReadonlySet<Side>;
   readonly last: ReadonlySet<Side>;
 };
+
+/**
+ * Doors without a lane (on to the next room, into a merge, a test or back
+ * round to the head) are passages; a door into a lane stays a door, so the
+ * choice between lanes reads.
+ */
+const PASSAGE = "passage";
 
 const NO_SIDES: ReadonlySet<Side> = new Set();
 const NO_EDGES: Edges = { first: NO_SIDES, last: NO_SIDES };
@@ -227,7 +235,11 @@ const placeFork = (
   const merge = placeRoom(fork.merge, x0, x1, bottom, lane, state);
   for (const end of ends) {
     if (end.lane.rejoins && end.placed.last !== null) {
-      state.doors.push({ from: end.placed.last, to: merge.id });
+      state.doors.push({
+        from: end.placed.last,
+        to: merge.id,
+        opening: PASSAGE,
+      });
     }
   }
   return { first: head.id, last: merge.id, bottom: merge.maxZ };
@@ -269,11 +281,11 @@ const placeLoop = (
   state.rooms.push(back);
   const test = placeRoom(loop.test, x0, x1, body.bottom, lane, state);
   if (body.last !== null) {
-    state.doors.push({ from: body.last, to: test.id });
+    state.doors.push({ from: body.last, to: test.id, opening: PASSAGE });
   }
   state.doors.push(
     { from: test.id, to: back.id, lane: BACK_LANE },
-    { from: back.id, to: head.id }
+    { from: back.id, to: head.id, opening: PASSAGE }
   );
   const end = placeRoom(loop.end, x0, x1, test.maxZ, lane, state);
   state.doors.push({ from: test.id, to: end.id, lane: EXIT_LANE });
@@ -307,6 +319,7 @@ const placeItems = (
       state.doors.push({
         from: last,
         to: item.kind === "room" ? item.id : item.head.id,
+        opening: PASSAGE,
       });
     }
     let placed: Placed;

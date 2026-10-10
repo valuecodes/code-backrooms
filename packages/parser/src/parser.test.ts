@@ -1,6 +1,7 @@
+import { hashString } from "@repo/world-generator/random";
 import { describe, expect, it } from "vitest";
 
-import { buildCodeGraph, parseModule } from "./parser";
+import { buildCodeGraph, hashSource, parseModule } from "./parser";
 
 const parse = (source: string, path = "t.ts") => parseModule({ path, source });
 
@@ -262,5 +263,48 @@ describe("buildCodeGraph", () => {
         { path: "./a.ts", source: "" },
       ])
     ).toThrow(/Duplicate module path/);
+  });
+});
+
+/** What `hashSource` hashes for one file `a.ts` holding `n`. */
+const hashedText = (n: number) => `a.ts\0${n}\0`;
+
+describe("hashSource", () => {
+  const file = { path: "a.ts", source: "export const a = 1;\n" };
+
+  it("is the same for the same files and changes with a path or a byte", () => {
+    expect(hashSource([file])).toBe(hashSource([{ ...file }]));
+    expect(hashSource([{ ...file, path: "b.ts" }])).not.toBe(
+      hashSource([file])
+    );
+    expect(hashSource([{ ...file, source: "export const a = 2;\n" }])).not.toBe(
+      hashSource([file])
+    );
+    // Moving text from the path into the source is a different program.
+    expect(hashSource([{ path: "ab", source: "c" }])).not.toBe(
+      hashSource([{ path: "a", source: "bc" }])
+    );
+  });
+
+  it("folds a 32-bit hash above the URL's range back into it", () => {
+    // The first source whose raw FNV-1a is past 2^31 - 1.
+    let index = 0;
+    while (hashString(hashedText(index)) <= 2 ** 31 - 1) {
+      index += 1;
+    }
+    const raw = hashString(hashedText(index));
+    expect(raw).toBeGreaterThan(2 ** 31 - 1);
+    expect(hashSource([{ path: "a.ts", source: `${index}` }])).toBe(
+      raw - 2 ** 31
+    );
+  });
+
+  it("stays within the seeds a URL can carry", () => {
+    for (let index = 0; index < 200; index += 1) {
+      const seed = hashSource([{ path: `m${index}.ts`, source: `${index}` }]);
+      expect(Number.isInteger(seed)).toBe(true);
+      expect(seed).toBeGreaterThanOrEqual(0);
+      expect(seed).toBeLessThanOrEqual(2 ** 31 - 1);
+    }
   });
 });

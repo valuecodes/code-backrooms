@@ -1,6 +1,12 @@
 import type { Port, Rect, WallSide } from "@repo/types";
 
-import { CORRIDOR_LENGTHS, CORRIDOR_WIDTH, GRID, MIN_SHARED } from "./config";
+import {
+  CORRIDOR_LENGTHS,
+  CORRIDOR_WIDTH,
+  CORRIDOR_WIDTHS,
+  GRID,
+  MIN_SHARED,
+} from "./config";
 import { snap } from "./fit";
 import { pick, shuffle } from "./random";
 import type { Rng } from "./random";
@@ -94,8 +100,8 @@ const lengthOrder = (rng: Rng): number[] => {
 
 /**
  * Every placement of `room` off one port of `anchor`, with or without a
- * corridor. A direct contact overlaps the port by at least MIN_SHARED; a
- * corridor starts inside it.
+ * corridor `width` wide. A direct contact overlaps the port by at least
+ * MIN_SHARED; a corridor starts inside it.
  */
 const candidatesOnWall = (
   rng: Rng,
@@ -103,7 +109,8 @@ const candidatesOnWall = (
   port: Port,
   room: Extent,
   wall: WallSide,
-  length: number
+  length: number,
+  width: number
 ): Candidate[] => {
   const { axis, sign } = OUTWARD[wall];
   const cross = other(axis);
@@ -138,20 +145,18 @@ const candidatesOnWall = (
   // must fully contain the corridor's other end.
   return offsets(
     rng,
-    [anchorLo, anchorHi - CORRIDOR_WIDTH, anchorMid - CORRIDOR_WIDTH / 2],
+    [anchorLo, anchorHi - width, anchorMid - width / 2],
     anchorLo,
-    anchorHi - CORRIDOR_WIDTH
+    anchorHi - width
   ).flatMap((corridorStart) => {
-    const corridorMid = corridorStart + CORRIDOR_WIDTH / 2;
+    const corridorMid = corridorStart + width / 2;
     // Hang the room outward, away from the anchor's middle.
     const outward =
-      corridorMid < anchorMid
-        ? corridorStart + CORRIDOR_WIDTH - across
-        : corridorStart;
+      corridorMid < anchorMid ? corridorStart + width - across : corridorStart;
     return offsets(
       rng,
       [outward, corridorMid - across / 2],
-      corridorStart + CORRIDOR_WIDTH - across,
+      corridorStart + width - across,
       corridorStart
     ).map((start) => ({
       wall,
@@ -162,7 +167,7 @@ const candidatesOnWall = (
         corridorLo,
         corridorHi,
         corridorStart,
-        corridorStart + CORRIDOR_WIDTH
+        corridorStart + width
       ),
     }));
   });
@@ -173,13 +178,18 @@ const candidatesOnWall = (
  * returned function yields the next wall-and-length batch (every port on
  * that wall; a wall without one yields nothing and draws no random numbers),
  * so a caller that finds a fit early never builds the rest. `footprint`
- * gives the extent to place for a wall, which a rotated unit changes.
+ * gives the extent to place for a wall, which a rotated unit changes. With
+ * `variation`, a corridor batch holds every width of CORRIDOR_WIDTHS in a
+ * random order, so a port too short for a wide corridor still takes a
+ * narrow one; without, corridors are CORRIDOR_WIDTH and the random draws
+ * are the same as before widths varied.
  */
 const candidateBatches = (
   rng: Rng,
   anchor: Rect,
   ports: readonly Port[],
-  footprint: (wall: WallSide) => Extent
+  footprint: (wall: WallSide) => Extent,
+  variation: boolean
 ): (() => Candidate[] | null) => {
   const walls = shuffle(rng, WALLS);
   const lengths = lengthOrder(rng);
@@ -191,11 +201,27 @@ const candidateBatches = (
       return null;
     }
     index += 1;
-    return ports
-      .filter((port) => port.wall === wall)
-      .flatMap((port) =>
-        candidatesOnWall(rng, anchor, port, footprint(wall), wall, length)
-      );
+    const onWall = ports.filter((port) => port.wall === wall);
+    if (onWall.length === 0) {
+      return [];
+    }
+    const widths =
+      variation && length > 0
+        ? shuffle(rng, CORRIDOR_WIDTHS)
+        : [CORRIDOR_WIDTH];
+    return widths.flatMap((width) =>
+      onWall.flatMap((port) =>
+        candidatesOnWall(
+          rng,
+          anchor,
+          port,
+          footprint(wall),
+          wall,
+          length,
+          width
+        )
+      )
+    );
   };
 };
 

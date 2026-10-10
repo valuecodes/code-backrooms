@@ -5,6 +5,7 @@ import {
   ARRIVAL_INSET,
   DOOR_HEIGHT,
   DOOR_WIDTH,
+  MIN_SHARED,
   PORTAL_TRIGGER_DEPTH,
   WALL_HEIGHT,
   WALL_THICKNESS,
@@ -73,6 +74,32 @@ describe("doorOpening", () => {
     expect(() =>
       doorOpening(lobby, { wall: "east", targetRoomId: "annex" }, grazing)
     ).toThrow(/less than/);
+  });
+
+  it("opens a passage as wide as the overlap allows, within a door and 4 m", () => {
+    const passage = {
+      wall: "east",
+      targetRoomId: "annex",
+      opening: "passage",
+    } as const;
+    /** The passage into an annex `depth` deep, centred on the lobby's east wall. */
+    const widthFor = (depth: number) =>
+      doorOpening(lobby, passage, { ...annex, position: [9, 0, 0], depth })
+        .width;
+    // The overlap less a 0.15 m wall and 0.2 m jamb at each end, floored to 0.5 m.
+    expect(widthFor(3)).toBe(2);
+    expect(widthFor(4)).toBe(3);
+    // The least shared edge leaves less than a door: it stays a door wide.
+    expect(widthFor(MIN_SHARED)).toBe(DOOR_WIDTH);
+    expect(widthFor(8)).toBe(4);
+    // A plain door between the same rooms stays 1.2 m.
+    expect(
+      doorOpening(
+        lobby,
+        { wall: "east", targetRoomId: "annex" },
+        { ...annex, position: [9, 0, 0], depth: 4 }
+      ).width
+    ).toBe(DOOR_WIDTH);
   });
 });
 

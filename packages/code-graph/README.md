@@ -128,7 +128,16 @@ wall only and that side may be taken, so `generateCodeWorld(graph, seed)`
 lays the world out and, when the layout reports a call door it cannot place
 (`LayoutError`), marks that edge portal-only (`toWorldGraph(graph,
 portalOnly)`), which turns the call into a portal and attaches the callee
-elsewhere, and tries again: a program that parses always becomes a world. Functions a
+elsewhere, and tries again: a program that parses always becomes a world.
+`generateCodeWorld(graph, seed, { variation })` (variation on by default) also
+lets the seed vary proportions without changing what is connected: each
+function's column is 0, 0.5 or 1 m wider, added after budget folding so its
+rooms stay the same, each hub starts 1, 1.25 or 1.5 times wider than deep
+(`toWorldGraph(graph, portalOnly, seed)`; a null seed keeps both plain), and
+the layout varies corridor widths. Inside a column a door that only leads on
+(to the next room, into a merge, a loop's test or back round to its head) is a
+passage (`opening: "passage"`), as wide as the rooms allow; a door into a lane
+stays a door. Functions a
 directed walk from the roots cannot reach (mutual recursion with no outside
 caller) are attached to the hub in source order. A hub has at most five doors,
 links to the neighbouring hubs included, so a module whose roots need more

@@ -71,11 +71,20 @@ type ClusterRoom = {
   readonly lane?: LaneLabel;
 };
 
+/**
+ * How wide an opening is: a door is the standard 1.2 m, a passage (between
+ * flow rooms that follow each other without a choice) as wide as the
+ * shared edge allows.
+ */
+type OpeningKind = "passage";
+
 /** A door between two rooms of the same cluster; they share an edge. */
 type ClusterDoor = {
   readonly from: string;
   readonly to: string;
   readonly lane?: LaneLabel;
+  /** A passage opens as wide as the shared edge allows; absent: a door. */
+  readonly opening?: OpeningKind;
 };
 
 /**
@@ -182,6 +191,8 @@ type DoorData = {
    * the flow, into the lane. Both sides carry the lane, for tints.
    */
   readonly forward?: true;
+  /** A passage opens as wide as the shared edge allows; absent: a door. */
+  readonly opening?: OpeningKind;
 };
 
 /** A portal on a wall: `along` is the world coordinate of its centre on the wall's axis. */

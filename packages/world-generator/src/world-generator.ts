@@ -10,6 +10,11 @@ type GenerateWorldOptions = {
   readonly roomCount?: number;
   /** An externally supplied graph, for example from a control-flow analysis. */
   readonly graph?: WorldGraph;
+  /**
+   * Seeded proportions that never change what is connected (today: tree
+   * corridors 2 or 3 m wide). Defaults to on; off gives the plain layout.
+   */
+  readonly variation?: boolean;
 };
 
 const DEFAULT_ROOM_COUNT = 15;
@@ -29,13 +34,14 @@ const generateWorld = ({
   seed,
   roomCount = DEFAULT_ROOM_COUNT,
   graph,
+  variation = true,
 }: GenerateWorldOptions): GeneratedWorld => {
   const attempts = graph === undefined ? GRAPH_ATTEMPTS : 1;
   for (let attempt = 0; ; attempt += 1) {
     const source =
       graph ?? generateGraph({ seed: seed + attempt * 7919, roomCount });
     try {
-      const layout = generateLayout(source, seed);
+      const layout = generateLayout(source, seed, variation);
       return { seed, graph: source, layout, built: buildWorld(layout) };
     } catch (error) {
       if (attempt + 1 >= attempts) {

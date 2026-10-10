@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { createRng, nextInt, pick, pickWeighted, shuffle } from "./random";
+import {
+  createRng,
+  hashString,
+  nextInt,
+  pick,
+  pickWeighted,
+  shuffle,
+} from "./random";
 
 const sequence = (seed: number, length: number): number[] => {
   const rng = createRng(seed);
@@ -55,5 +62,21 @@ describe("helpers", () => {
     const result = shuffle(createRng(5), input);
     expect(input).toEqual([1, 2, 3, 4, 5, 6]);
     expect([...result].sort()).toEqual(input);
+  });
+});
+
+describe("hashString", () => {
+  it("is 32-bit FNV-1a", () => {
+    expect(hashString("")).toBe(2_166_136_261);
+    expect(hashString("a")).toBe(3_826_002_220);
+    expect(hashString("foobar")).toBe(3_214_735_720);
+  });
+
+  it("is unsigned and tells near strings apart", () => {
+    expect(hashString("room-1")).not.toBe(hashString("room-2"));
+    for (const text of ["x", "fn::main", "a,b"]) {
+      expect(hashString(text)).toBeGreaterThanOrEqual(0);
+      expect(hashString(text)).toBeLessThan(2 ** 32);
+    }
   });
 });

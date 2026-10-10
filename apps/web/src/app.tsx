@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Hud } from "~/hud";
 import { EMPTY_VISITS, visit, visitedIn } from "~/map-model";
 import { OverviewMap } from "~/overview-map";
-import { parseWorldParams, withSeed } from "~/params";
+import { initialSeed, nextSeed, parseWorldParams, withSeed } from "~/params";
 import { createPoseFeed } from "~/pose-feed";
 import { SourcePanel } from "~/source-panel";
 import { sourceView } from "~/source-view";
@@ -22,6 +22,7 @@ import {
   codeGraphOf,
   describeRoom,
   promptOf,
+  sourceSeedOf,
   worldFromCode,
 } from "~/world-from-code";
 
@@ -38,6 +39,13 @@ const initial = parseWorldParams(globalThis.location.search);
 // Parsed once: a syntax error in a bundled example does not depend on the
 // seed, and it is shown in the HUD rather than thrown through the renderer.
 const code = initial.code === null ? null : codeGraphOf(initial.code);
+
+// A code world without `?seed` takes its source's own seed, so the same
+// program reloads into the same world; `?seed` and N override it.
+const startSeed = initialSeed(
+  initial,
+  initial.code === null ? null : sourceSeedOf(initial.code)
+);
 
 // Fed from the render loop and read only by the open map, never by the app.
 const feed = createPoseFeed();
@@ -83,7 +91,7 @@ const useGeneratedWorld = (seed: number): Generated =>
 
 const App = () => {
   const [locked, setLocked] = useState(false);
-  const [seed, setSeed] = useState(initial.seed);
+  const [seed, setSeed] = useState(startSeed);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [target, setTarget] = useState<Target | null>(null);
   const [sourceOpen, setSourceOpen] = useState(false);
@@ -120,7 +128,7 @@ const App = () => {
         return;
       }
       if (event.code === "KeyN") {
-        setSeed((current) => current + 1);
+        setSeed(nextSeed);
       } else if (locked && event.code === "Backspace") {
         event.preventDefault();
         back();
@@ -138,7 +146,7 @@ const App = () => {
 
   // Keep the URL shareable: it always names the seed on screen.
   useEffect(() => {
-    if (seed !== initial.seed) {
+    if (seed !== startSeed) {
       globalThis.history.replaceState(
         null,
         "",

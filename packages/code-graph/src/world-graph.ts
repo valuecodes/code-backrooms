@@ -21,6 +21,7 @@ import type {
 } from "./code-graph";
 import { layoutFlow, planFlow } from "./flow-layout";
 import { hubDimensions } from "./room-size";
+import { columnJitter, hubRatio } from "./variation";
 
 /** Functions nobody else calls, from the directed edges, in source order. */
 const rootsOf = (
@@ -247,14 +248,22 @@ const moduleWorld = (
   graph: CodeGraph,
   module: ModuleNode,
   extraHubDegree: number,
-  portalOnly: ReadonlySet<string>
+  portalOnly: ReadonlySet<string>,
+  seed: number | null
 ): ModuleWorld => {
   const functions = graph.functions.filter((fn) => fn.moduleId === module.id);
   const sites = sitesByCaller(graph.callSites);
   // Every function is planned first: a callee's width sets how far apart
   // the ports for it must sit, and a plan depends on its own body alone.
+  // The seeded jitter widens a column after folding, so rooms stay the same.
   const plans = new Map(
-    functions.map((fn) => [fn.id, planFlow(fn, sites.get(fn.id) ?? [])])
+    functions.map((fn) => {
+      const plan = planFlow(fn, sites.get(fn.id) ?? []);
+      return [
+        fn.id,
+        { ...plan, width: plan.width + columnJitter(seed, fn.id) },
+      ];
+    })
   );
   const widthOf = (id: string): number =>
     plans.get(id)?.width ?? FLOW_TOP_MIN_WIDTH;
@@ -315,12 +324,14 @@ const moduleWorld = (
   const groups = hubGroups(attached, extraHubDegree);
   const hubs = groups.map((group, index): GraphRoom => {
     const chain = (index > 0 ? 1 : 0) + (index < groups.length - 1 ? 1 : 0);
+    const id = index === 0 ? module.id : `${module.id}#${index + 1}`;
     return {
-      id: index === 0 ? module.id : `${module.id}#${index + 1}`,
+      id,
       label: module.path,
       hub: true,
       ...hubDimensions(
-        group.length + chain + (index === 0 ? extraHubDegree : 0)
+        group.length + chain + (index === 0 ? extraHubDegree : 0),
+        hubRatio(seed, id)
       ),
     };
   });
@@ -361,11 +372,13 @@ const moduleWorld = (
  * and a call portal for every other resolved call. The entrances of
  * successive modules are chained too, so the world is one connected
  * component, and the first module's entrance is the start room. Edges in
- * `portalOnly` (`source->target`) never become doors.
+ * `portalOnly` (`source->target`) never become doors. A `seed` varies the
+ * widths of columns and hubs, never what is connected; null keeps them plain.
  */
 const toWorldGraph = (
   graph: CodeGraph,
-  portalOnly: ReadonlySet<string> = new Set()
+  portalOnly: ReadonlySet<string> = new Set(),
+  seed: number | null = null
 ): WorldGraph => {
   const rooms: GraphRoom[] = [];
   const connections: Connection[] = [];
@@ -374,7 +387,7 @@ const toWorldGraph = (
   graph.modules.forEach((module, index) => {
     const chained =
       (index > 0 ? 1 : 0) + (index < graph.modules.length - 1 ? 1 : 0);
-    const world = moduleWorld(graph, module, chained, portalOnly);
+    const world = moduleWorld(graph, module, chained, portalOnly, seed);
     rooms.push(...world.hubs, ...world.rooms);
     const entrance = world.hubs[0];
     if (previousHub !== null && entrance !== undefined) {
@@ -395,13 +408,23 @@ const toWorldGraph = (
  * door the layout cannot place (a call inside a lane offers one wall only,
  * and that side may be taken) is demoted to a portal and the layout tried
  * again, so a program that parses always becomes a world: tree calls are
- * walkable where the walls allow, the rest teleport.
+ * walkable where the walls allow, the rest teleport. `variation` (on by
+ * default) lets the seed vary proportions too: column and hub widths here,
+ * corridor widths in the layout.
  */
-const generateCodeWorld = (graph: CodeGraph, seed: number): GeneratedWorld => {
+const generateCodeWorld = (
+  graph: CodeGraph,
+  seed: number,
+  { variation = true }: { readonly variation?: boolean } = {}
+): GeneratedWorld => {
   const portalOnly = new Set<string>();
   for (;;) {
     try {
-      return generateWorld({ seed, graph: toWorldGraph(graph, portalOnly) });
+      return generateWorld({
+        seed,
+        graph: toWorldGraph(graph, portalOnly, variation ? seed : null),
+        variation,
+      });
     } catch (error) {
       const failed =
         error instanceof LayoutError && error.connection.kind === "call"

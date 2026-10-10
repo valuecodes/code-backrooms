@@ -40,6 +40,18 @@ from), so a renderer can tint lanes and a HUD can name the lane on the way
 in and the room on the way back. Plain graphs are laid out exactly as before: a plain room
 simply offers each of its walls as a port.
 
+A door is 1.2 m wide. A cluster door marked `opening: "passage"` opens as wide
+as the shared edge allows (the overlap less 0.35 m at each end, floored to the
+0.5 m grid, between 1.2 and 4 m); both sides carry the mark, so their openings
+agree, and `checkLayout` spaces openings and portals by their edges. With
+`variation` (on by default in `generateWorld` and `generateLayout`) a tree
+corridor is 2 or 3 m wide, the order drawn from the seed, both widths always
+tried so a port too short for a wide corridor still takes a narrow one;
+corridors that close a loop stay 2 m. Without it every corridor is 2 m and the
+random draws, so the layouts, are those of a plain graph before widths varied.
+`hashString` (`@repo/world-generator/random`) is the 32-bit FNV-1a the other
+packages use for seeds and per-room nuances.
+
 Portals (`graph.portals`) are directed teleports drawn as a door frame with
 a dark plane on a wall of their `from` room; the wall stays solid. The
 layout places each on free wall space after the doors (a portal that fits

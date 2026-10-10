@@ -17,6 +17,9 @@ import type {
 import {
   ARRIVAL_INSET,
   DOOR_WIDTH,
+  GRID,
+  PASSAGE_JAMB,
+  PASSAGE_MAX_WIDTH,
   PORTAL_TRIGGER_DEPTH,
   WALL_THICKNESS,
 } from "./config";
@@ -32,8 +35,20 @@ import {
 } from "./walls";
 
 /**
+ * A passage takes the overlap less a jamb at each end, floored to the grid,
+ * up to PASSAGE_MAX_WIDTH; never narrower than a door (a minimal overlap
+ * leaves less than one).
+ */
+const passageWidth = (overlap: number): number => {
+  const free = overlap - 2 * (WALL_THICKNESS + PASSAGE_JAMB);
+  const snapped = Math.floor((free + EPSILON) / GRID) * GRID;
+  return Math.max(DOOR_WIDTH, Math.min(PASSAGE_MAX_WIDTH, snapped));
+};
+
+/**
  * A door is centred on the overlap of the two rooms' shared edge. Both rooms
- * compute it from the same edge, so the openings always coincide.
+ * compute it from the same edge, so the openings always coincide; both
+ * sides carry the same opening kind, so they agree on the width too.
  */
 const doorOpening = (
   room: RoomData,
@@ -60,7 +75,7 @@ const doorOpening = (
   return {
     wall: door.wall,
     along: (lo + hi) / 2,
-    width: DOOR_WIDTH,
+    width: door.opening === "passage" ? passageWidth(hi - lo) : DOOR_WIDTH,
     ...(door.lane === undefined ? {} : { lane: door.lane }),
   };
 };
