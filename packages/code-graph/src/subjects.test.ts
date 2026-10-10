@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import type { CodeGraph, FunctionNode, SourceSpan } from "./code-graph";
 import { demoGraph, fixtureGraph } from "./fixture";
+import { branch, fnWith, step } from "./flow-fixture";
 import { layoutFlow, planFlow } from "./flow-layout";
 import { parseFlowNodeId } from "./ids";
 import { portalSubject, roomSubject } from "./subjects";
@@ -120,5 +122,60 @@ describe("roomSubject folded rooms", () => {
     const subject = roomSubject(graph, folded?.id ?? "");
     expect(subject).toMatchObject({ kind: "flow", text: folded?.label });
     expect(folded?.label).toMatch(/^\d+ statements · \d+ calls$/);
+  });
+});
+
+/** A one-function graph around a hand-built flow. */
+const graphWith = (fn: FunctionNode): CodeGraph => ({
+  modules: [{ id: "m.ts", path: "m.ts", language: "typescript", lineCount: 1 }],
+  functions: [fn],
+  callSites: [],
+  edges: [],
+});
+
+/** Distinct spans: line n + 1 holds node n, columns 2..7. */
+const spanOf = (index: number): SourceSpan => ({
+  start: 100 * index + 2,
+  end: 100 * index + 7,
+  startLine: index + 1,
+  startColumn: 2,
+  endLine: index + 1,
+  endColumn: 7,
+});
+
+describe("roomSubject spans", () => {
+  it("gives a flow room its node's span, a tagged room its composite's", () => {
+    const then = { ...step(2, 1), span: spanOf(2) };
+    const fork = { ...branch(1, [then], [step(3, 1)]), span: spanOf(1) };
+    const graph = graphWith(fnWith([fork]));
+    expect(roomSubject(graph, then.id)).toMatchObject({ span: spanOf(2) });
+    expect(roomSubject(graph, fork.id)).toMatchObject({ span: spanOf(1) });
+    expect(roomSubject(graph, `${fork.id}:merge`)).toMatchObject({
+      span: spanOf(1),
+    });
+  });
+
+  it("spans a budget-folded room from its first node to its last", () => {
+    const steps = Array.from({ length: 200 }, (_, index) => ({
+      ...step(100 * index + 2, 1),
+      span: spanOf(index),
+    }));
+    const fn = fnWith(steps);
+    const [roomId, lastId] = [...planFlow(fn, []).folds][0] ?? [];
+    const first = steps.findIndex((node) => node.id === roomId);
+    const last = steps.findIndex((node) => node.id === lastId);
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(last).toBeGreaterThan(first);
+    expect(roomSubject(graphWith(fn), roomId ?? "")).toMatchObject({
+      kind: "flow",
+      span: {
+        start: 100 * first + 2,
+        startLine: first + 1,
+        startColumn: 2,
+        end: 100 * last + 7,
+        endLine: last + 1,
+        endColumn: 7,
+      },
+    });
   });
 });

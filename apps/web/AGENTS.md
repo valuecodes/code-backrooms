@@ -60,7 +60,7 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   switch with a nested `break`; a switch with a case that falls through or
   more than six cases, a loop whose body only returns, and `try` stay one
   collapsed room. See `?code=loops` and `?code=switches`.
-- Milestone 9 (current): switch fallthrough. A case that falls through
+- Milestone 9: switch fallthrough. A case that falls through
   has a side door from its last room into the next case's first room,
   tinted and prompted like a lane door (`→ case "banned"`), instead of a
   door into `end switch`; its call portals move to the other walls. Only a
@@ -70,6 +70,12 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   control-flow graph (`@repo/code-graph/cfg-checks`,
   `world-from-code-cfg.test.ts`): each door and portal stands for a flow
   edge and each reachable flow edge can be walked. Nothing visible changes.
+- Milestone 10 (current): the source panel. E while walking a code world
+  shows the code of the room the player stands in, docked right: the whole
+  file for a hub, the whole function for a function, and the function with
+  the room's own code marked for a flow room (a merge, test or end room
+  marks its whole `if`, loop or switch; a room the budget folded marks
+  everything folded into it).
 
 ---
 
@@ -100,6 +106,8 @@ src/
   app.tsx             full-screen <Canvas>, seed and current-room state, pointer lock, HUD
   hud.tsx             "Click to start walking" overlay / crosshair, seed + place readout,
                       breadcrumb and the prompt for the door or portal ahead
+  source-panel.tsx    the E overlay: the current room's code, its own lines marked
+  source-view.ts      room id -> the lines the source panel shows, pure
   params.ts           URL query -> { seed, rooms, preset, code }, with clamping
   examples.ts         bundled example programs for ?code=<name>
   use-navigation.ts   the exploration stack as React state, fed by the Player
@@ -123,7 +131,8 @@ src/
 WASD and the mouse move and look, Shift sprints. Walking into a call door or
 a call portal enters that function; Backspace (or the room's return portal)
 goes back to where it was entered, or to the file hub when nothing was; R
-returns to the world start with an empty stack; N takes the next seed.
+returns to the world start with an empty stack; N takes the next seed; E
+shows or hides the source panel in a code world.
 
 ### The pipeline
 

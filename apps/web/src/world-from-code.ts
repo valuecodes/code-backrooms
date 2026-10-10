@@ -17,13 +17,27 @@ import type { ExampleName } from "~/examples";
 // the player.
 
 type CodeResult =
-  | { readonly codeGraph: CodeGraph; readonly error: null }
+  | {
+      readonly codeGraph: CodeGraph;
+      /** Each module's source by module id, for the source panel. */
+      readonly sources: ReadonlyMap<string, string>;
+      readonly error: null;
+    }
   | { readonly codeGraph: null; readonly error: string };
 
 /** Parses a bundled example; a syntax error becomes a value, never a throw. */
 const codeGraphOf = (name: ExampleName): CodeResult => {
+  const files = [examples[name]];
   try {
-    return { codeGraph: buildCodeGraph([examples[name]]), error: null };
+    const codeGraph = buildCodeGraph(files);
+    // Modules come out in file order, each id normalised from its path.
+    const sources = new Map(
+      codeGraph.modules.map((module, index) => [
+        module.id,
+        files[index]?.source ?? "",
+      ])
+    );
+    return { codeGraph, sources, error: null };
   } catch (error) {
     return { codeGraph: null, error: String(error) };
   }

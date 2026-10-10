@@ -6,6 +6,7 @@ import type {
   FlowNode,
   FunctionNode,
   ModuleNode,
+  SourceSpan,
 } from "./code-graph";
 import { findFlowNode } from "./flow";
 import { planFlow } from "./flow-layout";
@@ -35,6 +36,11 @@ type RoomSubject =
       readonly ancestors: readonly FlowNode[];
       /** The HUD's words for the room: `await fetch(…)`, `3 statements`. */
       readonly text: string;
+      /**
+       * The room's code: its node's, a tagged room's composite's, or for a
+       * room folded from several, from the first node to the last.
+       */
+      readonly span: SourceSpan;
     } & FunctionSubject);
 
 const functionSubject = (
@@ -98,6 +104,28 @@ const nodeOf = (fn: FunctionNode, roomId: string, ref: FlowNodeRef) => {
     : { node: found.node, ancestors: [...found.ancestors, found.node] };
 };
 
+/** From the start of `first` to the end of `last`. */
+const joinSpans = (first: SourceSpan, last: SourceSpan): SourceSpan => ({
+  start: first.start,
+  startLine: first.startLine,
+  startColumn: first.startColumn,
+  end: last.end,
+  endLine: last.endLine,
+  endColumn: last.endColumn,
+});
+
+/** A room's span: its node's, through the last node folded into it. */
+const roomSpan = (
+  fn: FunctionNode,
+  plan: FlowPlan,
+  roomId: string,
+  node: FlowNode
+): SourceSpan => {
+  const lastId = plan.folds.get(roomId);
+  const last = lastId === undefined ? null : findFlowNode(fn.flow, lastId);
+  return last === null ? node.span : joinSpans(node.span, last.node.span);
+};
+
 /**
  * A flow room: a node of the function's flow, or the empty body's one room.
  * The text is the room's label from the template (deterministic, so it is
@@ -110,7 +138,8 @@ const flowSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
   if (ref === null || subject === null) {
     return null;
   }
-  const label = planOf(graph, subject.fn).labels.get(roomId);
+  const plan = planOf(graph, subject.fn);
+  const label = plan.labels.get(roomId);
   if (ref.kind === "step" && ref.tag === "empty") {
     return {
       kind: "flow",
@@ -118,6 +147,7 @@ const flowSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
       node: subject.fn.flow,
       ancestors: [],
       text: label ?? "empty body",
+      span: subject.fn.flow.span,
     };
   }
   const found = nodeOf(subject.fn, roomId, ref);
@@ -134,6 +164,7 @@ const flowSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
       (found.node.kind === "sequence"
         ? ""
         : flowNodeText(found.node, indexSites(sitesOf(graph, subject.fn.id)))),
+    span: roomSpan(subject.fn, plan, roomId, found.node),
   };
 };
 

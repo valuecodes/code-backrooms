@@ -58,6 +58,11 @@ type FlowRoomSpec = {
    * leave. One portal cannot show those ways, so they are collapsed too.
    */
   readonly escapes?: readonly string[];
+  /**
+   * For a room folded from several by the budget: the id of the last flow
+   * node folded into it. The room keeps the id of the first.
+   */
+  readonly through?: string;
 };
 
 /**

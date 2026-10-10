@@ -72,7 +72,28 @@ const merge = (
     // every jump either room hides.
     ...(b.jumpTo === undefined ? {} : { jumpTo: b.jumpTo }),
     ...escapesOf(a, b),
+    through: b.through ?? b.id,
   };
+};
+
+/** Rooms folded from several, mapped to the last node folded into each. */
+const foldsOf = (items: readonly FlowTree[]): ReadonlyMap<string, string> => {
+  const folds = new Map<string, string>();
+  const visit = (current: readonly FlowTree[]) => {
+    for (const item of current) {
+      if (item.kind === "room") {
+        if (item.through !== undefined) {
+          folds.set(item.id, item.through);
+        }
+        continue;
+      }
+      for (const body of bodiesOf(item)) {
+        visit(body);
+      }
+    }
+  };
+  visit(items);
+  return folds;
 };
 
 const overBudget = (items: readonly FlowTree[]): boolean =>
@@ -252,4 +273,4 @@ const foldToBudget = (
   }
 };
 
-export { foldToBudget, replaceComposite };
+export { foldsOf, foldToBudget, replaceComposite };
