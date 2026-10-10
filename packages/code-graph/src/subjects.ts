@@ -205,8 +205,9 @@ const membersOf = (
 
 /**
  * What a room stands for: a flow room of a function, a function, a module
- * hub, a class's lobby or the repository entrance; null for corridors and ids not from this
- * graph. Flow ids also contain `::`, so they are tried first.
+ * hub, a class's lobby or the repository entrance; null for corridors and
+ * ids not from this graph. Flow ids also contain `::`, so they are tried
+ * first.
  */
 const roomSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
   if (parseFlowNodeId(roomId) !== null) {
