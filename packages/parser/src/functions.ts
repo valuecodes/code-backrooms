@@ -18,12 +18,15 @@ import {
   isVariableDeclaration,
 } from "@babel/types";
 import type { ClassBody, Node, Program } from "@babel/types";
-import type { ContainmentEdge, FunctionKind } from "@repo/code-graph";
+import type {
+  ContainmentEdge,
+  FunctionKind,
+  ImportRecord,
+} from "@repo/code-graph";
 import { functionId, uniqueNames } from "@repo/code-graph/ids";
 
 import {
   bindingNames,
-  exportedNamesOf,
   fieldFunction,
   functionScope,
   isFunctionLike,
@@ -58,7 +61,7 @@ type Discovered = {
 type Context = {
   readonly moduleId: string;
   readonly nextName: (qualifiedName: string) => string;
-  /** Names exported by `export { a, b }` or `export default a`. */
+  /** Local names exported by any form (see `exportedLocalNames`). */
   readonly exportedNames: ReadonlySet<string>;
   readonly out: Discovered;
 };
@@ -304,8 +307,18 @@ const visit = (
   }
 };
 
-const discover = (moduleId: string, program: Program): Discovered => {
+const discover = (
+  moduleId: string,
+  program: Program,
+  imports: readonly ImportRecord[],
+  exportedNames: ReadonlySet<string>
+): Discovered => {
   const moduleScope = newScope(null, null, null, false);
+  for (const record of imports) {
+    if (record.localName !== null) {
+      moduleScope.imports.set(record.localName, record);
+    }
+  }
   const out: Discovered = {
     functions: [],
     edges: [],
@@ -319,7 +332,7 @@ const discover = (moduleId: string, program: Program): Discovered => {
   const context: Context = {
     moduleId,
     nextName: uniqueNames(),
-    exportedNames: exportedNamesOf(program),
+    exportedNames,
     out,
   };
   for (const statement of program.body) {

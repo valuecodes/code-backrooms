@@ -127,7 +127,16 @@ describe("roomSubject folded rooms", () => {
 
 /** A one-function graph around a hand-built flow. */
 const graphWith = (fn: FunctionNode): CodeGraph => ({
-  modules: [{ id: "m.ts", path: "m.ts", language: "typescript", lineCount: 1 }],
+  modules: [
+    {
+      id: "m.ts",
+      path: "m.ts",
+      language: "typescript",
+      lineCount: 1,
+      imports: [],
+      exports: [],
+    },
+  ],
   functions: [fn],
   callSites: [],
   edges: [],

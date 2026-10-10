@@ -12,6 +12,7 @@ import { languageOf, parseSource } from "./babel";
 import { collectCalls } from "./calls";
 import { buildFlow } from "./flow";
 import { discover } from "./functions";
+import { exportedLocalNames, exportsOf, importsOf } from "./imports";
 import { lineCountOf } from "./span";
 
 type SourceFile = {
@@ -59,31 +60,45 @@ const sitesByCaller = (
 const parseModule = (file: SourceFile): ParsedModule => {
   const id = moduleId(file.path);
   const ast = parseSource(file.path, file.source);
-  const { discovered, calls, functions } = withPath(file.path, () => {
-    const found = discover(id, ast.program);
-    const collected = collectCalls(id, ast.program, found);
-    const byCaller = sitesByCaller(collected.callSites);
-    return {
-      discovered: found,
-      calls: collected,
-      // nodeOf is filled as functions are registered: same order as `functions`.
-      functions: [...found.nodeOf].map(([fn, node]): FunctionNode => ({
-        ...fn,
-        flow: buildFlow({
-          functionId: fn.id,
-          node,
-          source: file.source,
-          sites: byCaller.get(fn.id) ?? [],
-          byNode: found.byNode,
-        }),
-      })),
-    };
-  });
+  const { imports, exports, discovered, calls, functions } = withPath(
+    file.path,
+    () => {
+      const importRecords = importsOf(ast.program);
+      const exportRecords = exportsOf(ast.program);
+      const found = discover(
+        id,
+        ast.program,
+        importRecords,
+        exportedLocalNames(exportRecords)
+      );
+      const collected = collectCalls(id, ast.program, found);
+      const byCaller = sitesByCaller(collected.callSites);
+      return {
+        imports: importRecords,
+        exports: exportRecords,
+        discovered: found,
+        calls: collected,
+        // nodeOf is filled as functions are registered: same order as `functions`.
+        functions: [...found.nodeOf].map(([fn, node]): FunctionNode => ({
+          ...fn,
+          flow: buildFlow({
+            functionId: fn.id,
+            node,
+            source: file.source,
+            sites: byCaller.get(fn.id) ?? [],
+            byNode: found.byNode,
+          }),
+        })),
+      };
+    }
+  );
   const module: ModuleNode = {
     id,
     path: id,
     language: languageOf(file.path),
     lineCount: lineCountOf(file.source),
+    imports,
+    exports,
   };
   return {
     module,

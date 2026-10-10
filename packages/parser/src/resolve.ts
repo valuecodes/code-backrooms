@@ -27,7 +27,7 @@ import {
   isYieldExpression,
 } from "@babel/types";
 import type { Node } from "@babel/types";
-import type { CallKind, CallResolution } from "@repo/code-graph";
+import type { CallKind, CallResolution, ImportVia } from "@repo/code-graph";
 
 import { KNOWN_GLOBALS } from "./globals";
 import type { ClassTable, DiscoveredFunction, Scope } from "./scope";
@@ -38,12 +38,22 @@ type Resolved = {
   readonly resolution: CallResolution;
   /** For `ambiguous`: every function the call may reach, in source order. */
   readonly candidates?: readonly DiscoveredFunction[];
+  /** Set when the callee is an import binding; the call stays unresolved. */
+  readonly via?: ImportVia;
 };
 
 const unresolved = (calleeName: string): Resolved => ({
   calleeName,
   target: null,
   resolution: "unresolved",
+});
+
+/** A call through an import: left for the cross-file linker. */
+const imported = (calleeName: string, via: ImportVia): Resolved => ({
+  calleeName,
+  target: null,
+  resolution: "unresolved",
+  via,
 });
 
 const external = (calleeName: string): Resolved => ({
@@ -144,7 +154,7 @@ const rootIdentifier = (raw: Node): string | null => {
  * function, so each branch declaring one adds a candidate); a parameter
  * makes it dynamic (a callback); any other binding of the name (a
  * variable, import or class) shadows everything further out and makes the
- * call unresolved.
+ * call unresolved, carrying `via` when that binding is an import.
  */
 const resolveIdentifier = (name: string, scope: Scope): Resolved => {
   for (
@@ -160,7 +170,9 @@ const resolveIdentifier = (name: string, scope: Scope): Resolved => {
       return dynamic(name);
     }
     if (current.bindings.has(name)) {
-      return unresolved(name);
+      return current.imports.has(name)
+        ? imported(name, { localName: name, member: null, isNew: false })
+        : unresolved(name);
     }
   }
   return KNOWN_GLOBALS.has(name) ? external(name) : unresolved(name);
@@ -182,6 +194,27 @@ const resolveClass = (name: string, scope: Scope): ClassTable | null => {
     }
   }
   return null;
+};
+
+/** Whether the name refers to an import binding here (not shadowed). */
+const isImport = (name: string, scope: Scope): boolean => {
+  for (
+    let current: Scope | null = scope;
+    current !== null;
+    current = current.parent
+  ) {
+    if (current.imports.has(name)) {
+      return true;
+    }
+    if (
+      current.locals.has(name) ||
+      current.classes.has(name) ||
+      current.bindings.has(name)
+    ) {
+      return false;
+    }
+  }
+  return false;
 };
 
 /** Any binding of the name between here and the module, inclusive. */
@@ -292,6 +325,13 @@ const resolveMember = (
       const target = table.static.get(property);
       return target === undefined ? unresolved(name) : resolved(name, target);
     }
+    if (isImport(object.name, scope)) {
+      return imported(name, {
+        localName: object.name,
+        member: property,
+        isNew: false,
+      });
+    }
   }
   const root = rootIdentifier(object);
   return root !== null && KNOWN_GLOBALS.has(root) && !shadowed(root, scope)
@@ -311,7 +351,10 @@ const resolveNew = (callee: Node, scope: Scope): Resolved => {
     return table.ctor === null ? unresolved(name) : resolved(name, table.ctor);
   }
   // `new Foo()` on a plain function: the function is the constructor.
-  return resolveIdentifier(name, scope);
+  const plain = resolveIdentifier(name, scope);
+  return plain.via === undefined
+    ? plain
+    : { ...plain, via: { ...plain.via, isNew: true } };
 };
 
 const resolveCallee = (

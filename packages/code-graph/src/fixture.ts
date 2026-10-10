@@ -6,8 +6,10 @@ import type {
   CallEdge,
   CallSite,
   CodeGraph,
+  ExportRecord,
   FlowStep,
   FunctionNode,
+  ImportRecord,
   ModuleNode,
   SourceSpan,
 } from "./code-graph";
@@ -24,6 +26,9 @@ type FixtureFunction = {
 type FixtureModule = {
   readonly path: string;
   readonly functions: readonly FixtureFunction[];
+  /** Import and export records as the parser would emit them; default none. */
+  readonly imports?: readonly ImportRecord[];
+  readonly exports?: readonly ExportRecord[];
 };
 
 const LINE_WIDTH = 40;
@@ -133,6 +138,8 @@ const fixtureModule = (module: FixtureModule): CodeGraph => {
     path: module.path,
     language: "typescript",
     lineCount: line - 1,
+    imports: module.imports ?? [],
+    exports: module.exports ?? [],
   };
   return {
     modules: [node],

@@ -8,9 +8,6 @@ import {
   isClassPrivateMethod,
   isClassPrivateProperty,
   isClassProperty,
-  isExportDefaultDeclaration,
-  isExportNamedDeclaration,
-  isExportSpecifier,
   isFunctionDeclaration,
   isFunctionExpression,
   isIdentifier,
@@ -30,9 +27,12 @@ import type {
   FunctionExpression,
   Node,
   ObjectMethod,
-  Program,
 } from "@babel/types";
-import type { FunctionKind, FunctionNode } from "@repo/code-graph";
+import type {
+  FunctionKind,
+  FunctionNode,
+  ImportRecord,
+} from "@repo/code-graph";
 
 /**
  * A function as the discovery and call passes know it: everything but its
@@ -66,6 +66,8 @@ type Scope = {
   readonly bindings: Set<string>;
   /** The bindings that are parameters: a call to one is dynamic. */
   readonly params: Set<string>;
+  /** Module scope only: the bindings that are imports, by local name. */
+  readonly imports: Map<string, ImportRecord>;
   readonly parent: Scope | null;
 };
 
@@ -93,6 +95,7 @@ const newScope = (
   classes: new Map(),
   bindings: new Set(),
   params: new Set(),
+  imports: new Map(),
   parent,
 });
 
@@ -233,33 +236,8 @@ const fieldFunction = (
   return null;
 };
 
-/** `export { a, b as c }` (local names) and `export default a`. */
-const exportedNamesOf = (program: Program): ReadonlySet<string> => {
-  const names = new Set<string>();
-  for (const statement of program.body) {
-    if (isExportNamedDeclaration(statement)) {
-      for (const specifier of statement.specifiers) {
-        if (
-          isExportSpecifier(specifier) &&
-          isIdentifier(specifier.local) &&
-          (statement.source === null || statement.source === undefined)
-        ) {
-          names.add(specifier.local.name);
-        }
-      }
-    } else if (
-      isExportDefaultDeclaration(statement) &&
-      isIdentifier(statement.declaration)
-    ) {
-      names.add(statement.declaration.name);
-    }
-  }
-  return names;
-};
-
 export {
   bindingNames,
-  exportedNamesOf,
   fieldFunction,
   functionScope,
   isFunctionLike,
