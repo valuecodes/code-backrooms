@@ -152,12 +152,12 @@ wall only and that side may be taken, so `generateCodeWorld(graph, seed)`
 portalOnly)`), which turns the call into a portal and attaches the callee
 elsewhere, and tries again: a program that parses always becomes a world.
 The areas are then set apart and joined by portals only (`assembleAreas`).
-The player starts in the repository entrance (`./entrance`, area and hub
+The player starts in the repository entrance (`src/entrance.ts`, area and hub
 id `ENTRANCE_ID = "//entrance"`, which no normalised path can equal): a
 hub named after the directory every module lies in (`src`), else
 `repository`, with a module portal to each entry module, eight to a hub,
 further hubs chained on (`//entrance#2`). `entryModules(graph)`
-(`./entrypoints`) picks them, best first: every module nobody imports
+(`src/entrypoints.ts`) picks them, best first: every module nobody imports
 (nothing else leads there), ranked +3 for an `index`/`main`/`server`/`app`/
 `cli` basename, +1 per exported function nobody calls (at most 3) and -1
 per directory below a leading `src/`, ties by path; then, for modules only
