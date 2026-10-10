@@ -187,8 +187,8 @@ describe("cfgOf", () => {
       loop(1, [tryNode(2, [branch(3, [breakOut(4, LOOP)]), ret(6)])]),
     ]);
     expect(edgesOf(cfg)).toEqual([
-      "2:try -return-> exit",
       "2:try -break-> 1:loop:end",
+      "2:try -return-> exit",
       "1:loop -true-> 2:try",
       "1:loop -false-> 1:loop:end",
       "1:loop:again -loop-back-> 1:loop",
@@ -205,6 +205,25 @@ describe("cfgOf", () => {
     ]);
     const out = edgesOf(cfg).filter((edge) => edge.startsWith("2:try"));
     expect(out).toEqual(["2:try -return-> exit"]);
+  });
+
+  it("lets a nested finally that returns override the inner throw", () => {
+    const cfg = checked([
+      tryNode(1, [tryNode(2, [throwAt(3)], [ret(5)])]),
+      step(9, 1),
+    ]);
+    const out = edgesOf(cfg).filter((edge) => edge.startsWith("1:try"));
+    expect(out).toEqual(["1:try -return-> exit"]);
+  });
+
+  it("gives labels grouped on one body a case and a default edge", () => {
+    const cfg = checked([
+      switchNode(1, [{ labels: ['case "a"', "default"], body: [step(10, 1)] }]),
+    ]);
+    expect(edgesOf(cfg).slice(0, 2)).toEqual([
+      "1:switch -case-> 10:step",
+      "1:switch -default-> 10:step",
+    ]);
   });
 
   it("is deterministic and renders as dot", () => {

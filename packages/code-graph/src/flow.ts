@@ -218,6 +218,7 @@ const hasReturn = (node: FlowNode): boolean => {
 };
 
 export {
+  childrenOf,
   countStatements,
   escapingJumps,
   findFlowNode,

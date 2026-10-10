@@ -7,12 +7,13 @@
 import type {
   BreakNode,
   ContinueNode,
+  FlowNode,
   FlowStep,
   FunctionNode,
   SequenceNode,
   TryNode,
 } from "./code-graph";
-import { escapingJumps, isTerminal, walkFlow } from "./flow";
+import { childrenOf, isTerminal, walkFlow } from "./flow";
 import { emptyBodySpec, jumpTarget } from "./flow-measure";
 import { taggedFlowNodeId } from "./ids";
 
@@ -111,28 +112,61 @@ const jumpEdge = (jump: BreakNode | ContinueNode, b: Builder) => {
   }
 };
 
+/** A way control leaves a node other than running on: a return or a jump. */
+type Outcome =
+  | { readonly kind: "return" | "throw" }
+  | { readonly kind: "jump"; readonly jump: BreakNode | ContinueNode };
+
+/** The parts of a `try` whose ways out count: a finalizer that ends overrides the rest. */
+const tryParts = (node: TryNode): readonly SequenceNode[] =>
+  node.finalizer !== null && isTerminal(node.finalizer)
+    ? [node.finalizer]
+    : [node.block, node.handler, node.finalizer].filter(
+        (part) => part !== null
+      );
+
+/** Every return and jump under `node`, nested finalizers overriding theirs. */
+const outcomesOf = (node: FlowNode): readonly Outcome[] => {
+  switch (node.kind) {
+    case "return": {
+      return [{ kind: node.throws ? "throw" : "return" }];
+    }
+    case "break":
+    case "continue": {
+      return [{ kind: "jump", jump: node }];
+    }
+    case "try": {
+      return tryParts(node).flatMap(outcomesOf);
+    }
+    case "sequence":
+    case "branch":
+    case "switch":
+    case "loop":
+    case "step":
+    case "call":
+    case "await":
+    default: {
+      return childrenOf(node).flatMap(outcomesOf);
+    }
+  }
+};
+
 /**
- * A `try` is one block. A finalizer that ends overrides every earlier way
- * out, so only its own count; otherwise every part's returns and jumps out
- * do, and the block runs on unless the whole `try` ends.
+ * A `try` is one block with its ways out: its returns and throws, its jumps
+ * to composites outside it, and running on unless the whole `try` ends.
  */
 const tryEdges = (node: TryNode, b: Builder) => {
-  const parts =
-    node.finalizer !== null && isTerminal(node.finalizer)
-      ? [node.finalizer]
-      : [node.block, node.handler, node.finalizer].filter(
-          (part) => part !== null
-        );
-  for (const part of parts) {
-    walkFlow(part, (current) => {
-      if (current.kind === "return") {
-        b.edge(node.id, b.exit, current.throws ? "throw" : "return");
-      }
-    });
-    for (const jump of escapingJumps(part)) {
-      const target = jumpTarget(jump);
+  const inside = new Set<string>();
+  walkFlow(node, (current) => {
+    inside.add(current.id);
+  });
+  for (const outcome of outcomesOf(node)) {
+    if (outcome.kind !== "jump") {
+      b.edge(node.id, b.exit, outcome.kind);
+    } else if (!inside.has(outcome.jump.targetId)) {
+      const target = jumpTarget(outcome.jump);
       if (target !== null) {
-        b.edge(node.id, target, jump.kind);
+        b.edge(node.id, target, outcome.jump.kind);
       }
     }
   }
@@ -158,11 +192,13 @@ const compileSwitch = (
     if (compiled === undefined) {
       continue;
     }
-    b.edge(
-      node.id,
-      compiled.first,
-      item.labels.includes("default") ? "default" : "case"
-    );
+    // Labels grouped on one body may hold cases and the default.
+    if (item.labels.some((label) => label !== "default")) {
+      b.edge(node.id, compiled.first, "case");
+    }
+    if (item.labels.includes("default")) {
+      b.edge(node.id, compiled.first, "default");
+    }
     const next = cases[index + 1];
     if (item.fallsThrough && next !== undefined) {
       b.link(compiled.exits, next.first, "fallthrough");
