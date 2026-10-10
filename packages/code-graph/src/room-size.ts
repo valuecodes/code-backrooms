@@ -48,9 +48,13 @@ const HUB_EXTENT = 8;
  */
 const HUB_PERIMETER_PER_DOOR = 10;
 
-const hubDimensions = (degree: number): RoomDimensions => {
+/**
+ * `ratio` makes the hub start that much wider than deep (snapped to the
+ * grid) before it grows; 1 keeps the square start.
+ */
+const hubDimensions = (degree: number, ratio = 1): RoomDimensions => {
   const [w, d] = growToPerimeter(
-    HUB_EXTENT,
+    Math.min(MAX_EXTENT, Math.round((HUB_EXTENT * ratio) / GRID) * GRID),
     HUB_EXTENT,
     degree * HUB_PERIMETER_PER_DOOR
   );

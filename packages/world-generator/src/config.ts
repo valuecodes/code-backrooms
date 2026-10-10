@@ -10,7 +10,10 @@ const DOOR_HEIGHT = 2.1;
 /** Room edges snap to this lattice, so shared edges compare exactly. */
 const GRID = 0.5;
 
+/** The width of a closing corridor, and of every corridor without variation. */
 const CORRIDOR_WIDTH = 2;
+/** Widths a tree corridor may take when variation is on, the narrowest first. */
+const CORRIDOR_WIDTHS: readonly number[] = [CORRIDOR_WIDTH, 3];
 /** Corridor lengths tried when a neighbour does not fit against a wall. */
 const CORRIDOR_LENGTHS: readonly number[] = [2, 3, 4, 6, 8, 10, 14];
 const MAX_CORRIDOR_LENGTH = 14;
@@ -27,6 +30,11 @@ const MIN_GAP = 2;
  * hard floor; the rest keeps the jambs clear of the corner boxes.
  */
 const MIN_SHARED = DOOR_WIDTH + 2 * WALL_THICKNESS + 0.5;
+
+/** A passage (a wide opening between consecutive flow rooms) is at most this wide. */
+const PASSAGE_MAX_WIDTH = 4;
+/** Wall a passage leaves beside it, past the wall thickness, at each end of the overlap. */
+const PASSAGE_JAMB = 0.2;
 
 type SizeClass = {
   readonly min: number;
@@ -88,6 +96,7 @@ export {
   ARRIVAL_INSET,
   CORRIDOR_LENGTHS,
   CORRIDOR_WIDTH,
+  CORRIDOR_WIDTHS,
   DOOR_HEIGHT,
   DOOR_WIDTH,
   FLOW_BUDGET,
@@ -105,6 +114,8 @@ export {
   MAX_LAYOUT_ATTEMPTS,
   MIN_GAP,
   MIN_SHARED,
+  PASSAGE_JAMB,
+  PASSAGE_MAX_WIDTH,
   PORTAL_GAP,
   PORTAL_TRIGGER_DEPTH,
   ROOM_SIZE_CLASSES,

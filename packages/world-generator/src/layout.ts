@@ -58,7 +58,8 @@ const choose = (
   anchorId: string,
   roomId: string,
   room: GraphRoom,
-  neighbours: ReadonlySet<string>
+  neighbours: ReadonlySet<string>,
+  variation: boolean
 ): Candidate | null => {
   const anchor = state.rects.get(anchorId);
   const ports = state.portsFor(anchorId, roomId);
@@ -71,7 +72,8 @@ const choose = (
     rng,
     anchor,
     ports,
-    cluster === undefined ? () => room : (wall) => footprintOf(cluster, wall)
+    cluster === undefined ? () => room : (wall) => footprintOf(cluster, wall),
+    variation
   );
   let best: { readonly option: Candidate; readonly score: number } | null =
     null;
@@ -124,7 +126,12 @@ const placeUnit = (
   return { unit: id, room: id };
 };
 
-const attempt = (graph: WorldGraph, start: string, rng: Rng): Attempt => {
+const attempt = (
+  graph: WorldGraph,
+  start: string,
+  rng: Rng,
+  variation: boolean
+): Attempt => {
   const byId = new Map(graph.rooms.map((room) => [room.id, room]));
   // Neighbour order decides who gets the free wall space first; shuffling it
   // per attempt means a retry explores a genuinely different packing.
@@ -174,7 +181,15 @@ const attempt = (graph: WorldGraph, start: string, rng: Rng): Attempt => {
             )
           : []
       );
-      const chosen = choose(state, rng, anchorId, roomId, room, neighbours);
+      const chosen = choose(
+        state,
+        rng,
+        anchorId,
+        roomId,
+        room,
+        neighbours,
+        variation
+      );
       if (chosen === null) {
         return { ok: false, from: anchorId, to: roomId };
       }
@@ -231,16 +246,27 @@ const shortfall = (layout: WorldLayout): number =>
  * not place. Portals go onto free wall space afterwards (those a cluster
  * positioned itself first, so the rest keep clear of them); when a packing
  * leaves some without a wall, a few more packings are tried and the best
- * one is returned with its `unplacedPortals`, never an error.
+ * one is returned with its `unplacedPortals`, never an error. `variation`
+ * lets tree corridors vary in width (CORRIDOR_WIDTHS); without it every
+ * corridor is CORRIDOR_WIDTH.
  */
-const generateLayout = (graph: WorldGraph, seed: number): WorldLayout => {
+const generateLayout = (
+  graph: WorldGraph,
+  seed: number,
+  variation = true
+): WorldLayout => {
   validateGraph(graph);
   const start = graph.start ?? graph.rooms[0]?.id ?? "";
   let failure: Failure | null = null;
   let best: WorldLayout | null = null;
   let packings = 0;
   for (let tries = 0; tries < MAX_LAYOUT_ATTEMPTS; tries += 1) {
-    const result = attempt(graph, start, createRng(seed + tries * 1_000_003));
+    const result = attempt(
+      graph,
+      start,
+      createRng(seed + tries * 1_000_003),
+      variation
+    );
     if (!result.ok) {
       failure = result;
       continue;

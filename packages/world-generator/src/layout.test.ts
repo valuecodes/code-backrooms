@@ -221,10 +221,13 @@ describe("clusters", () => {
       ["above", { minX: 4, maxX: 7, minZ: -20, maxZ: 2 }],
       ["below", { minX: 4, maxX: 7, minZ: 9, maxZ: 30 }],
     ]);
-    const next = candidateBatches(createRng(3), anchor, [port], () => ({
-      width: 5,
-      depth: 5,
-    }));
+    const next = candidateBatches(
+      createRng(3),
+      anchor,
+      [port],
+      () => ({ width: 5, depth: 5 }),
+      true
+    );
     const fitting = [];
     for (let batch = next(); batch !== null; batch = next()) {
       for (const option of batch) {
@@ -277,9 +280,16 @@ describe("clusters", () => {
   });
 });
 
-/** FNV-1a over a layout's rooms: a cheap, stable fingerprint. */
-const fingerprint = (graph: WorldGraph, seed: number): string => {
-  const text = JSON.stringify(generateLayout(graph, seed).rooms);
+/**
+ * FNV-1a over a layout's rooms: a cheap, stable fingerprint. Without
+ * variation unless asked, so the pins below predate varied corridors.
+ */
+const fingerprint = (
+  graph: WorldGraph,
+  seed: number,
+  variation = false
+): string => {
+  const text = JSON.stringify(generateLayout(graph, seed, variation).rooms);
   let hash = 0x81_1c_9d_c5;
   for (let index = 0; index < text.length; index += 1) {
     hash ^= text.charCodeAt(index);
@@ -321,6 +331,44 @@ describe("plain layouts", () => {
     expect(fingerprint(generateGraph({ seed, roomCount: 15 }), seed)).toBe(
       expected
     );
+  });
+});
+
+describe("varied corridors", () => {
+  it("is pinned with variation on too", () => {
+    expect(
+      fingerprint(generateGraph({ seed: 1, roomCount: 15 }), 1, true)
+    ).toBe("d267e9db");
+  });
+
+  it("makes some tree corridors 3 m wide, closing corridors 2 m", () => {
+    const widths = new Set<number>();
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const graph = generateGraph({ seed, roomCount: 15 });
+      for (const room of generateLayout(graph, seed).rooms) {
+        if (room.kind !== "corridor") {
+          continue;
+        }
+        const alongZ = room.doors.some(
+          (door) => door.wall === "north" || door.wall === "south"
+        );
+        widths.add(alongZ ? room.width : room.depth);
+      }
+    }
+    expect([...widths].toSorted()).toEqual([2, 3]);
+  });
+
+  it("varies nothing without variation", () => {
+    const widths = new Set<number>();
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const graph = generateGraph({ seed, roomCount: 15 });
+      for (const room of generateLayout(graph, seed, false).rooms) {
+        if (room.kind === "corridor") {
+          widths.add(Math.min(room.width, room.depth));
+        }
+      }
+    }
+    expect([...widths]).toEqual([2]);
   });
 });
 

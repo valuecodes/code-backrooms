@@ -3,7 +3,7 @@ import { laneText } from "@repo/code-graph/flow-text";
 import { portalSubject, roomSubject } from "@repo/code-graph/subjects";
 import type { RoomSubject } from "@repo/code-graph/subjects";
 import { generateCodeWorld } from "@repo/code-graph/world-graph";
-import { buildCodeGraph } from "@repo/parser";
+import { buildCodeGraph, hashSource } from "@repo/parser";
 import type { GeneratedWorld } from "@repo/types";
 import type { Target } from "@repo/world-generator/interaction";
 import type { Frame } from "@repo/world-generator/navigation";
@@ -25,9 +25,15 @@ type CodeResult =
     }
   | { readonly codeGraph: null; readonly error: string };
 
+/** The files of a bundled example, in order. */
+const filesOf = (name: ExampleName) => [examples[name]];
+
+/** A bundled example's own seed: the same source always gives the same world. */
+const sourceSeedOf = (name: ExampleName): number => hashSource(filesOf(name));
+
 /** Parses a bundled example; a syntax error becomes a value, never a throw. */
 const codeGraphOf = (name: ExampleName): CodeResult => {
-  const files = [examples[name]];
+  const files = filesOf(name);
   try {
     const codeGraph = buildCodeGraph(files);
     // Modules come out in file order, each id normalised from its path.
@@ -147,4 +153,11 @@ const promptOf = (
   return `return to ${top === undefined ? subject.fn.moduleId : labelOf(codeGraph, top.callerRoomId)}`;
 };
 
-export { breadcrumbOf, codeGraphOf, describeRoom, promptOf, worldFromCode };
+export {
+  breadcrumbOf,
+  codeGraphOf,
+  describeRoom,
+  promptOf,
+  sourceSeedOf,
+  worldFromCode,
+};

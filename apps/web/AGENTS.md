@@ -76,12 +76,22 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   the room's own code marked for a flow room (a merge, test or end room
   marks its whole `if`, loop or switch; a room the budget folded marks
   everything folded into it). The mouse wheel scrolls it.
-- Milestone 11 (current): the overview map. M or Tab while walking shows a
+- Milestone 11: the overview map. M or Tab while walking shows a
   map in the top-left corner, north up and centred on the player: the rooms
   stood in, filled with their lane's colour, the rooms seen through their
   doors drawn hollow, their doors, and their portals coloured by kind (call
   amber, return pale, jump grey). It belongs to one world: N starts it over,
   R does not.
+- Milestone 12 (current): aesthetic variation. A code world is seeded from
+  a hash of its source, so the same program always gives the same world
+  and `?seed` / N are a dev override. The seed varies proportions only,
+  never what is connected (a test compares every example with variation on
+  and off): each function's column is 0, 0.5 or 1 m wider, each hub starts
+  up to 1.5 times wider than deep, and a tree corridor is 2 or 3 m wide.
+  Rooms that follow each other without a choice open onto each other
+  through wide passages (up to 4 m); doors into a lane stay 1.2 m doors so
+  the choice reads. Each room's wallpaper is a shade lighter or darker,
+  and the ceiling lights buzz out of step.
 
 ---
 
@@ -126,6 +136,9 @@ src/
 ### Query parameters
 
 - `?seed=12345` picks the world; `N` while playing bumps it (and rewrites the URL).
+  Without it a random or preset world uses seed 1 and a code world the hash
+  of its source (`hashSource` from `@repo/parser`), so a shared `?code=` link
+  reloads into the same world; for code worlds `?seed` is a dev override.
 - `?rooms=15` sets the random graph size (clamped to 1-40).
 - `?graph=<preset>` lays out a hand-written graph from
   `@repo/world-generator/presets` instead: `lobby`, `linear`, `branching`,

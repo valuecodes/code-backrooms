@@ -6,6 +6,7 @@ import type {
   ModuleNode,
 } from "@repo/code-graph";
 import { moduleId } from "@repo/code-graph/ids";
+import { hashString } from "@repo/world-generator/random";
 
 import { languageOf, parseSource } from "./babel";
 import { collectCalls } from "./calls";
@@ -110,5 +111,16 @@ const buildCodeGraph = (files: readonly SourceFile[]): CodeGraph => {
   };
 };
 
-export { buildCodeGraph, parseModule };
+/** Seeds stay within what a `?seed` URL can carry (2^31 - 1). */
+const SEED_RANGE = 2 ** 31;
+
+/**
+ * A world seed from the files themselves: the same source always gives the
+ * same world, and any change to a path or its text gives another one.
+ */
+const hashSource = (files: readonly SourceFile[]): number =>
+  hashString(files.map((file) => `${file.path}\0${file.source}\0`).join("")) %
+  SEED_RANGE;
+
+export { buildCodeGraph, hashSource, parseModule };
 export type { ParsedModule, SourceFile };

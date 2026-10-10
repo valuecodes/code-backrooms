@@ -9,7 +9,7 @@ import type {
 
 import { checkClusters, unitLinks, unitOf } from "./cluster-checks";
 import {
-  CORRIDOR_WIDTH,
+  CORRIDOR_WIDTHS,
   DOOR_WIDTH,
   MAX_CORRIDOR_LENGTH,
   MIN_GAP,
@@ -93,10 +93,15 @@ const checkLayout = (graph: WorldGraph, layout: WorldLayout): Failure[] => {
         continue;
       }
       realised.add(connectionKey(room.connection.from, room.connection.to));
-      const long = Math.max(room.width, room.depth);
-      const short = Math.min(room.width, room.depth);
+      // Its doors are on its two ends, which say which way it runs: a
+      // wide corridor may be shorter than it is wide.
+      const alongZ = room.doors.some(
+        (door) => door.wall === "north" || door.wall === "south"
+      );
+      const long = alongZ ? room.depth : room.width;
+      const short = alongZ ? room.width : room.depth;
       if (
-        short !== CORRIDOR_WIDTH ||
+        !CORRIDOR_WIDTHS.includes(short) ||
         long < MIN_GAP ||
         long > MAX_CORRIDOR_LENGTH
       ) {
@@ -109,7 +114,7 @@ const checkLayout = (graph: WorldGraph, layout: WorldLayout): Failure[] => {
           rect !== undefined && other !== undefined
             ? sharedEdge(rect, other)
             : null;
-        if (edge === null || edge.overlap !== CORRIDOR_WIDTH) {
+        if (edge === null || edge.overlap !== short) {
           failures.push(
             `${room.id} end is not contained in ${door.targetRoomId}`
           );
@@ -198,10 +203,13 @@ const checkLayout = (graph: WorldGraph, layout: WorldLayout): Failure[] => {
           `${room.id} ${opening.wall} door is ${clearance} m from a corner`
         );
       }
+      // 0.3 m of wall between two openings' edges, whatever their widths.
       for (const other of openings.slice(i + 1)) {
         if (
           other.wall === opening.wall &&
-          Math.abs(other.along - opening.along) < DOOR_WIDTH + 0.3
+          Math.abs(other.along - opening.along) -
+            (other.width + opening.width) / 2 <
+            0.3
         ) {
           failures.push(
             `${room.id} has two ${opening.wall} doors too close together`
@@ -298,15 +306,18 @@ const checkPortals = (
         );
       }
       const others = [
-        ...openings.map((opening) => [opening.wall, opening.along] as const),
+        ...openings.map(
+          (opening) => [opening.wall, opening.along, opening.width] as const
+        ),
         ...portals
           .slice(i + 1)
-          .map((other) => [other.wall, other.along] as const),
+          .map((other) => [other.wall, other.along, DOOR_WIDTH] as const),
       ];
-      for (const [wall, along] of others) {
+      for (const [wall, along, width] of others) {
         if (
           wall === portal.wall &&
-          Math.abs(along - portal.along) < DOOR_WIDTH + PORTAL_GAP - 1e-9
+          Math.abs(along - portal.along) <
+            (width + DOOR_WIDTH) / 2 + PORTAL_GAP - 1e-9
         ) {
           failures.push(
             `${room.id} ${portal.wall} portal is too close to an opening`

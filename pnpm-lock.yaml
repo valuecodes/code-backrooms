@@ -358,6 +358,9 @@ importers:
       '@repo/code-graph':
         specifier: workspace:*
         version: link:../code-graph
+      '@repo/world-generator':
+        specifier: workspace:*
+        version: link:../world-generator
     devDependencies:
       '@repo/prettier':
         specifier: workspace:*

@@ -193,15 +193,18 @@ const orient = (
       );
     }
     const lane = door.lane === undefined ? {} : { lane: door.lane };
+    const opening = door.opening === undefined ? {} : { opening: door.opening };
     doors.get(door.from)?.push({
       wall: edge.wall,
       targetRoomId: door.to,
       ...(door.lane === undefined ? {} : { lane: door.lane, forward: true }),
+      ...opening,
     });
     doors.get(door.to)?.push({
       wall: OPPOSITE[edge.wall],
       targetRoomId: door.from,
       ...lane,
+      ...opening,
     });
   }
   const entryWall = OPPOSITE[orientation];

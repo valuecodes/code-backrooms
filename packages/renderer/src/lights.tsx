@@ -1,5 +1,6 @@
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useRef } from "react";
+import { hashString } from "@repo/world-generator/random";
+import { useEffect, useMemo, useRef } from "react";
 import type { PointLight } from "three";
 
 import type { FixturePoint } from "./fixtures";
@@ -15,11 +16,18 @@ const LIGHT_INTENSITY = 14;
 const LIGHT_COLOR = "#fff2cc";
 const LIGHT_DISTANCE = 9;
 
-/** Slot 0 (the nearest fixture) is the one shadow caster and the one that buzzes. */
+/** Slot 0 (the nearest fixture) is the one shadow caster. */
 const SHADOW_SLOT = 0;
+
+/** Seconds a fixture's buzz is offset by at most; longer than its slowest beat. */
+const FLICKER_PERIOD = 10;
 
 const flicker = (t: number): number =>
   0.93 + 0.07 * Math.sin(t * 23) * Math.sin(t * 7.3) * Math.sin(t * 1.7);
+
+/** Every fixture buzzes on its own phase, fixed by where it hangs. */
+const phaseOf = ({ x, z }: FixturePoint): number =>
+  (hashString(`${x},${z}`) / 2 ** 32) * FLICKER_PERIOD;
 
 /**
  * Keeps the K nearest fixture indices to (x, z), nearest first. A plain
@@ -66,6 +74,7 @@ const LightPool = ({ fixtures }: LightPoolProps) => {
   const nearest = useRef<number[]>([]);
   const distances = useRef<number[]>([]);
   const shadowFixture = useRef(-1);
+  const phases = useMemo(() => fixtures.map(phaseOf), [fixtures]);
 
   // A new world (new fixtures) needs a fresh shadow map even if the shadow
   // light happens to land on the same fixture index.
@@ -93,10 +102,10 @@ const LightPool = ({ fixtures }: LightPoolProps) => {
         continue;
       }
       light.position.set(fixture.x, fixture.ceiling - LIGHT_DROP, fixture.z);
+      // The phase follows the fixture, so a light keeps its buzz when the
+      // pool hands it to another slot.
       light.intensity =
-        slot === SHADOW_SLOT
-          ? LIGHT_INTENSITY * flicker(clock.elapsedTime)
-          : LIGHT_INTENSITY;
+        LIGHT_INTENSITY * flicker(clock.elapsedTime + (phases[index] ?? 0));
       if (slot === SHADOW_SLOT && index !== shadowFixture.current) {
         shadowFixture.current = index;
         gl.shadowMap.needsUpdate = true;
