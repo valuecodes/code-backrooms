@@ -71,6 +71,16 @@ describe("entryModules", () => {
     ]);
   });
 
+  it("breaks a tie by code units, the same on every machine", () => {
+    const graph = fixtureGraph(
+      { path: "ä.ts", functions: [] },
+      { path: "z.ts", functions: [] },
+      { path: "m10.ts", functions: [] },
+      { path: "m9.ts", functions: [] }
+    );
+    expect(idsOf(graph)).toEqual(["m10.ts", "m9.ts", "z.ts", "ä.ts"]);
+  });
+
   it("does not depend on the order of the modules", () => {
     const util = {
       path: "lib/util.ts",

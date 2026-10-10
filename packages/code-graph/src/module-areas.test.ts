@@ -1,3 +1,4 @@
+import type { AreaWorld } from "@repo/types";
 import { checkAreas } from "@repo/world-generator/area-checks";
 import { mergeAreas } from "@repo/world-generator/areas";
 import { roomBounds } from "@repo/world-generator/geometry";
@@ -29,6 +30,31 @@ const twoModules = () =>
     }
   );
 
+/**
+ * The player starts inside the entrance's first hub, facing its first
+ * portal: the facing point sits on the portal's wall, level with its
+ * centre, ahead of the start.
+ */
+const expectFacingFirstPortal = (world: AreaWorld, seed: number) => {
+  const merged = mergeAreas(world);
+  expect(merged.layout.startRoomId).toBe(ENTRANCE_ID);
+  const hub = merged.layout.rooms.find((room) => room.id === ENTRANCE_ID);
+  const first = merged.built.portals.find(
+    ({ portal: { from } }) => from === ENTRANCE_ID
+  );
+  const { start, facing } = merged.built;
+  expect(hub !== undefined && containsPoint(roomBounds(hub), start)).toBe(true);
+  const frame = first?.frame;
+  expect(frame).toBeDefined();
+  const [x = 0, , z = 0] = frame?.center ?? [];
+  expect(frame?.axis === "x" ? facing.x : facing.z, `seed ${seed}`).toBe(
+    frame?.axis === "x" ? x : z
+  );
+  expect(
+    (facing.x - start.x) * (x - start.x) + (facing.z - start.z) * (z - start.z)
+  ).toBeGreaterThan(0);
+};
+
 describe("generateCodeWorld", () => {
   it("starts a one-module graph in an entrance leading to it", () => {
     const world = generateCodeWorld(demoGraph(), 1);
@@ -53,27 +79,8 @@ describe("generateCodeWorld", () => {
   it("spawns inside the entrance, facing its first portal", () => {
     for (let seed = 1; seed <= 10; seed += 1) {
       const world = generateCodeWorld(demoGraph(), seed);
-      const merged = mergeAreas(world);
-      expect(merged.layout.startRoomId).toBe(ENTRANCE_ID);
-      const hub = merged.layout.rooms.find((room) => room.id === ENTRANCE_ID);
-      const portal = merged.built.portals.find(
-        ({ portal: { from } }) => from === ENTRANCE_ID
-      );
-      expect(
-        hub !== undefined && containsPoint(roomBounds(hub), merged.built.start)
-      ).toBe(true);
-      const { start, facing } = merged.built;
-      const frame = portal?.frame;
-      expect(frame).toBeDefined();
-      // The facing point sits on the portal's wall, level with its centre.
-      const [x = 0, , z = 0] = frame?.center ?? [];
-      expect(frame?.axis === "x" ? facing.x : facing.z, `seed ${seed}`).toBe(
-        frame?.axis === "x" ? x : z
-      );
-      expect(
-        (facing.x - start.x) * (x - start.x) +
-          (facing.z - start.z) * (z - start.z)
-      ).toBeGreaterThan(0);
+      expect(world.entry).toBe(ENTRANCE_ID);
+      expectFacingFirstPortal(world, seed);
     }
   });
 
@@ -134,6 +141,8 @@ describe("generateCodeWorld", () => {
         (entrance?.graph.portals ?? []).map((portal) => portal.to).toSorted()
       ).toEqual([...paths, "shared.ts"].toSorted());
       expect(checkAreas(world), `seed ${seed}`).toEqual([]);
+      // The doorway to the second hub does not turn the player from it.
+      expectFacingFirstPortal(world, seed);
     }
   });
 
