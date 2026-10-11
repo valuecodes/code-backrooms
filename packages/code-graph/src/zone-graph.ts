@@ -28,13 +28,14 @@ const zoneEntranceGraph = (
 /**
  * A zone's hub chain, labelled with the package's name, holding a module
  * portal to each of the zone's entry modules (`entryModules` among its own
- * modules), each labelled with its path inside the package.
+ * modules, scored from the package's directory), each labelled with its
+ * path inside the package.
  */
 const zoneGraph = (graph: CodeGraph, zone: Zone): WorldGraph =>
   hubChainGraph(
     zone.id,
     zone.name,
-    entryModules(graph, zone.modules).map((module) => ({
+    entryModules(graph, zone.modules, zone.pkg?.dir ?? "").map((module) => ({
       id: module.id,
       label:
         zone.pkg === null
