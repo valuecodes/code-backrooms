@@ -27,12 +27,13 @@ const ZONE_PREFIX = `${ZONE_ID}:`;
 
 /**
  * The zone of a package: `//zone:@repo/x`; of the modules no package owns:
- * `//zone`. A `#` in the package id is escaped, as hub chains end in `#<n>`.
+ * `//zone`. A `#` in the package id is escaped, as hub chains end in `#<n>`,
+ * and so is `%` first, so that no two ids escape alike.
  */
 const zoneId = (packageId: string | null): string =>
   packageId === null
     ? ZONE_ID
-    : `${ZONE_PREFIX}${packageId.replaceAll("#", "%23")}`;
+    : `${ZONE_PREFIX}${packageId.replaceAll("%", "%25").replaceAll("#", "%23")}`;
 
 /** Whether a room is one of a zone's hubs: `//zone:@repo/x`, `//zone:@repo/x#2`. */
 const isZoneHub = (roomId: string): boolean => {

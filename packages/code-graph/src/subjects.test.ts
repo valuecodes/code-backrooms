@@ -123,7 +123,8 @@ describe("roomSubject", () => {
     expect(roomSubject(zoned, ENTRANCE_ID)).toMatchObject({
       kind: "entrance",
       name: "repository",
-      modules: [],
+      // A4 leads the entrance to zone hubs; until then it leads to modules.
+      modules: [{ path: "app/main.ts" }],
       zones: [{ name: "app" }, { name: "lib" }],
     });
   });
