@@ -1,8 +1,12 @@
 // Link pass: follows each module's imports into the other modules of the
 // graph, so a call through an import (`via`, left unresolved by the per-file
-// pass) can name the function it reaches. Relative specifiers only: a
-// package import stays unresolved and keeps `via`, which is how the HUD
-// tells a library call from one the analysis could not follow.
+// pass) can name the function it reaches. Specifiers resolve as relative
+// paths, as tsconfig `paths` aliases of the importer's package (`~/hud`) and
+// as workspace packages by name through their `exports` (`@repo/x/sub`);
+// see module-resolver.ts for what is out of scope. An import of anything
+// else (npm packages, `node:` builtins) stays unresolved and keeps `via`,
+// which is how the HUD tells a library call from one the analysis could not
+// follow.
 
 import type {
   CallEdge,
@@ -10,8 +14,10 @@ import type {
   GraphEdge,
   ImportRecord,
   ModuleNode,
+  PackageNode,
 } from "@repo/code-graph";
-import { resolveSpecifier } from "@repo/code-graph/ids";
+import { createResolver } from "@repo/code-graph/module-resolver";
+import type { Resolver } from "@repo/code-graph/module-resolver";
 
 import type { DiscoveredFunction } from "./scope";
 import type { TopLevel } from "./top-level";
@@ -52,7 +58,7 @@ const bindingKey = (binding: Binding): string =>
     : binding.moduleId;
 
 type Linker = {
-  readonly ids: ReadonlySet<string>;
+  readonly resolve: Resolver;
   readonly modules: ReadonlyMap<string, ModuleNode>;
   readonly functions: ReadonlyMap<string, readonly DiscoveredFunction[]>;
   readonly topLevel: ReadonlyMap<string, TopLevel>;
@@ -83,7 +89,7 @@ const starExports = (
     if (record.exportedName !== "*" || record.specifier === null) {
       continue;
     }
-    const target = resolveSpecifier(module.id, record.specifier, linker.ids);
+    const target = linker.resolve(module.id, record.specifier);
     const found = target === null ? null : exportOf(linker, target, name, seen);
     for (const binding of listOf(found)) {
       hits.set(bindingKey(binding), binding);
@@ -125,7 +131,7 @@ const exportOf = (
       ? { kind: "local", moduleId, localName: record.localName }
       : importBinding(linker, imported, seen);
   }
-  const target = resolveSpecifier(moduleId, record.specifier, linker.ids);
+  const target = linker.resolve(moduleId, record.specifier);
   if (target === null || record.importedName === null) {
     return null;
   }
@@ -277,11 +283,18 @@ const withEdges = (
 };
 
 /**
- * Resolves every import's module and every call through an import. Pure and
- * deterministic: the result depends only on the units, in their order.
+ * Resolves every import's module and every call through an import, bare
+ * specifiers through `packages`. Pure and deterministic: the result depends
+ * only on the units, in their order, and the packages.
  */
-const linkModules = <T extends Linkable>(units: readonly T[]): readonly T[] => {
-  const ids = new Set(units.map((unit) => unit.module.id));
+const linkModules = <T extends Linkable>(
+  units: readonly T[],
+  packages: readonly PackageNode[] = []
+): readonly T[] => {
+  const resolve = createResolver(
+    new Set(units.map((unit) => unit.module.id)),
+    packages
+  );
   const modules = new Map(
     units.map((unit): [string, ModuleNode] => [
       unit.module.id,
@@ -289,13 +302,13 @@ const linkModules = <T extends Linkable>(units: readonly T[]): readonly T[] => {
         ...unit.module,
         imports: unit.module.imports.map((record) => ({
           ...record,
-          moduleId: resolveSpecifier(unit.module.id, record.specifier, ids),
+          moduleId: resolve(unit.module.id, record.specifier),
         })),
       },
     ])
   );
   const linker: Linker = {
-    ids,
+    resolve,
     modules,
     functions: new Map(units.map((unit) => [unit.module.id, unit.functions])),
     topLevel: new Map(units.map((unit) => [unit.module.id, unit.topLevel])),

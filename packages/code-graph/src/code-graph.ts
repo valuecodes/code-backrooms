@@ -236,7 +236,7 @@ type ClassNode = {
 
 /**
  * resolved: one function in the graph, possibly in another module (linked
- * through relative imports); ambiguous: the name may refer to several
+ * through imports); ambiguous: the name may refer to several
  * functions in the graph (`candidateIds`), so no one is followed; dynamic:
  * the callee is computed at run time (a parameter or callback, `obj[key]()`,
  * `f()()`); external: a known runtime global such as `console.log`;
@@ -306,6 +306,39 @@ type ContainmentEdge = {
 
 type GraphEdge = CallEdge | ContainmentEdge;
 
+/**
+ * One subpath of a package's `exports`: `"./cfg"` → `["packages/x/src/cfg.ts"]`.
+ * Targets are repo-relative and in priority order (the first one that is a
+ * module of the graph wins); a `*` in the subpath is a pattern whose match
+ * replaces the `*` of each target. No targets: the subpath is blocked
+ * (`"./internal": null`).
+ */
+type ExportEntry = {
+  readonly subpath: string;
+  readonly targets: readonly string[];
+};
+
+/** One tsconfig `paths` alias: `"~/*"` → `["apps/web/src/*"]`, repo-relative. */
+type PathAlias = {
+  readonly pattern: string;
+  readonly targets: readonly string[];
+};
+
+/** A `package.json` with a name, among the files the graph was built from. */
+type PackageNode = {
+  /** The name, suffixed `~2`, `~3` when several manifests share it. */
+  readonly id: string;
+  readonly name: string;
+  /** The normalised directory of the manifest, `""` for the repository root. */
+  readonly dir: string;
+  /** Flattened `exports`, or `.` and `./*` entries standing for `main` and plain paths. */
+  readonly exports: readonly ExportEntry[];
+  /** From the `tsconfig.json` beside the manifest. */
+  readonly paths: readonly PathAlias[];
+  /** Ids of the graph's packages it depends on, in first-seen order. */
+  readonly deps: readonly string[];
+};
+
 type CodeGraph = {
   readonly modules: readonly ModuleNode[];
   readonly functions: readonly FunctionNode[];
@@ -313,6 +346,12 @@ type CodeGraph = {
   readonly classes: readonly ClassNode[];
   readonly callSites: readonly CallSite[];
   readonly edges: readonly GraphEdge[];
+  /**
+   * The packages of the repository, by `dir`; present only when manifests
+   * were among the files. A module belongs to the package with the nearest
+   * enclosing `dir`.
+   */
+  readonly packages?: readonly PackageNode[];
 };
 
 export type {
@@ -328,6 +367,7 @@ export type {
   CodeGraph,
   ContainmentEdge,
   ContinueNode,
+  ExportEntry,
   ExportRecord,
   FlowNode,
   FlowStep,
@@ -340,6 +380,8 @@ export type {
   LoopKind,
   LoopNode,
   ModuleNode,
+  PackageNode,
+  PathAlias,
   ReturnNode,
   SequenceNode,
   SourceSpan,

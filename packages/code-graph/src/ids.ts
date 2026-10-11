@@ -334,6 +334,7 @@ const uniqueNames = (): ((qualifiedName: string) => string) => {
 export {
   callPortalId,
   callSiteId,
+  candidatePaths,
   classId,
   ENTRANCE_ID,
   flowNodeId,

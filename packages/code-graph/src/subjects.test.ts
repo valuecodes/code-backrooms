@@ -279,6 +279,8 @@ describe("packageOf", () => {
           record("format", "node:util", null),
           record("gone", "./missing", null),
           record("two", "./b", "b.ts"),
+          record("lib", "@repo/lib", "packages/lib/src/lib.ts"),
+          record("other", "@repo/other", null),
         ],
         exports: [],
       },
@@ -308,5 +310,13 @@ describe("packageOf", () => {
     expect(packageOf(graph, site("a.ts::main", "gone"))).toBeNull();
     expect(packageOf(graph, site("a.ts::main", null))).toBeNull();
     expect(packageOf(graph, site("other.ts::main", "format"))).toBeNull();
+  });
+
+  it("is null for a workspace package the graph links to", () => {
+    expect(packageOf(graph, site("a.ts::main", "lib"))).toBeNull();
+  });
+
+  it("names a bare package the graph does not link", () => {
+    expect(packageOf(graph, site("a.ts::main", "other"))).toBe("@repo/other");
   });
 });
