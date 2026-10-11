@@ -349,6 +349,32 @@ describe("checkAreas on zones", () => {
     ]);
   });
 
+  it("counts only placed portals of the entry, also into a pending hub", () => {
+    const { world } = createAreaStore({
+      seed: 1,
+      entry: "one",
+      specs: specsOf(1),
+      zones,
+    }).snapshot();
+    expect(checkAreas(world)).toEqual([]);
+    // The graph still has the portal; the layout left it unplaced.
+    const unplaced: AreaWorld = {
+      ...world,
+      areas: world.areas.map((area) => ({
+        ...area,
+        built: {
+          ...area.built,
+          portals: area.built.portals.filter(
+            ({ portal }) => portal.id !== "module:hub>hub3"
+          ),
+        },
+      })),
+    };
+    expect(checkAreas(unplaced)).toContain(
+      "zone b hub three is not reached from the entry"
+    );
+  });
+
   it("names an area its hub cannot reach once the zone is built, not before", () => {
     const hubThree: readonly ZoneSpec[] = [
       { id: "a", name: "Zone A", hub: "two" },
