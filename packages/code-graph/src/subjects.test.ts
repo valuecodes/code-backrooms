@@ -120,12 +120,15 @@ describe("roomSubject", () => {
     expect(roomSubject(zoned, "//zone:lib")).toMatchObject(lib);
     expect(roomSubject(zoned, "//zone:lib#2")).toMatchObject(lib);
     expect(roomSubject(zoned, "//zone:nope")).toBeNull();
-    expect(roomSubject(zoned, ENTRANCE_ID)).toMatchObject({
+    expect(roomSubject(zoned, ENTRANCE_ID)).toEqual({
       kind: "entrance",
       name: "repository",
-      // A4 leads the entrance to zone hubs; until then it leads to modules.
-      modules: [{ path: "app/main.ts" }],
-      zones: [{ name: "app" }, { name: "lib" }],
+      // A zoned entrance leads to zone hubs, not to modules.
+      modules: [],
+      zones: [
+        expect.objectContaining({ name: "app" }),
+        expect.objectContaining({ name: "lib" }),
+      ],
     });
   });
 });

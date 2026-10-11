@@ -15,6 +15,7 @@
     "./packages": "./src/packages.ts",
     "./subjects": "./src/subjects.ts",
     "./world-graph": "./src/world-graph.ts",
+    "./zone-labels": "./src/zone-labels.ts",
     "./zones": "./src/zones.ts"
   },
   "scripts": {

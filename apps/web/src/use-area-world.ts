@@ -1,5 +1,6 @@
 import type { CodeGraph } from "@repo/code-graph";
 import { codeAreaStore } from "@repo/code-graph/module-areas";
+import { isZoneHub } from "@repo/code-graph/zones";
 import type { AreaWorld, GeneratedWorld } from "@repo/types";
 import { generateWorld } from "@repo/world-generator";
 import { createAreaStore } from "@repo/world-generator/area-store";
@@ -44,7 +45,16 @@ type AreaView = {
   readonly lastMs: number | null;
   /** Connections and portals not laid out and areas that failed, one line each. */
   readonly warnings: readonly string[];
+  /** The message of every area that could not be generated, by area id. */
+  readonly errors: ReadonlyMap<string, string>;
   readonly error: string | null;
+};
+
+/** A zone's name and its module areas generated so far and in all. */
+type ZoneProgress = {
+  readonly name: string;
+  readonly built: number;
+  readonly total: number;
 };
 
 /** The one area of a random or preset world. */
@@ -138,6 +148,53 @@ const warningsOf = (
   ),
 ];
 
+/**
+ * The modules generated so far: every area of a code world but its
+ * entrance and its zones' hubs; a random or preset world's one area.
+ */
+const builtModules = (world: AreaWorld, code: boolean): number =>
+  code
+    ? world.areas.filter(
+        (area) => area.id !== world.entry && !isZoneHub(area.id)
+      ).length
+    : world.areas.length;
+
+/**
+ * The zone the room is in (any of its rooms or corridors, or its hub's)
+ * with its module areas generated so far and in all; null outside every
+ * zone, in the entrance, and before the player is in a room.
+ */
+const zoneProgress = (
+  world: AreaWorld,
+  roomId: string | null
+): ZoneProgress | null => {
+  if (roomId === null) {
+    return null;
+  }
+  const areaId =
+    world.areaOf.get(roomId) ??
+    world.areas.find((area) =>
+      area.layout.rooms.some((room) => room.id === roomId)
+    )?.id;
+  const zone = world.zones.find((candidate) =>
+    candidate.areas.some((id) => id === areaId)
+  );
+  if (zone === undefined) {
+    return null;
+  }
+  // Its hub comes first and is not a module.
+  const modules = zone.areas.slice(1);
+  const built = new Set(world.areas.map((area) => area.id));
+  return {
+    name: zone.name,
+    built: modules.filter((id) => built.has(id)).length,
+    total: modules.length,
+  };
+};
+
+/** No area failed: one map for every render without a store. */
+const NO_ERRORS: ReadonlyMap<string, string> = new Map();
+
 /** Subscribes to a world that never changes: there is nothing to report. */
 const NO_UPDATES = () => () => {
   // Nothing was subscribed, so nothing to undo.
@@ -189,11 +246,8 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
     [state]
   );
   const total = options.codeGraph?.modules.length ?? 1;
-  // A code world's entrance is an area but not a module.
   const built =
-    state === null
-      ? 0
-      : state.world.areas.length - (options.codeGraph === null ? 0 : 1);
+    state === null ? 0 : builtModules(state.world, options.codeGraph !== null);
   return {
     world,
     current,
@@ -203,9 +257,17 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
     modules: { built, total },
     lastMs: options.eager ? null : (state?.lastMs ?? null),
     warnings,
+    errors: state?.errors ?? NO_ERRORS,
     error: source.error,
   };
 };
 
-export { storeFor, targetAreaOf, useAreaWorld, warningsOf };
-export type { WorldOptions };
+export {
+  builtModules,
+  storeFor,
+  targetAreaOf,
+  useAreaWorld,
+  warningsOf,
+  zoneProgress,
+};
+export type { WorldOptions, ZoneProgress };

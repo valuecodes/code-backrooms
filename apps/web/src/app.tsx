@@ -12,7 +12,7 @@ import { initialSeed, nextSeed, parseWorldParams, withSeed } from "~/params";
 import { createPoseFeed } from "~/pose-feed";
 import { SourcePanel } from "~/source-panel";
 import { sourceView } from "~/source-view";
-import { useAreaWorld } from "~/use-area-world";
+import { useAreaWorld, zoneProgress } from "~/use-area-world";
 import type { WorldOptions } from "~/use-area-world";
 import { useNavigation } from "~/use-navigation";
 import {
@@ -201,6 +201,11 @@ const App = () => {
         seed={seed}
         rooms={generated.rooms}
         modules={generated.modules}
+        zone={
+          generated.world === null
+            ? null
+            : zoneProgress(generated.world, roomId)
+        }
         lastMs={generated.lastMs}
         preset={initial.preset}
         code={initial.code}

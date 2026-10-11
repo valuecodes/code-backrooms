@@ -1,9 +1,13 @@
+import type { ZoneProgress } from "~/use-area-world";
+
 type HudProps = {
   readonly locked: boolean;
   readonly seed: number;
   readonly rooms: number;
   /** Modules of a code world generated so far and in all, each its own area. */
   readonly modules: { readonly built: number; readonly total: number };
+  /** The zone the player is in, with its modules generated so far and in all. */
+  readonly zone: ZoneProgress | null;
   /** Milliseconds the last module generated on the way took, or null. */
   readonly lastMs: number | null;
   readonly preset: string | null;
@@ -49,22 +53,29 @@ const modulesOf = ({
     : `${count} modules · last ${Math.round(lastMs)} ms`;
 };
 
+/** `seed 7 · code self · 3/105 modules · web 2/40` for a code world. */
 const whereOf = ({
   seed,
   rooms,
   modules,
+  zone,
   lastMs,
   preset,
   code,
 }: Pick<
   HudProps,
-  "seed" | "rooms" | "modules" | "lastMs" | "preset" | "code"
+  "seed" | "rooms" | "modules" | "zone" | "lastMs" | "preset" | "code"
 >): string => {
   if (code !== null) {
     const count = modulesOf({ modules, lastMs });
-    return count === null
-      ? `seed ${seed} · code ${code}`
-      : `seed ${seed} · code ${code} · ${count}`;
+    const parts = [`seed ${seed}`, `code ${code}`];
+    if (count !== null) {
+      parts.push(count);
+    }
+    if (zone !== null) {
+      parts.push(`${zone.name} ${zone.built}/${zone.total}`);
+    }
+    return parts.join(" · ");
   }
   return `seed ${seed} · ${preset ?? `${rooms} rooms`}`;
 };

@@ -8,6 +8,7 @@ import {
   roomSubject,
 } from "@repo/code-graph/subjects";
 import type { RoomSubject } from "@repo/code-graph/subjects";
+import { awayZone, zonedPath } from "@repo/code-graph/zone-labels";
 import { buildCodeGraph, hashSource } from "@repo/parser";
 import type { AreaWorld, GeneratedWorld } from "@repo/types";
 import { mergeAreas } from "@repo/world-generator/areas";
@@ -70,13 +71,14 @@ const subjectOf = (
   codeGraph === null ? null : roomSubject(codeGraph, roomId);
 
 /**
- * `Class.method()` for a function or one of its rooms, the path for a hub,
- * `class Svc` for a lobby, the repository's name for the entrance, the
- * package's for a zone's hub, the id otherwise.
+ * `Class.method()` for a function or one of its rooms, the path for a hub
+ * (inside its zone when there are several: `web · src/main.ts`), `class
+ * Svc` for a lobby, the repository's name for the entrance, the package's
+ * for a zone's hub, the id otherwise.
  */
 const labelOf = (codeGraph: CodeGraph | null, roomId: string): string => {
   const subject = subjectOf(codeGraph, roomId);
-  if (subject === null) {
+  if (codeGraph === null || subject === null) {
     return roomId;
   }
   if (subject.kind === "entrance") {
@@ -89,7 +91,7 @@ const labelOf = (codeGraph: CodeGraph | null, roomId: string): string => {
     return `class ${subject.node.name}`;
   }
   return subject.kind === "module"
-    ? subject.module.path
+    ? zonedPath(codeGraph, subject.module)
     : `${subject.fn.qualifiedName}()`;
 };
 
@@ -98,11 +100,12 @@ const labelOf = (codeGraph: CodeGraph | null, roomId: string): string => {
  * package's in a zone's hub, the file for a hub, `file · class Svc` for a
  * lobby, `file · Class.method()` for a function, `file · Class.method() ·
  * await fetch(…)` for a room of its flow, and the raw id for anything else
- * (corridors, preset rooms).
+ * (corridors, preset rooms). With several zones the file is named inside
+ * its zone: `web · src/main.ts · main()`.
  */
 const describeRoom = (codeGraph: CodeGraph | null, roomId: string): string => {
   const subject = subjectOf(codeGraph, roomId);
-  if (subject === null) {
+  if (codeGraph === null || subject === null) {
     return roomId;
   }
   if (subject.kind === "entrance") {
@@ -111,13 +114,14 @@ const describeRoom = (codeGraph: CodeGraph | null, roomId: string): string => {
   if (subject.kind === "zone") {
     return subject.zone.name;
   }
+  const file = zonedPath(codeGraph, subject.module);
   if (subject.kind === "module") {
-    return subject.module.path;
+    return file;
   }
   if (subject.kind === "class") {
-    return `${subject.module.path} · class ${subject.node.name}`;
+    return `${file} · class ${subject.node.name}`;
   }
-  const head = `${subject.module.path} · ${subject.fn.qualifiedName}()`;
+  const head = `${file} · ${subject.fn.qualifiedName}()`;
   return subject.kind === "flow" ? `${head} · ${subject.text}` : head;
 };
 
@@ -172,14 +176,21 @@ const promptOf = (
   }
   const subject =
     codeGraph === null ? null : portalSubject(codeGraph, target.portalId);
-  if (subject === null) {
+  if (codeGraph === null || subject === null) {
     return target.portalId;
   }
+  // Into another zone, the zone's name goes first, as on the portal's wall.
   if (subject.kind === "call") {
-    return `→ ${subject.callee.qualifiedName}()`;
+    const { caller, callee } = subject;
+    const zone = awayZone(codeGraph, caller.moduleId, callee.moduleId);
+    return zone === null
+      ? `→ ${callee.qualifiedName}()`
+      : `→ ${zone.name} · ${callee.qualifiedName}()`;
   }
   if (subject.kind === "module") {
-    return `→ ${subject.module.path}`;
+    const { from, module } = subject;
+    const away = from === null ? null : awayZone(codeGraph, from.id, module.id);
+    return `→ ${away === null ? module.path : zonedPath(codeGraph, module)}`;
   }
   if (subject.kind === "zone") {
     return `→ ${subject.zone.name}`;
@@ -187,9 +198,9 @@ const promptOf = (
   // A marker leads nowhere: it names the calls the world cannot follow.
   if (subject.kind === "marker") {
     const nameOf = (id: string): string =>
-      codeGraph?.functions.find((fn) => fn.id === id)?.qualifiedName ?? id;
+      codeGraph.functions.find((fn) => fn.id === id)?.qualifiedName ?? id;
     return `closed · ${markerText(subject.sites, nameOf, (site) =>
-      codeGraph === null ? null : packageOf(codeGraph, site)
+      packageOf(codeGraph, site)
     )}`;
   }
   // A jump reads like a door within the function: `→ again?`, `→ end for`.

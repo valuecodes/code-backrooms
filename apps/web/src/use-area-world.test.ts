@@ -1,11 +1,18 @@
 import { ENTRANCE_ID, modulePortalId } from "@repo/code-graph/ids";
+import { buildCodeGraph } from "@repo/parser";
 import type { BuiltArea } from "@repo/types";
 import { checkAreas } from "@repo/world-generator/area-checks";
 import { mergeAreas } from "@repo/world-generator/areas";
 import { createNavigator } from "@repo/world-generator/navigation";
 import { describe, expect, it } from "vitest";
 
-import { storeFor, targetAreaOf, warningsOf } from "./use-area-world";
+import {
+  builtModules,
+  storeFor,
+  targetAreaOf,
+  warningsOf,
+  zoneProgress,
+} from "./use-area-world";
 import type { WorldOptions } from "./use-area-world";
 import { areasFromCode, codeGraphOf } from "./world-from-code";
 
@@ -157,5 +164,74 @@ describe("a lazy walk through the repo example", () => {
     expect(entered.teleport).not.toBeNull();
     // The entrance did not move: the player's start is where it was.
     expect(after.built.start).toBe(before.built.start);
+  });
+});
+
+/** An app of two modules importing a library of one, as workspace packages. */
+const workspace = () =>
+  buildCodeGraph([
+    {
+      path: "apps/web/package.json",
+      source: JSON.stringify({
+        name: "web",
+        dependencies: { "@repo/lib": "workspace:*" },
+      }),
+    },
+    {
+      path: "apps/web/src/main.ts",
+      source: 'import "./util";\nimport { run } from "@repo/lib";\nrun();',
+    },
+    { path: "apps/web/src/util.ts", source: "export const util = 1;" },
+    {
+      path: "packages/lib/package.json",
+      source: JSON.stringify({ name: "@repo/lib", main: "src/lib.ts" }),
+    },
+    { path: "packages/lib/src/lib.ts", source: "export function run() {}" },
+  ]);
+
+describe("modules and zones of a workspace", () => {
+  const store = () => storeOf(1, { codeGraph: workspace() });
+
+  it("counts modules only, not the entrance or the zones' hubs", () => {
+    const zoned = store();
+    expect(builtModules(zoned.snapshot().world, true)).toBe(0);
+    zoned.ensure("//zone:web");
+    expect(builtModules(zoned.snapshot().world, true)).toBe(0);
+    zoned.ensure("apps/web/src/main.ts");
+    expect(builtModules(zoned.snapshot().world, true)).toBe(1);
+    zoned.ensureAll();
+    expect(builtModules(zoned.snapshot().world, true)).toBe(3);
+  });
+
+  it("counts a random world's one area", () => {
+    const random = storeOf(1, { codeGraph: null });
+    expect(builtModules(random.snapshot().world, false)).toBe(1);
+  });
+
+  it("names the zone the player is in with its modules so far", () => {
+    const zoned = store();
+    zoned.ensure("//zone:web");
+    zoned.ensure("apps/web/src/main.ts");
+    const { world } = zoned.snapshot();
+    const web = { name: "web", built: 1, total: 2 };
+    expect(zoneProgress(world, null)).toBeNull();
+    expect(zoneProgress(world, ENTRANCE_ID)).toBeNull();
+    expect(zoneProgress(world, "//zone:web")).toEqual(web);
+    expect(zoneProgress(world, "apps/web/src/main.ts")).toEqual(web);
+    // A corridor is no unit: a room missing from `areaOf` is found by layout.
+    expect(
+      zoneProgress({ ...world, areaOf: new Map() }, "apps/web/src/main.ts")
+    ).toEqual(web);
+    expect(zoneProgress(world, "packages/lib/src/lib.ts")).toEqual({
+      name: "@repo/lib",
+      built: 0,
+      total: 1,
+    });
+  });
+
+  it("finds no zone in a world of one package", () => {
+    const { world } = storeOf(1).snapshot();
+    expect(world.zones).toEqual([]);
+    expect(zoneProgress(world, "src/index.ts")).toBeNull();
   });
 });
