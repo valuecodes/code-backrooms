@@ -16,6 +16,7 @@ import { discover } from "./functions";
 import type { Discovered } from "./functions";
 import { exportedLocalNames, exportsOf, importsOf } from "./imports";
 import { linkModules } from "./link";
+import { packagesOf, splitFiles } from "./manifests";
 import type { DiscoveredFunction } from "./scope";
 import { lineCountOf } from "./span";
 import { topLevelOf } from "./top-level";
@@ -171,10 +172,14 @@ const byPath = (files: readonly SourceFile[]): readonly SourceFile[] =>
 
 /**
  * Files sorted by path, so neither ids nor order depend on how they were
- * found; calls through relative imports are linked across them.
+ * found; calls through imports are linked across them. Manifests
+ * (`package.json`, `tsconfig*.json`) never reach the parser: they describe
+ * the packages that bare and aliased imports resolve through, and the graph
+ * carries `packages` only when they name at least one.
  */
 const buildCodeGraph = (files: readonly SourceFile[]): CodeGraph => {
-  const analysed = byPath(files).map(analyseModule);
+  const { manifests, sources } = splitFiles(byPath(files));
+  const analysed = sources.map(analyseModule);
   const seen = new Set<string>();
   for (const { module } of analysed) {
     if (seen.has(module.id)) {
@@ -182,13 +187,15 @@ const buildCodeGraph = (files: readonly SourceFile[]): CodeGraph => {
     }
     seen.add(module.id);
   }
-  const parsed = linkModules(analysed).map(finishModule);
+  const packages = packagesOf(manifests);
+  const parsed = linkModules(analysed, packages).map(finishModule);
   return {
     modules: parsed.map((item) => item.module),
     functions: parsed.flatMap((item) => item.functions),
     classes: parsed.flatMap((item) => item.classes),
     callSites: parsed.flatMap((item) => item.callSites),
     edges: parsed.flatMap((item) => item.edges),
+    ...(packages.length === 0 ? {} : { packages }),
   };
 };
 
