@@ -160,7 +160,10 @@ const ZoneNames = ({ model, viewWidth }: ZoneNamesProps) => {
     const size = zoneLabelSize(
       viewWidth,
       base,
-      zone.rect.maxX - zone.rect.minX,
+      {
+        width: zone.rect.maxX - zone.rect.minX,
+        height: zone.rect.maxZ - zone.rect.minZ,
+      },
       text
     );
     return (

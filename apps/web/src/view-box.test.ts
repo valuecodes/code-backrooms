@@ -159,24 +159,42 @@ describe("detailLevel", () => {
 });
 
 describe("zoneLabelSize", () => {
+  /** The `web` zone's band on the self map: wide and deep. */
+  const tall = { width: 500, height: 433 };
+
   it("never shrinks below the base size", () => {
-    expect(zoneLabelSize(100, 8, 500, "web 25/25")).toBe(8);
-    expect(zoneLabelSize(SELF.width, 8, 20, "a very long zone name")).toBe(8);
+    expect(zoneLabelSize(100, 8, tall, "web 25/25")).toBe(8);
+    expect(
+      zoneLabelSize(
+        SELF.width,
+        8,
+        { width: 20, height: 20 },
+        "a very long zone name"
+      )
+    ).toBe(8);
   });
 
   it("grows with the view while the name fits its band", () => {
-    expect(zoneLabelSize(SELF.width, 8, 500, "web 25/25")).toBeCloseTo(
+    expect(zoneLabelSize(SELF.width, 8, tall, "web 25/25")).toBeCloseTo(
       SELF.width / 90
     );
-    expect(zoneLabelSize(1800, 8, 500, "web 25/25")).toBe(20);
+    expect(zoneLabelSize(1800, 8, tall, "web 25/25")).toBe(20);
   });
 
   it("keeps a long name inside its zone's strip zoomed out", () => {
     const text = "@repo/world-generator 18/18";
-    const band = 515.5;
+    const band = { width: 515.5, height: 700 };
     const size = zoneLabelSize(SELF.width, 8, band, text);
     expect(size).toBeLessThan(SELF.width / 90);
     // Monospace advance ≈ 0.6 em, plus the 0.3 em inset.
-    expect(size * (text.length * 0.6 + 0.3)).toBeLessThanOrEqual(band);
+    expect(size * (text.length * 0.6 + 0.3)).toBeLessThanOrEqual(band.width);
+  });
+
+  it("keeps a name inside a shallow band zoomed out", () => {
+    const band = { width: 523, height: 30 };
+    const size = zoneLabelSize(SELF.width, 8, band, "@repo/logger 8/8");
+    expect(size).toBeLessThan(SELF.width / 90);
+    // Baseline one size down, descenders a quarter more.
+    expect(size * 1.25).toBeLessThanOrEqual(band.height);
   });
 });

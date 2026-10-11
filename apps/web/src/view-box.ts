@@ -35,6 +35,8 @@ const ZONE_NAMES_ACROSS = 90;
 /** Monospace advance as a fraction of the font size, plus the insets. */
 const CHAR_WIDTH = 0.62;
 const NAME_INSETS = 0.6;
+/** A name's baseline sits one size down; descenders take a quarter more. */
+const LINE_HEIGHT = 1.25;
 /** How much one pixel of wheel travel zooms, and the most one event may. */
 const ZOOM_PER_PIXEL = 0.0015;
 const MAX_WHEEL_PIXELS = 300;
@@ -144,17 +146,21 @@ const detailLevel = (width: number): DetailLevel =>
 
 /**
  * A zone name's height in metres: a fixed share of the view, so names stay
- * readable when zoomed out, but never wider than the zone's band and never
- * below `base`.
+ * readable when zoomed out, but never wider or taller than the zone's band
+ * and never below `base`.
  */
 const zoneLabelSize = (
   viewWidth: number,
   base: number,
-  bandWidth: number,
+  band: { readonly width: number; readonly height: number },
   text: string
 ): number => {
-  const fits = bandWidth / (text.length * CHAR_WIDTH + NAME_INSETS);
-  return Math.max(base, Math.min(viewWidth / ZONE_NAMES_ACROSS, fits));
+  const fitsAcross = band.width / (text.length * CHAR_WIDTH + NAME_INSETS);
+  const fitsDown = band.height / LINE_HEIGHT;
+  return Math.max(
+    base,
+    Math.min(viewWidth / ZONE_NAMES_ACROSS, fitsAcross, fitsDown)
+  );
 };
 
 export {
