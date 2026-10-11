@@ -136,6 +136,32 @@ describe("packTree", () => {
     expect(new Set(distances).size).toBe(4);
   });
 
+  it("fans a parent's children out ahead of it, each turned its own way", () => {
+    const parents = new Map([
+      ["a", "entry"],
+      ["b", "a"],
+      ["c", "a"],
+      ["d", "a"],
+    ]);
+    const placed = placedOf(
+      ["entry", "a", "b", "c", "d"].map((id) => ({ id, rect: square(20) })),
+      parents
+    );
+    const [entry, a, ...children] = placed.map(({ rect }) => centreOf(rect));
+    const out = {
+      x: (a?.x ?? 0) - (entry?.x ?? 0),
+      z: (a?.z ?? 0) - (entry?.z ?? 0),
+    };
+    const turns = children.map((child) => {
+      const dx = child.x - (a?.x ?? 0);
+      const dz = child.z - (a?.z ?? 0);
+      // Ahead of the parent, never back towards the entry.
+      expect(dx * out.x + dz * out.z).toBeGreaterThanOrEqual(0);
+      return Math.atan2(dz, dx);
+    });
+    expect(new Set(turns).size).toBe(3);
+  });
+
   it("anchors on the nearest placed ancestor, else on the entry", () => {
     const parents = new Map([
       ["a", "entry"],
