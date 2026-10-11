@@ -23,10 +23,9 @@ const awayZone = (
   fromModuleId: string,
   toModuleId: string
 ): Zone | null => {
+  const home = zoneOfModule(graph, fromModuleId);
   const zone = zoneOfModule(graph, toModuleId);
-  return zone === null || zone === zoneOfModule(graph, fromModuleId)
-    ? null
-    : zone;
+  return home === null || zone === null || zone === home ? null : zone;
 };
 
 /** `@repo/x · src/a.ts`: the zone's name, then the path inside its package. */
