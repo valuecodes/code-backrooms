@@ -140,6 +140,13 @@ not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   the player collides with, stands in and steps through only the area
   they are in, and the map draws that area. Only the navigator still
   sees every area as one world, to land portals across them.
+- The world map. Tab while walking draws the whole world over the
+  scene, north up and scaled to fit: each package's zone as a named band
+  with its modules generated so far, every generated area with its rooms,
+  every area not generated yet as a dashed ghost on a shelf above its zone
+  (failed ones red, the error on hover), the module and call links between
+  areas, and the player's marker. M keeps the local map; clicks on the
+  world map do not lock the mouse.
 
 ---
 
@@ -172,8 +179,12 @@ src/
                       breadcrumb and the prompt for the door or portal ahead
   source-panel.tsx    the E overlay: the current room's code, its own lines marked
   source-view.ts      room id -> the lines the source panel shows, pure
-  overview-map.tsx    the M / Tab overlay: an SVG map of the rooms walked so far
+  overview-map.tsx    the M overlay: an SVG map of the rooms walked so far
   map-model.ts        visited rooms -> the rooms, doors and portals the map draws, pure
+  map-keys.ts         which map M, Tab and Esc open or close, pure
+  world-map-overlay.tsx  the Tab overlay: the whole world, the player's marker on it
+  world-map.tsx       the whole-world SVG: zone bands, areas, ghosts, links, player
+  world-map-model.ts  areas, ghosts, zone bands and links the world map draws, pure
   pose-feed.ts        the player's position from the render loop to the map, no app render
   params.ts           URL query -> { seed, rooms, preset, code }, with clamping
   examples.ts         bundled example programs for ?code=<name>
@@ -204,7 +215,8 @@ a call portal enters that function; Backspace (or the room's return portal)
 goes back to where it was entered, or to the file hub when nothing was; R
 returns to the world start with an empty stack; N takes the next seed; E
 shows or hides the source panel in a code world, and the wheel scrolls it;
-M or Tab shows or hides the overview map.
+M shows or hides the overview map; Tab shows the world map, and Tab or (once
+the mouse is released) Esc closes it.
 
 ### The pipeline
 

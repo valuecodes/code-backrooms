@@ -5,7 +5,12 @@ import { mergeAreas } from "@repo/world-generator/areas";
 import { createNavigator } from "@repo/world-generator/navigation";
 import { describe, expect, it } from "vitest";
 
-import { areasFromCode, describeRoom, promptOf } from "./world-from-code";
+import {
+  areaLabelOf,
+  areasFromCode,
+  describeRoom,
+  promptOf,
+} from "./world-from-code";
 
 const json = (value: unknown): string => JSON.stringify(value);
 
@@ -75,6 +80,14 @@ describe("a workspace's world of zones", () => {
     expect(describeRoom(codeGraph, ENTRANCE_ID)).toBe("mono");
     expect(describeRoom(codeGraph, WEB_ZONE)).toBe("web");
     expect(describeRoom(codeGraph, LIB_ZONE)).toBe("@repo/lib");
+  });
+
+  it("labels areas on the world map by package, a file inside its package", () => {
+    expect(areaLabelOf(codeGraph, ENTRANCE_ID)).toBe("mono");
+    expect(areaLabelOf(codeGraph, WEB_ZONE)).toBe("web");
+    expect(areaLabelOf(codeGraph, LIB_ZONE)).toBe("@repo/lib");
+    expect(areaLabelOf(codeGraph, MAIN)).toBe("src/main.ts");
+    expect(areaLabelOf(codeGraph, LIB)).toBe("src/lib.ts");
   });
 
   it("names a file inside its zone in the HUD", () => {

@@ -29,7 +29,8 @@ const hints: readonly (readonly [string, string])[] = [
   ["Backspace", "return to the caller"],
   ["R", "back to the entrance"],
   ["N", "next seed"],
-  ["M / Tab", "show the map"],
+  ["M", "local map"],
+  ["Tab", "world map"],
   ["Esc", "release the mouse"],
 ];
 

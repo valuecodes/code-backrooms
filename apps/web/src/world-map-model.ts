@@ -323,6 +323,21 @@ const playerMarker = (world: AreaWorld, placement: Placement): MapPlayer => {
   };
 };
 
+/** Label height in metres: a 140th of the map's width, kept readable. */
+const LABEL_MIN = 1.5;
+const LABEL_MAX = 5;
+const LABELS_ACROSS = 140;
+
+/**
+ * How tall an area's label is drawn, in world metres: grows with the map so
+ * it stays legible once the map is scaled to fit, within 1.5 and 5 m.
+ */
+const labelFontSize = (bounds: Rect): number =>
+  Math.min(
+    LABEL_MAX,
+    Math.max(LABEL_MIN, (bounds.maxX - bounds.minX) / LABELS_ACROSS)
+  );
+
 /**
  * The whole world for the map: every generated area with its rooms, every
  * pending or failed one as a ghost above its zone's strip, each zone's
@@ -356,5 +371,5 @@ const worldMapModel = (
   };
 };
 
-export { playerMarker, worldMapModel };
-export type { MapArea, WorldMapModel };
+export { labelFontSize, playerMarker, worldMapModel };
+export type { MapArea, MapPlayer, WorldMapModel };
