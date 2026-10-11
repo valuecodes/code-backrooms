@@ -156,6 +156,12 @@ const App = () => {
   );
   const failed =
     target?.kind === "portal" ? generated.failedArea(target.portalId) : null;
+  // A corridor's zone is found by scanning layouts: once per room or world.
+  const zone = useMemo(
+    () =>
+      generated.world === null ? null : zoneProgress(generated.world, roomId),
+    [generated.world, roomId]
+  );
 
   return (
     <div className="relative h-dvh w-screen overflow-hidden bg-black">
@@ -201,11 +207,7 @@ const App = () => {
         seed={seed}
         rooms={generated.rooms}
         modules={generated.modules}
-        zone={
-          generated.world === null
-            ? null
-            : zoneProgress(generated.world, roomId)
-        }
+        zone={zone}
         lastMs={generated.lastMs}
         preset={initial.preset}
         code={initial.code}
