@@ -24,6 +24,14 @@ headless screenshots. When no world can be generated at all (a parse error),
 the error is shown with `data-state="failed"` instead, so wait for
 `[data-state="done"], [data-state="failed"]`.
 
+`?code=self` turns this repository itself into the world: its workspace
+packages become zones. Its sources and manifests are bundled into a chunk of
+their own (`src/self-files.ts`) that only `?code=self` fetches. Under the dev
+server, editing an included source or manifest file rebuilds that chunk and
+changes the source seed, so the reloaded world differs unless the URL names a
+`?seed`. Not every seed lays out every module yet; an area that cannot be laid
+out is shown as failed.
+
 ## Getting started
 
 From the repo root:

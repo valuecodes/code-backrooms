@@ -2,20 +2,21 @@ import type { BuiltWorld, GeneratedWorld } from "@repo/types";
 import { openingCentre, roomBounds } from "@repo/world-generator/geometry";
 import { describe, expect, it } from "vitest";
 
-import type { ExampleName } from "./examples";
+import { examples } from "./examples";
+import type { BundledName } from "./examples";
 import { EMPTY_VISITS, mapModel, visit, visitedIn } from "./map-model";
 import { areasFromCode, codeGraphOf, worldFromCode } from "./world-from-code";
 
 /** An example's world, or fails the test with the parser's message. */
-const worldOf = (name: ExampleName, seed = 1): GeneratedWorld => {
-  const { codeGraph, error } = codeGraphOf(name);
+const worldOf = (name: BundledName, seed = 1): GeneratedWorld => {
+  const { codeGraph, error } = codeGraphOf(examples[name]);
   if (codeGraph === null) {
     throw new Error(`${name}: ${error}`);
   }
   return worldFromCode(codeGraph, seed);
 };
 
-const builtOf = (name: ExampleName, seed = 1): BuiltWorld =>
+const builtOf = (name: BundledName, seed = 1): BuiltWorld =>
   worldOf(name, seed).built;
 
 const demo = builtOf("demo");
@@ -132,7 +133,7 @@ describe("mapModel", () => {
   });
 
   it("draws one area of a world of several: only its rooms", () => {
-    const { codeGraph } = codeGraphOf("repo");
+    const { codeGraph } = codeGraphOf(examples.repo);
     if (codeGraph === null) {
       throw new Error("repo does not parse");
     }

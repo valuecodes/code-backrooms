@@ -3,16 +3,16 @@ import { cfgFailures, cfgLayoutFailures } from "@repo/code-graph/cfg-checks";
 import { describe, expect, it } from "vitest";
 
 import { examples } from "./examples";
-import type { ExampleName } from "./examples";
+import type { BundledName } from "./examples";
 import { codeGraphOf, worldFromCode } from "./world-from-code";
 
-const exampleNames = Object.keys(examples) as readonly ExampleName[];
+const exampleNames = Object.keys(examples) as readonly BundledName[];
 
 describe("worldFromCode and the control-flow graph", () => {
   it.each(exampleNames)(
     "keeps every function of the %s example on its control-flow graph",
     (name) => {
-      const { codeGraph, error } = codeGraphOf(name);
+      const { codeGraph, error } = codeGraphOf(examples[name]);
       if (codeGraph === null) {
         throw new Error(`${name}: ${error}`);
       }

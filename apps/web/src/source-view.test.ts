@@ -2,14 +2,14 @@ import type { CodeGraph, FlowStep } from "@repo/code-graph";
 import { describe, expect, it } from "vitest";
 
 import { examples } from "./examples";
-import type { ExampleName } from "./examples";
+import type { BundledName } from "./examples";
 import { sourceView } from "./source-view";
 import type { SourceView } from "./source-view";
 import { codeGraphOf } from "./world-from-code";
 
 /** Parses an example or fails the test with the parser's message. */
 const parsed = (name: "demo" | "loops") => {
-  const result = codeGraphOf(name);
+  const result = codeGraphOf(examples[name]);
   if (result.error !== null) {
     throw new Error(`${name}: ${result.error}`);
   }
@@ -49,8 +49,8 @@ describe("sourceView", () => {
   const loops = parsed("loops");
 
   it("keeps every example's source by its module id", () => {
-    for (const name of Object.keys(examples) as readonly ExampleName[]) {
-      const result = codeGraphOf(name);
+    for (const name of Object.keys(examples) as readonly BundledName[]) {
+      const result = codeGraphOf(examples[name]);
       const files = examples[name];
       expect(result.codeGraph?.modules.length).toBe(files.length);
       for (const module of result.codeGraph?.modules ?? []) {

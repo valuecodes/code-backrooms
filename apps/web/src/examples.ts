@@ -319,10 +319,7 @@ const examples = {
   repo,
 } as const satisfies Readonly<Record<string, readonly SourceFile[]>>;
 
-type ExampleName = keyof typeof examples;
+type BundledName = keyof typeof examples;
 
-const isExampleName = (name: string): name is ExampleName =>
-  Object.hasOwn(examples, name);
-
-export { examples, isExampleName };
-export type { ExampleName };
+export { examples };
+export type { BundledName };

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { examples } from "./examples";
 import { ensureNext, storeFor } from "./use-area-world";
 import { generateAll, nextFrame } from "./use-generate-all";
 import type { Schedule } from "./use-generate-all";
@@ -134,7 +135,7 @@ describe("generateAll", () => {
   });
 
   it("drives a code world's store to every area generated", () => {
-    const { codeGraph } = codeGraphOf("repo");
+    const { codeGraph } = codeGraphOf(examples.repo);
     const source = storeFor(1, {
       codeGraph,
       codeError: null,

@@ -1,6 +1,7 @@
 import type { GeneratedWorld } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
+import { examples } from "./examples";
 import { codeGraphOf, promptOf, worldFromCode } from "./world-from-code";
 
 /** The flow rooms of a function, in flow order. */
@@ -13,7 +14,7 @@ const acrossX = (wall: string | undefined) =>
 
 describe("switch fallthrough", () => {
   it("gives a case that falls through a side door into the next case", () => {
-    const { codeGraph, error } = codeGraphOf("switches");
+    const { codeGraph, error } = codeGraphOf(examples.switches);
     if (codeGraph === null) {
       throw new Error(`switches: ${error}`);
     }

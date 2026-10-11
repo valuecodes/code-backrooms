@@ -6,7 +6,7 @@ import type { Frame } from "@repo/world-generator/navigation";
 import { describe, expect, it } from "vitest";
 
 import { examples } from "./examples";
-import type { ExampleName } from "./examples";
+import type { BundledName } from "./examples";
 import {
   areasFromCode,
   breadcrumbOf,
@@ -16,11 +16,11 @@ import {
   worldFromCode,
 } from "./world-from-code";
 
-const exampleNames = Object.keys(examples) as readonly ExampleName[];
+const exampleNames = Object.keys(examples) as readonly BundledName[];
 
 /** Parses an example or fails the test with the parser's message. */
-const graphOf = (name: ExampleName) => {
-  const { codeGraph, error } = codeGraphOf(name);
+const graphOf = (name: BundledName) => {
+  const { codeGraph, error } = codeGraphOf(examples[name]);
   if (codeGraph === null) {
     throw new Error(`${name}: ${error}`);
   }

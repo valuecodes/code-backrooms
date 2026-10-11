@@ -5,12 +5,13 @@ import type { AreaWorld } from "@repo/types";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { examples } from "./examples";
 import { areaLabelOf, codeGraphOf } from "./world-from-code";
 import { WorldMap } from "./world-map";
 import { playerMarker, worldMapModel } from "./world-map-model";
 
 const repo = () => {
-  const { codeGraph, error } = codeGraphOf("repo");
+  const { codeGraph, error } = codeGraphOf(examples.repo);
   if (codeGraph === null) {
     throw new Error(`repo: ${error}`);
   }

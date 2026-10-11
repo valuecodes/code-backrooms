@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { examples } from "./examples";
 import {
   initialSeed,
   MAX_SEED,
@@ -32,6 +33,10 @@ describe("parseWorldParams", () => {
       eager: true,
       view: "world",
     });
+  });
+
+  it("reads ?code=self, the repository itself", () => {
+    expect(parseWorldParams("?code=self").code).toBe("self");
   });
 
   it("reads ?view=map", () => {
@@ -104,8 +109,8 @@ describe("seeds", () => {
 
   it("gives a code world a source seed a shared URL reloads unchanged", () => {
     for (const name of ["demo", "loops", "switches"] as const) {
-      const seed = sourceSeedOf(name);
-      expect(seed).toBe(sourceSeedOf(name));
+      const seed = sourceSeedOf(examples[name]);
+      expect(seed).toBe(sourceSeedOf(examples[name]));
       expect(seed).toBeLessThanOrEqual(MAX_SEED);
       expect(parseWorldParams(withSeed(`?code=${name}`, seed)).seed).toBe(seed);
     }

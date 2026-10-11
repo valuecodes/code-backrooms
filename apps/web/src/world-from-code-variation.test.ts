@@ -3,10 +3,10 @@ import type { GeneratedWorld } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
 import { examples } from "./examples";
-import type { ExampleName } from "./examples";
+import type { BundledName } from "./examples";
 import { codeGraphOf } from "./world-from-code";
 
-const exampleNames = Object.keys(examples) as readonly ExampleName[];
+const exampleNames = Object.keys(examples) as readonly BundledName[];
 
 /**
  * What is connected, as sorted lines: cluster doors, connections the layout
@@ -37,7 +37,7 @@ describe("aesthetic variation", () => {
   it.each(exampleNames)(
     "connects the %s example the same with variation on and off",
     (name) => {
-      const { codeGraph, error } = codeGraphOf(name);
+      const { codeGraph, error } = codeGraphOf(examples[name]);
       if (codeGraph === null) {
         throw new Error(`${name}: ${error}`);
       }

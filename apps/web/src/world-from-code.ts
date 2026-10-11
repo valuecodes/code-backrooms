@@ -12,16 +12,14 @@ import type { RoomSubject } from "@repo/code-graph/subjects";
 import { awayZone, zonedPath } from "@repo/code-graph/zone-labels";
 import { hasZones, zoneOfModule } from "@repo/code-graph/zones";
 import { buildCodeGraph, hashSource } from "@repo/parser";
+import type { SourceFile } from "@repo/parser";
 import type { AreaWorld, GeneratedWorld } from "@repo/types";
 import { mergeAreas } from "@repo/world-generator/areas";
 import type { Target } from "@repo/world-generator/interaction";
 import type { Frame } from "@repo/world-generator/navigation";
 
-import { examples } from "~/examples";
-import type { ExampleName } from "~/examples";
-
 // The code half of the pipeline, kept free of React so it runs under vitest:
-// bundled source -> CodeGraph -> WorldGraph -> generated world, plus the
+// an example's source -> CodeGraph -> WorldGraph -> generated world, plus the
 // HUD's words for rooms, the navigation stack and the thing in front of
 // the player.
 
@@ -34,15 +32,12 @@ type CodeResult =
     }
   | { readonly codeGraph: null; readonly error: string };
 
-/** The files of a bundled example. */
-const filesOf = (name: ExampleName) => examples[name];
+/** An example's own seed: the same source always gives the same world. */
+const sourceSeedOf = (files: readonly SourceFile[]): number =>
+  hashSource(files);
 
-/** A bundled example's own seed: the same source always gives the same world. */
-const sourceSeedOf = (name: ExampleName): number => hashSource(filesOf(name));
-
-/** Parses a bundled example; a syntax error becomes a value, never a throw. */
-const codeGraphOf = (name: ExampleName): CodeResult => {
-  const files = filesOf(name);
+/** Parses an example's files; a syntax error becomes a value, never a throw. */
+const codeGraphOf = (files: readonly SourceFile[]): CodeResult => {
   try {
     const codeGraph = buildCodeGraph(files);
     // Modules come out sorted by path, each id normalised from its path.
@@ -251,3 +246,4 @@ export {
   sourceSeedOf,
   worldFromCode,
 };
+export type { CodeResult };
