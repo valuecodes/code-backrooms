@@ -58,11 +58,9 @@ describe("the repository as a code world", { timeout: 30_000 }, () => {
     expect(linked("apps/web/src/app.tsx", "apps/web/src/hud.tsx")).toBe(true);
   });
 
-  it("generates every area, all of them passing the area checks", () => {
-    // Not every seed lays out every module yet (seed 1 cannot place
-    // `packages/parser/src/resolve.ts`): seed 2 is one that does.
+  it("generates every area with variation, all passing the area checks", () => {
     const started = performance.now();
-    const world = generateCodeWorld(codeGraph, 2);
+    const world = generateCodeWorld(codeGraph, 1);
     const generation = Math.round(performance.now() - started);
     expect(world.pending, `generation took ${generation} ms`).toEqual([]);
     expect(world.failed).toEqual([]);
@@ -72,17 +70,19 @@ describe("the repository as a code world", { timeout: 30_000 }, () => {
     expect(model.areas).toHaveLength(world.areas.length);
   });
 
-  it("keeps a module the layout cannot place to its own failed area", () => {
-    const { world, errors } = codeAreaStore(codeGraph, 1, {
-      eager: true,
-    }).snapshot();
-    expect(world.pending).toEqual([]);
-    expect(world.failed).toEqual([...errors.keys()]);
-    // A layout error, reported per area rather than thrown; what is reached
-    // only through that area stays unreachable, so no `checkAreas` here.
-    for (const message of errors.values()) {
-      expect(message).toContain("Could not lay out");
+  // `packages/parser/src/resolve.ts` failed on half the seeds before hubs
+  // could step down to fewer doors (`HUB_DOOR_LADDER`).
+  it.each([1, 2, 3, 4, 5, 6, 7, 8])(
+    "lays out every module on seed %i",
+    (seed) => {
+      const started = performance.now();
+      const { world, errors } = codeAreaStore(codeGraph, seed, {
+        variation: false,
+        eager: true,
+      }).snapshot();
+      const generation = Math.round(performance.now() - started);
+      expect([...errors], `generation took ${generation} ms`).toEqual([]);
+      expect(checkAreas(world)).toEqual([]);
     }
-    expect(world.areas.length).toBeGreaterThan(100);
-  });
+  );
 });

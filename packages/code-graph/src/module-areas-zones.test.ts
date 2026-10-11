@@ -79,6 +79,35 @@ describe("codeAreaStore with zones", () => {
     }
   });
 
+  it("grows each zone out from the entrance in a direction of its own", () => {
+    // Branches go round the entrance by hub id: @repo/lib along +X, web -X.
+    const headings = new Map([
+      [LIB, { x: 1, z: 0 }],
+      [WEB, { x: -1, z: 0 }],
+    ]);
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const world = generateCodeWorld(workspace(), seed);
+      const centreOf = (id: string) => {
+        const bounds = world.areas.find((area) => area.id === id)?.bounds;
+        return {
+          x: ((bounds?.minX ?? 0) + (bounds?.maxX ?? 0)) / 2,
+          z: ((bounds?.minZ ?? 0) + (bounds?.maxZ ?? 0)) / 2,
+        };
+      };
+      const entrance = centreOf(ENTRANCE_ID);
+      for (const zone of world.zones) {
+        const heading = headings.get(zone.id) ?? { x: 0, z: 0 };
+        for (const id of zone.areas) {
+          const { x, z } = centreOf(id);
+          expect(
+            (x - entrance.x) * heading.x + (z - entrance.z) * heading.z,
+            `seed ${seed} ${id}`
+          ).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
   it("generates the entrance first, then a zone's hub, then its modules", () => {
     const store = codeAreaStore(workspace(), 3);
     const ids = () => store.snapshot().world.areas.map(({ id }) => id);

@@ -6,7 +6,6 @@ import {
   layoutBounds,
   mergeAreas,
   packOffsets,
-  packSlots,
   SHELF_WIDTH,
   translateLayout,
 } from "./areas";
@@ -79,8 +78,8 @@ describe("packOffsets", () => {
     expect(packOffsets([])).toEqual([]);
   });
 
-  it("places exactly as before zones, through packSlots in strip 0", () => {
-    // Recorded from packOffsets before strips existed.
+  it("places exactly as it always has", () => {
+    // Recorded from packOffsets before zones existed.
     const cases: readonly (readonly [Rect[], Point[]])[] = [
       [
         [rect(20, 10), rect(31, 17), rect(8, 40), rect(100, 6)],
@@ -125,9 +124,6 @@ describe("packOffsets", () => {
     ];
     for (const [bounds, offsets] of cases) {
       expect(unsigned(packOffsets(bounds))).toEqual(offsets);
-      expect(
-        unsigned(packSlots(bounds.map((r) => ({ rect: r, strip: 0 }))))
-      ).toEqual(offsets);
     }
   });
 

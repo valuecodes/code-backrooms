@@ -3,7 +3,7 @@ import { ENTRANCE_ID } from "@repo/code-graph/ids";
 import { codeAreaStore } from "@repo/code-graph/module-areas";
 import { buildCodeGraph } from "@repo/parser";
 import type { AreaWorld, Point, Rect } from "@repo/types";
-import { AREA_GAP, stripRange } from "@repo/world-generator/areas";
+import { AREA_GAP } from "@repo/world-generator/areas";
 import { describe, expect, it } from "vitest";
 
 import { examples } from "./examples";
@@ -235,58 +235,46 @@ describe("worldMapModel", () => {
     for (const area of model.areas) {
       expect(contains(model.bounds, area.rect)).toBe(true);
     }
-    for (const zone of model.zones) {
-      expect(zone.rect === null || contains(model.bounds, zone.rect)).toBe(
-        true
-      );
+    for (const rect of model.zones.flatMap((zone) => zone.rects)) {
+      expect(contains(model.bounds, rect)).toBe(true);
     }
   });
 
-  it("keeps a ghost in its slot while other areas generate, in any order", () => {
+  it("lays the ghosts out the same for the same world, whatever came before", () => {
     const graph = repo();
-    const first = codeAreaStore(graph, 1);
-    const second = codeAreaStore(graph, 1);
-    const start = ghostRects(worldMapModel(first.snapshot().world));
     const modules = graph.modules.map((module) => module.id);
+    const first = codeAreaStore(graph, 1);
     for (const id of modules.slice(0, 3)) {
       first.ensure(id);
     }
-    for (const id of modules.slice(0, 3).toReversed()) {
-      second.ensure(id);
-    }
     const one = ghostRects(worldMapModel(first.snapshot().world));
-    const other = ghostRects(worldMapModel(second.snapshot().world));
+    const again = ghostRects(worldMapModel(first.snapshot().world));
     expect(one.size).toBe(modules.length - 3);
-    for (const [id, rect] of one) {
-      expect(rect).toEqual(start.get(id));
-      expect(other.get(id)).toEqual(rect);
-    }
+    expect([...again]).toEqual([...one]);
   });
 
-  it("puts ghosts on a shelf above their strip, apart from every generated area", () => {
+  it("puts ghosts on a shelf above the world, zone by zone, apart from every area", () => {
     const graph = workspace();
     const store = codeAreaStore(graph, 1);
     store.ensure(WEB_ZONE);
     const world = store.snapshot().world;
     const model = worldMapModel(world);
-    const entrance = areaOf(model, ENTRANCE_ID).rect;
     const ghosts = model.areas.filter((area) => area.state !== "generated");
     const generated = model.areas.filter((area) => area.state === "generated");
+    const top = Math.min(...generated.map((area) => area.rect.minZ));
     expect(ghosts.length).toBeGreaterThan(0);
     for (const ghost of ghosts) {
-      expect(ghost.rect.maxZ).toBeLessThanOrEqual(entrance.minZ - AREA_GAP);
-      const strip =
-        world.zones.findIndex((zone) => zone.id === ghost.zoneId) + 1;
-      const range = stripRange(entrance.minX, strip);
-      expect(ghost.rect.minX).toBeGreaterThanOrEqual(range.minX);
-      expect(ghost.rect.maxX).toBeLessThanOrEqual(range.maxX);
+      expect(ghost.rect.maxZ).toBeLessThanOrEqual(top - AREA_GAP);
       for (const other of [...ghosts, ...generated]) {
         expect(other === ghost || !overlaps(ghost.rect, other.rect)).toBe(true);
       }
     }
+    // Each zone's ghosts start a row of their own, in zone order.
+    const rowOf = (id: string) => ghostRects(model).get(id)?.maxZ;
+    expect(rowOf(LIB_ZONE)).toBeLessThan(rowOf(MAIN) ?? 0);
   });
 
-  it("bands each zone around its areas and ghosts, counting its modules", () => {
+  it("bands each zone round each of its areas, counting its modules", () => {
     const graph = workspace();
     const store = codeAreaStore(graph, 1);
     const start = worldMapModel(store.snapshot().world);
@@ -313,15 +301,29 @@ describe("worldMapModel", () => {
       zoneId: WEB_ZONE,
     });
     expect(areaOf(model, MAIN).zoneId).toBe(WEB_ZONE);
-    for (const zone of model.zones) {
-      const members = model.areas.filter((area) => area.zoneId === zone.id);
-      expect(members.length).toBeGreaterThan(0);
-      for (const area of members) {
-        expect(zone.rect !== null && contains(zone.rect, area.rect)).toBe(true);
+    const [web, lib] = model.zones;
+    const generated = (zoneId: string) =>
+      model.areas.filter(
+        (area) => area.zoneId === zoneId && area.state === "generated"
+      );
+    expect(web?.rects).toHaveLength(2);
+    for (const area of generated(WEB_ZONE)) {
+      expect(web?.rects.some((rect) => contains(rect, area.rect))).toBe(true);
+    }
+    // Its name goes on its hub's band.
+    expect(web?.rect && contains(web.rect, areaOf(model, WEB_ZONE).rect)).toBe(
+      true
+    );
+    expect(lib).toMatchObject({ rects: [], rect: null });
+
+    store.ensureAll();
+    const done = worldMapModel(store.snapshot().world);
+    const [doneWeb, doneLib] = done.zones;
+    for (const a of doneWeb?.rects ?? []) {
+      for (const b of doneLib?.rects ?? []) {
+        expect(overlaps(a, b)).toBe(false);
       }
     }
-    const [web, lib] = model.zones;
-    expect(web?.rect && lib?.rect && overlaps(web.rect, lib.rect)).toBe(false);
   });
 
   it("is the same model for the same world", () => {

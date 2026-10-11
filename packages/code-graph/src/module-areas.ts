@@ -5,9 +5,11 @@ import type { AreaSpec, AreaStore } from "@repo/world-generator/area-store";
 import type { ZoneSpec } from "@repo/world-generator/areas";
 import { LayoutError } from "@repo/world-generator/layout";
 
+import { areaParentsOf } from "./area-parents";
 import type { CodeGraph, ModuleNode } from "./code-graph";
 import { entranceGraph } from "./entrance";
 import { entryModules } from "./entrypoints";
+import { HUB_DOOR_LADDER, MAX_HUB_DOORS } from "./hub-plan";
 import { ENTRANCE_ID } from "./ids";
 import { edgeKey, toWorldGraph } from "./world-graph";
 import { zoneEntranceGraph, zoneGraph } from "./zone-graph";
@@ -27,43 +29,88 @@ const gapsOf = ({ layout }: GeneratedWorld): string =>
     ...layout.unplacedPortals.map(({ id }) => id).toSorted(),
   ]);
 
-/** One module's world: varied when `varied`, its corridors named after the module. */
+/** Derived layout seeds tried on the last rung of HUB_DOOR_LADDER. */
+const RESEEDS = 4;
+const RESEED_STEP = 7919;
+
+/** How a module is laid out: what the plain world settled on. */
+type Plan = {
+  /** The call edges demoted to portals, which fix the door/portal plan. */
+  readonly portalOnly: ReadonlySet<string>;
+  /** Doors per hub (`HUB_DOOR_LADDER`). */
+  readonly maxDoors: number;
+  /** The seed the plain layout searched with. */
+  readonly layoutSeed: number;
+};
+
+/**
+ * One module's world under `plan`: varied when `varied` (with the module's
+ * own seed), its corridors named after the module.
+ */
 const layOut = (
   { graph, module, seed }: AreaInput,
-  portalOnly: ReadonlySet<string>,
+  { portalOnly, maxDoors, layoutSeed }: Plan,
   varied: boolean
 ): GeneratedWorld =>
   generateWorld({
-    seed,
-    graph: toWorldGraph(graph, portalOnly, varied ? seed : null, module),
+    seed: varied ? seed : layoutSeed,
+    graph: toWorldGraph(
+      graph,
+      portalOnly,
+      varied ? seed : null,
+      module,
+      maxDoors
+    ),
     variation: varied,
     corridorPrefix: `${module.id}/corridor-`,
   });
 
-type Plain = {
-  readonly world: GeneratedWorld;
-  /** The call edges demoted to portals, which fix the door/portal plan. */
-  readonly portalOnly: ReadonlySet<string>;
-};
+type Plain = Plan & { readonly world: GeneratedWorld };
 
 /**
  * The plain world: a call door the layout cannot place is demoted to a
- * portal and the layout tried again, until everything fits.
+ * portal and the layout tried again. A hub or lobby door it cannot place
+ * (or a call door already demoted) steps down HUB_DOOR_LADDER, chaining
+ * smaller hubs, and the last rung tries a few derived layout seeds; only
+ * when those fail too does the module fail.
  */
 const plainWorld = (input: AreaInput): Plain => {
+  const last = HUB_DOOR_LADDER.at(-1) ?? MAX_HUB_DOORS;
+  const rungs = [
+    ...HUB_DOOR_LADDER.map((maxDoors) => ({
+      maxDoors,
+      layoutSeed: input.seed,
+    })),
+    ...Array.from({ length: RESEEDS }, (_, k) => ({
+      maxDoors: last,
+      layoutSeed: input.seed + (k + 1) * RESEED_STEP,
+    })),
+  ];
   const portalOnly = new Set<string>();
+  let rung = 0;
   for (;;) {
+    const plan = {
+      portalOnly,
+      ...(rungs[rung] ?? { maxDoors: last, layoutSeed: input.seed }),
+    };
     try {
-      return { world: layOut(input, portalOnly, false), portalOnly };
+      return { ...plan, world: layOut(input, plan, false) };
     } catch (error) {
-      const failed =
-        error instanceof LayoutError && error.connection.kind === "call"
-          ? edgeKey(error.connection.from, error.connection.to)
-          : null;
-      if (failed === null || portalOnly.has(failed)) {
+      if (!(error instanceof LayoutError)) {
         throw error;
       }
-      portalOnly.add(failed);
+      const failed =
+        error.connection.kind === "call"
+          ? edgeKey(error.connection.from, error.connection.to)
+          : null;
+      if (failed !== null && !portalOnly.has(failed)) {
+        portalOnly.add(failed);
+        continue;
+      }
+      rung += 1;
+      if (rung >= rungs.length) {
+        throw error;
+      }
     }
   }
 };
@@ -75,8 +122,8 @@ const plainWorld = (input: AreaInput): Plain => {
  * again, so a module that parses always becomes an area: tree calls are
  * walkable where the walls allow, the rest teleport. `variation` lets the
  * seed vary proportions too: column and hub widths here, corridor widths in
- * the layout. Which calls are doors is decided on the plain world first and
- * kept; a varied layout that cannot realise exactly that plan gives way to
+ * the layout. Which calls are doors, and how many doors a hub has, is
+ * decided on the plain world first and kept; a varied layout that cannot realise exactly that plan gives way to
  * the plain world, so variation never changes what is connected.
  */
 const moduleArea = (input: AreaInput, variation: boolean): GeneratedWorld => {
@@ -85,7 +132,7 @@ const moduleArea = (input: AreaInput, variation: boolean): GeneratedWorld => {
     return plain.world;
   }
   try {
-    const varied = layOut(input, plain.portalOnly, true);
+    const varied = layOut(input, plain, true);
     return gapsOf(varied) === gapsOf(plain.world) ? varied : plain.world;
   } catch (error) {
     if (error instanceof LayoutError) {
@@ -143,12 +190,8 @@ const moduleSpecs = (
     return zone === null ? spec : { ...spec, zone: zone.id };
   });
 
-/**
- * The repository entrance, then one area per zone's hub when there are
- * several zones, then one per module. With one zone or none the entrance
- * leads straight to the entry modules and nothing is zoned.
- */
-const codeAreaSpecs = (
+/** `codeAreaSpecs` before parents: what each area is and its zone. */
+const zonedSpecs = (
   graph: CodeGraph,
   seed: number,
   variation: boolean
@@ -170,7 +213,25 @@ const codeAreaSpecs = (
   ];
 };
 
-/** Each zone's strip, its hub area first; none with one zone or none. */
+/**
+ * The repository entrance, then one area per zone's hub when there are
+ * several zones, then one per module, each beside the area it is first
+ * reached from (`areaParentsOf`). With one zone or none the entrance leads
+ * straight to the entry modules and nothing is zoned.
+ */
+const codeAreaSpecs = (
+  graph: CodeGraph,
+  seed: number,
+  variation: boolean
+): readonly AreaSpec[] => {
+  const parents = areaParentsOf(graph);
+  return zonedSpecs(graph, seed, variation).map((spec) => {
+    const parent = parents.get(spec.id);
+    return parent === undefined ? spec : { ...spec, parent };
+  });
+};
+
+/** Each zone with its hub area; none with one zone or none. */
 const zoneSpecsOf = (graph: CodeGraph): readonly ZoneSpec[] =>
   hasZones(graph)
     ? zonesOf(graph).map((zone) => ({
@@ -187,7 +248,9 @@ const zoneSpecsOf = (graph: CodeGraph): readonly ZoneSpec[] =>
  * lead to the entry modules (`entryModules`), from which imports reach
  * every other module. In a repository of several zones (`zonesOf`) they
  * lead to each zone's hub instead, whose portals lead to the zone's entry
- * modules, and each zone packs into a strip of its own. Only the entrance
+ * modules. Each area is placed beside the one it is first reached from, so
+ * the world grows out from the entrance in every direction, a branch per
+ * zone. Only the entrance
  * is generated up front unless `eager`; every other area waits for its
  * first `ensure`.
  */

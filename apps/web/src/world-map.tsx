@@ -62,17 +62,20 @@ const Layers = ({ model, clip }: LayersProps) => {
     <>
       {model.zones.map(
         (zone) =>
-          zone.rect !== null && (
-            <rect
-              key={zone.id}
-              data-zone={zone.id}
-              {...rectProps(zone.rect)}
-              fill={PLAIN}
-              fillOpacity={0.04}
-              stroke={PLAIN}
-              strokeOpacity={0.3}
-              vectorEffect="non-scaling-stroke"
-            />
+          zone.rects.length > 0 && (
+            // Faded as a group, so where a zone's rects overlap stays even.
+            <g key={zone.id} data-zone={zone.id} opacity={0.3}>
+              {zone.rects.map((rect, index) => (
+                <rect
+                  key={index}
+                  {...rectProps(rect)}
+                  fill={PLAIN}
+                  fillOpacity={0.13}
+                  stroke={PLAIN}
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
+            </g>
           )
       )}
       {model.links.map((link) => (

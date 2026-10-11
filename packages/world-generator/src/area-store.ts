@@ -3,16 +3,19 @@
 // moves once placed (the packing is a function of the sequence so far), so
 // a world that grows keeps every room, portal and landing it had.
 
-import type { AreaWorld, BuiltArea, GeneratedWorld } from "@repo/types";
+import type { AreaWorld, BuiltArea, GeneratedWorld, Rect } from "@repo/types";
 
 import {
   areaZones,
+  checkAreaSpecs,
   layoutBounds,
-  packSlots,
+  packOffsets,
+  parentsOf,
   placeArea,
-  stripsOf,
 } from "./areas";
-import type { Slot, ZoneSpec } from "./areas";
+import type { ZoneSpec } from "./areas";
+import { placeNext } from "./tree-packing";
+import type { PlacedSlot } from "./tree-packing";
 
 /** An area to generate on demand. */
 type AreaSpec = {
@@ -23,6 +26,8 @@ type AreaSpec = {
   readonly generate: () => GeneratedWorld;
   /** The id of its zone; none for an area outside every zone. */
   readonly zone?: string;
+  /** The area it is reached from, placed beside it (`placeNext`). */
+  readonly parent?: string;
 };
 
 type AreaState = {
@@ -52,7 +57,7 @@ type AreaStoreOptions = {
   /** The area generated at once, at the origin; its failure throws. */
   readonly entry: string;
   readonly specs: readonly AreaSpec[];
-  /** Each zone's areas pack into a strip of their own; none by default. */
+  /** Zones the areas are listed in; none by default. */
   readonly zones?: readonly ZoneSpec[];
 };
 
@@ -63,28 +68,52 @@ const createAreaStore = ({
   zones = [],
 }: AreaStoreOptions): AreaStore => {
   const specOf = new Map(specs.map((spec) => [spec.id, spec]));
-  const areaOf = new Map(
+  // Replaced, never changed, so an older snapshot keeps its own.
+  let areaOf: ReadonlyMap<string, string> = new Map(
     specs.flatMap((spec) => spec.units.map((unit) => [unit, spec.id] as const))
   );
-  const strips = stripsOf(zones, entry, specs);
+  checkAreaSpecs(zones, entry, specs);
+  const parents = parentsOf(specs);
   const listeners = new Set<() => void>();
   const built = new Map<string, BuiltArea>();
-  const slots: Slot[] = [];
+  /** Every placed area, where it is; and its bounds round the origin. */
+  const placed: PlacedSlot[] = [];
+  const unmoved: Rect[] = [];
   const areas: BuiltArea[] = [];
   const errors = new Map<string, string>();
 
+  /** Beside its parent with parents, else in rows as `packOffsets` packs. */
+  const slotOf = (id: string, rect: Rect): PlacedSlot =>
+    parents.size > 0
+      ? placeNext(placed, { id, rect }, parents)
+      : {
+          id,
+          rect,
+          anchor: null,
+          offset: packOffsets([...unmoved, rect]).at(-1) ?? { x: 0, z: 0 },
+        };
+
   const generate = (spec: AreaSpec): BuiltArea => {
     const world = spec.generate();
-    const slot = {
-      rect: layoutBounds(world.layout.rooms),
-      strip: strips.get(spec.id) ?? 0,
-    };
-    const offset = packSlots([...slots, slot]).at(-1) ?? { x: 0, z: 0 };
-    const area = placeArea({ id: spec.id, world, zone: spec.zone }, offset);
+    const rect = layoutBounds(world.layout.rooms);
+    const slot = slotOf(spec.id, rect);
+    const area = placeArea(
+      { id: spec.id, world, zone: spec.zone },
+      slot.offset
+    );
     // Only a placed area takes up room: a throw above leaves no trace.
-    slots.push(slot);
+    placed.push({ ...slot, rect: area.bounds });
+    unmoved.push(rect);
     built.set(spec.id, area);
     areas.push(area);
+    // Rooms its units did not list (more hubs than planned) belong to it too.
+    const unowned = area.graph.rooms.filter((room) => !areaOf.has(room.id));
+    if (unowned.length > 0) {
+      areaOf = new Map([
+        ...areaOf,
+        ...unowned.map((room) => [room.id, spec.id] as const),
+      ]);
+    }
     return area;
   };
 

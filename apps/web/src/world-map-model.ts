@@ -8,14 +8,15 @@ import type {
   Rect,
   RoomKind,
 } from "@repo/types";
-import { AREA_GAP, SHELF_WIDTH, stripRange } from "@repo/world-generator/areas";
 import { roomBounds } from "@repo/world-generator/geometry";
 import { areaAt } from "@repo/world-generator/locate";
+
+import { ghostSlots } from "~/ghost-shelf";
 
 // What the whole-world map draws, worked out without React or the DOM: every
 // area of the world, generated or not, the zones' bands, the links between
 // areas and the player. An area not generated yet has no place in the world,
-// so it is drawn as a ghost on a shelf above its zone's strip.
+// so it is drawn as a ghost on a shelf above the world (`ghostSlots`).
 
 type AreaState = "generated" | "pending" | "failed";
 
@@ -44,7 +45,9 @@ type MapArea = {
 type MapZone = {
   readonly id: string;
   readonly name: string;
-  /** Its band: its generated areas and its ghosts, padded; null with neither. */
+  /** Its band: each of its generated areas, padded; ghosts sit on the shelf. */
+  readonly rects: readonly Rect[];
+  /** Where its name goes: its hub's band rect, or its first; null with none. */
   readonly rect: Rect | null;
   /** Its module areas (not its hub) generated so far and in all. */
   readonly built: number;
@@ -90,12 +93,6 @@ type WorldMapOptions = {
   readonly links?: readonly AreaLink[];
 };
 
-/** A ghost's footprint and the gap between ghosts, in metres. */
-const GHOST_WIDTH = 20;
-const GHOST_DEPTH = 12;
-const GHOST_GAP = 4;
-/** Ghosts in one row of a strip's shelf: as many as its width holds. */
-const GHOST_COLUMNS = Math.floor(SHELF_WIDTH / (GHOST_WIDTH + GHOST_GAP));
 /** A zone's band past its areas: under half a gap, so bands never touch. */
 const ZONE_PAD = 6;
 
@@ -122,62 +119,6 @@ const centreOf = (rect: Rect): Point => ({
   x: (rect.minX + rect.maxX) / 2,
   z: (rect.minZ + rect.maxZ) / 2,
 });
-
-/**
- * Each strip's areas as the ghost shelf lists them: a zone's in its own
- * order (its hub first) on strip zone index + 1, every other area the
- * world knows of, sorted, on strip 0, as the packer assigns strips.
- */
-const shelvesOf = (
-  world: AreaWorld
-): readonly { readonly strip: number; readonly areas: readonly string[] }[] => {
-  const zoned = new Set(world.zones.flatMap((zone) => zone.areas));
-  const unzoned = [
-    ...world.areas.map((area) => area.id),
-    ...world.pending,
-    ...world.failed,
-  ]
-    .filter((id) => !zoned.has(id))
-    .toSorted();
-  return [
-    { strip: 0, areas: unzoned },
-    ...world.zones.map((zone, index) => ({
-      strip: index + 1,
-      areas: zone.areas,
-    })),
-  ];
-};
-
-/**
- * Where every area's ghost goes: its slot on the shelf above its strip,
- * rows growing away from the world (-Z). The entry area never moves and
- * every other one is packed at or below its top, and each strip starts at
- * a fixed distance from its left edge (`stripRange`), so a ghost keeps its
- * slot while the world grows and whatever order areas generate in.
- */
-const ghostSlots = (world: AreaWorld): ReadonlyMap<string, Rect> => {
-  const entry =
-    world.areas.find((area) => area.id === world.entry) ?? world.areas[0];
-  const left = entry?.bounds.minX ?? 0;
-  const top = (entry?.bounds.minZ ?? 0) - AREA_GAP;
-  const slots = new Map<string, Rect>();
-  for (const { strip, areas } of shelvesOf(world)) {
-    const start = stripRange(left, strip).minX;
-    areas.forEach((id, index) => {
-      const column = index % GHOST_COLUMNS;
-      const row = Math.floor(index / GHOST_COLUMNS);
-      const minX = start + column * (GHOST_WIDTH + GHOST_GAP);
-      const maxZ = top - row * (GHOST_DEPTH + GHOST_GAP);
-      slots.set(id, {
-        minX,
-        maxX: minX + GHOST_WIDTH,
-        minZ: maxZ - GHOST_DEPTH,
-        maxZ,
-      });
-    });
-  }
-  return slots;
-};
 
 const kindOf = (world: AreaWorld, id: string): MapArea["kind"] => {
   if (id === world.entry) {
@@ -239,22 +180,21 @@ const zonesOf = (
 ): readonly MapZone[] => {
   const built = new Set(world.areas.map((area) => area.id));
   return world.zones.map((zone): MapZone => {
-    const ghosts = zone.areas.flatMap((id) => {
-      const area = areas.get(id);
-      return area === undefined || area.state === "generated"
-        ? []
-        : [area.rect];
-    });
-    const band = unionOf([
-      ...(zone.bounds === null ? [] : [zone.bounds]),
-      ...ghosts,
-    ]);
     // Its hub comes first and is not a module.
+    const [hub] = zone.areas;
+    const generated = zone.areas.flatMap((id) => {
+      const area = areas.get(id);
+      return area?.state === "generated" ? [area] : [];
+    });
+    const rects = generated.map((area) => padded(area.rect, ZONE_PAD));
+    const labelled =
+      generated.find((area) => area.id === hub) ?? generated[0] ?? null;
     const modules = zone.areas.slice(1);
     return {
       id: zone.id,
       name: zone.name,
-      rect: band === null ? null : padded(band, ZONE_PAD),
+      rects,
+      rect: labelled === null ? null : padded(labelled.rect, ZONE_PAD),
       built: modules.filter((id) => built.has(id)).length,
       total: modules.length,
     };
@@ -358,8 +298,8 @@ const labelFontSize = (bounds: Rect): number =>
 
 /**
  * The whole world for the map: every generated area with its rooms, every
- * pending or failed one as a ghost above its zone's strip, each zone's
- * band, the links between areas, and the player when placed.
+ * pending or failed one as a ghost on the shelf above the world, each
+ * zone's band, the links between areas, and the player when placed.
  */
 const worldMapModel = (
   world: AreaWorld,
@@ -378,7 +318,7 @@ const worldMapModel = (
   const zones = zonesOf(world, byId);
   const bounds = unionOf([
     ...areas.map((area) => area.rect),
-    ...zones.flatMap((zone) => (zone.rect === null ? [] : [zone.rect])),
+    ...zones.flatMap((zone) => zone.rects),
   ]) ?? { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
   return {
     bounds,

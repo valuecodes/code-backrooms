@@ -1,6 +1,6 @@
 import type { AreaWorld, BuiltArea } from "@repo/types";
 
-import { AREA_GAP, SHELF_WIDTH, stripRange } from "./areas";
+import { AREA_GAP } from "./config";
 import { rectGap } from "./fit";
 import { roomBounds } from "./geometry";
 import { blocked, checkLayout } from "./layout-checks";
@@ -92,9 +92,8 @@ const reachableFrom = (
 
 /**
  * The zones of `world`: every area's `zoneId` is the zone that lists it;
- * every area no wider than SHELF_WIDTH inside its zone's strip (strip 0
- * outside every zone); every zone hub led to by a placed portal of the
- * entry area (built for pending hubs too); and, once all of a zone's areas are built,
+ * every zone hub led to by a placed portal of the entry area (built for
+ * pending hubs too); and, once all of a zone's areas are built,
  * each reachable from its hub over portals between them. A zone with an
  * area pending or failed is not walked: a portal from another zone may
  * have generated an area before its hub, and areas behind a failed one are
@@ -110,24 +109,14 @@ const checkZones = (
     return;
   }
   const zoneOf = new Map(
-    world.zones.flatMap((zone, at) =>
-      zone.areas.map((id) => [id, { zone, strip: at + 1 }] as const)
-    )
+    world.zones.flatMap((zone) => zone.areas.map((id) => [id, zone.id]))
   );
   for (const area of world.areas) {
-    const listed = zoneOf.get(area.id);
-    if (area.zoneId !== (listed?.zone.id ?? null)) {
+    const listed = zoneOf.get(area.id) ?? null;
+    if (area.zoneId !== listed) {
       failures.push(
-        `area ${area.id} has zoneId ${area.zoneId}, expected ${listed?.zone.id ?? null}`
+        `area ${area.id} has zoneId ${area.zoneId}, expected ${listed}`
       );
-    }
-    const strip = stripRange(entry.bounds.minX, listed?.strip ?? 0);
-    if (
-      area.bounds.maxX - area.bounds.minX <= SHELF_WIDTH &&
-      (area.bounds.minX < strip.minX - 1e-9 ||
-        area.bounds.maxX > strip.maxX + 1e-9)
-    ) {
-      failures.push(`area ${area.id} is outside its strip`);
     }
   }
   // Placed portals only: one left unplaced has no door. A placed portal into
