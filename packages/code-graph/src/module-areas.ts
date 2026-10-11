@@ -161,12 +161,26 @@ const codeAreaStore = (
   return store;
 };
 
-/** Every area of the code graph at once: the entrance, then the modules in order. */
+/**
+ * Every area of the code graph at once: the entrance, then the modules in
+ * order. Throws the first module that could not be laid out, rather than
+ * returning a world without it; a store keeps such errors instead.
+ */
 const generateCodeWorld = (
   graph: CodeGraph,
   seed: number,
   { variation = true }: { readonly variation?: boolean } = {}
-): AreaWorld =>
-  codeAreaStore(graph, seed, { variation, eager: true }).snapshot().world;
+): AreaWorld => {
+  const { world, errors } = codeAreaStore(graph, seed, {
+    variation,
+    eager: true,
+  }).snapshot();
+  const [failure] = errors;
+  if (failure !== undefined) {
+    const [module, message] = failure;
+    throw new Error(`Module ${module} could not be generated: ${message}`);
+  }
+  return world;
+};
 
 export { codeAreaStore, generateCodeWorld };

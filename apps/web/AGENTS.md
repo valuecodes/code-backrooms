@@ -126,7 +126,7 @@ external, x.render(…) ambiguous: A.render() | B.render()`). Choosing
 UserService`), one door of the module hub; methods reached by a call door
   keep it. The HUD reads `service.ts · class UserService` and the source
   panel shows the whole class.
-- Milestone 18 (current): lazy areas. A code world generates its entrance
+- Milestone 18: lazy areas. A code world generates its entrance
   only; a module's area is generated when the player faces a portal into
   it (or steps into one first), placed after the areas so far, so nothing
   already there moves, and the player, the breadcrumb and the map carry on.
@@ -134,6 +134,12 @@ UserService`), one door of the module hub; methods reached by a call door
   file could not be laid out stays dark and reads `closed · <file> could
 not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   `?eager=1` generates every module up front, as before.
+- Milestone 19 (current): per-area rendering, which completes Phase 4
+  (multi-file repositories). The scene draws each area on its own, so an
+  area that joins mounts alone and nothing already on screen is rebuilt;
+  the player collides with, stands in and steps through only the area
+  they are in, and the map draws that area. Only the navigator still
+  sees every area as one world, to land portals across them.
 
 ---
 

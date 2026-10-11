@@ -1,5 +1,5 @@
 import { useFrame, useThree } from "@react-three/fiber";
-import type { BuiltWorld, Placement, Point } from "@repo/types";
+import type { AreaWorld, BuiltArea, Placement, Point } from "@repo/types";
 import { moveWithCollisions } from "@repo/world-generator/collision";
 import {
   inAnyTrigger,
@@ -7,8 +7,9 @@ import {
   portalToEnter,
 } from "@repo/world-generator/interaction";
 import type { Target } from "@repo/world-generator/interaction";
-import { roomAt, roomRects } from "@repo/world-generator/locate";
-import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
+import { areaAt, roomAt, roomRects } from "@repo/world-generator/locate";
+import type { RoomRect } from "@repo/world-generator/locate";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import { Vector3 } from "three";
 
 import { useMovementKeys } from "./controls";
@@ -25,7 +26,8 @@ import {
 type Teleport = Placement & { readonly nonce: number };
 
 type PlayerProps = {
-  readonly world: BuiltWorld;
+  /** The areas so far: the player starts in the entry and walks one at a time. */
+  readonly world: AreaWorld;
   /** False while the pointer is not locked: input is ignored and motion stops. */
   readonly enabled: boolean;
   /**
@@ -60,6 +62,22 @@ const PRIORITY = -1;
 /** Seconds between `onMove` calls: often enough for a map, rare enough for React. */
 const MOVE_INTERVAL = 0.1;
 
+/** Each area's room footprints, worked out once: an area never changes. */
+const rectsByArea = new WeakMap<BuiltArea, readonly RoomRect[]>();
+
+const rectsOf = (area: BuiltArea): readonly RoomRect[] => {
+  const known = rectsByArea.get(area);
+  if (known !== undefined) {
+    return known;
+  }
+  const created = roomRects(area.built.rooms.map((built) => built.room));
+  rectsByArea.set(area, created);
+  return created;
+};
+
+const NO_COLLIDERS: readonly [] = [];
+const ORIGIN: Point = { x: 0, z: 0 };
+
 const targetKey = (target: Target | null): string | null => {
   if (target === null) {
     return null;
@@ -69,7 +87,11 @@ const targetKey = (target: Target | null): string | null => {
     : `door:${target.roomId}>${target.targetRoomId}`;
 };
 
-/** First-person movement, driven from the render loop without React state. */
+/**
+ * First-person movement, driven from the render loop without React state.
+ * Each frame looks only at the area the player stands in (areas lie
+ * AREA_GAP apart, so nothing of another one is in reach).
+ */
 const Player = ({
   world,
   enabled,
@@ -81,12 +103,11 @@ const Player = ({
 }: PlayerProps) => {
   const camera = useThree((state) => state.camera);
   const keys = useMovementKeys();
-  const position = useRef<Point>(world.start);
+  // The same object while the world grows: the entry is never generated again.
+  const entry = world.areas.find((area) => area.id === world.entry)?.built;
+  const position = useRef<Point>(entry?.start ?? ORIGIN);
   const velocity = useRef(new Vector3());
-  const rects = useMemo(
-    () => roomRects(world.rooms.map((built) => built.room)),
-    [world]
-  );
+  const areaId = useRef<string | null>(null);
   const roomId = useRef<string | null>(null);
   /** False from a teleport until the player has left every portal trigger. */
   const armed = useRef(true);
@@ -115,10 +136,15 @@ const Player = ({
 
   // Keyed on the start, not the world: a world that grew (another area
   // joined in) keeps its start objects, and the player stays where they are.
-  const { start, facing } = world;
+  const start = entry?.start;
+  const facing = entry?.facing;
   useLayoutEffect(() => {
+    if (start === undefined || facing === undefined) {
+      return;
+    }
     place({ position: start, facing });
-    // Forget the room too, so the first frame reports the new start room.
+    // Forget the area and room too, so the first frame reports the start room.
+    areaId.current = null;
     roomId.current = null;
     armed.current = true;
     // The near-target key is kept on purpose: the next frame compares the
@@ -160,16 +186,24 @@ const Player = ({
       velocity.current.set(0, 0, 0);
     }
     const { x, z } = velocity.current;
+    // Outside every area (a teleport into one this render has not seen
+    // yet) there is nothing to collide with for a frame.
+    const area = areaAt(world.areas, position.current, areaId.current);
+    areaId.current = area?.id ?? null;
+    const built = area?.built ?? null;
     const next = moveWithCollisions(
       position.current,
       { x: x * dt, z: z * dt },
       PLAYER_RADIUS,
-      world.colliders,
+      built?.colliders ?? NO_COLLIDERS,
       MAX_STEP_DISTANCE
     );
     position.current = next;
     camera.position.set(next.x, EYE_HEIGHT, next.z);
-    const current = roomAt(rects, next, roomId.current)?.id ?? null;
+    const current =
+      area === null
+        ? null
+        : (roomAt(rectsOf(area), next, roomId.current)?.id ?? null);
     if (current !== roomId.current) {
       roomId.current = current;
       onRoomChange?.(current);
@@ -189,7 +223,8 @@ const Player = ({
         });
       }
     }
-    if (world.portals.length === 0 && onNearTarget === undefined) {
+    const portals = built?.portals ?? [];
+    if (portals.length === 0 && onNearTarget === undefined) {
       return;
     }
     const motion = {
@@ -197,15 +232,16 @@ const Player = ({
       forward: { x: forward.x, z: forward.z },
       velocity: { x, z },
     };
-    const hit = portalToEnter(world.portals, motion, armed.current);
+    const hit = portalToEnter(portals, motion, armed.current);
     if (hit !== null) {
       armed.current = false;
       onPortal?.(hit.portal.id);
-    } else if (!armed.current && !inAnyTrigger(world.portals, next)) {
+    } else if (!armed.current && !inAnyTrigger(portals, next)) {
       armed.current = true;
     }
     if (onNearTarget !== undefined) {
-      const near = nearestTarget(world, current, motion);
+      const near =
+        built === null ? null : nearestTarget(built, current, motion);
       const key = targetKey(near);
       if (key !== nearKey.current) {
         nearKey.current = key;

@@ -1,10 +1,10 @@
-import type { BuiltArea, WorldGraph } from "@repo/types";
+import type { AreaWorld, BuiltArea, WorldGraph } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
 import { checkAreas } from "./area-checks";
 import { createAreaStore } from "./area-store";
 import type { AreaSpec } from "./area-store";
-import { assembleAreas } from "./areas";
+import { assembleAreas, mergeAreas, pendingPortals } from "./areas";
 import { LayoutError } from "./layout";
 import { areaGraphs } from "./portal-world";
 import { generateWorld } from "./world-generator";
@@ -232,6 +232,8 @@ describe("createAreaStore", () => {
     const { world, errors } = store.snapshot();
     expect(ids(world.areas)).toEqual(["one", "two"]);
     expect(world.pending).toEqual(["four"]);
+    expect(world.failed).toEqual(["three"]);
+    expect(checkAreas(world)).toEqual([]);
     expect(errors.get("three")).toEqual(
       expect.stringContaining("hub3 -> nowhere")
     );
@@ -276,5 +278,97 @@ describe("createAreaStore", () => {
     unsubscribe();
     store.ensure("two");
     expect(notified).toBe(0);
+  });
+});
+
+/** The pending portals of the area `id` of `world`. */
+const pendingOf = (world: AreaWorld, id: string) => {
+  const area = world.areas.find((candidate) => candidate.id === id);
+  if (area === undefined) {
+    throw new Error(`no area "${id}"`);
+  }
+  return pendingPortals(world, area);
+};
+
+describe("pendingPortals", () => {
+  it("lists the portals into areas not generated, until they are", () => {
+    const store = storeOf();
+    expect(pendingOf(store.snapshot().world, "one")).toEqual([
+      "module:hub>hub2",
+      "portal:main>work",
+    ]);
+    store.ensure("two");
+    const { world } = store.snapshot();
+    expect(pendingOf(world, "one")).toEqual([]);
+    expect(pendingOf(world, "two")).toEqual([
+      "module:hub2>hub3",
+      "module:hub2>hub4",
+    ]);
+  });
+
+  it("keeps the portals into an area that failed", () => {
+    const failing = specsOf(1).map((spec): AreaSpec =>
+      spec.id === "three"
+        ? {
+            ...spec,
+            generate: () => {
+              throw new LayoutError({ from: "hub3", to: "nowhere" });
+            },
+          }
+        : spec
+    );
+    const store = createAreaStore({ seed: 1, entry: "one", specs: failing });
+    store.ensure("two");
+    store.ensure("three");
+    store.ensure("four");
+    expect(pendingOf(store.snapshot().world, "two")).toEqual([
+      "module:hub2>hub3",
+    ]);
+  });
+
+  it("never lists a marker", () => {
+    const { world } = storeOf().snapshot();
+    const [one] = world.areas;
+    if (one === undefined) {
+      throw new Error("no entry area");
+    }
+    // A marker has no arrival either: the same portals, as markers.
+    const marked: BuiltArea = {
+      ...one,
+      built: {
+        ...one.built,
+        portals: one.built.portals.map((built) => ({
+          ...built,
+          portal: { ...built.portal, kind: "marker" as const },
+        })),
+      },
+    };
+    expect(pendingPortals(world, one)).not.toEqual([]);
+    expect(pendingPortals(world, marked)).toEqual([]);
+  });
+
+  it("darkens exactly the portals the merged world cannot land", () => {
+    for (const order of [
+      ["two", "three", "four"],
+      ["two", "four", "three"],
+    ]) {
+      const store = storeOf(2);
+      for (const id of ["one", ...order]) {
+        if (id !== "one") {
+          store.ensure(id);
+        }
+        const { world } = store.snapshot();
+        const unlanded = mergeAreas(world)
+          .built.portals.filter(
+            ({ portal, arrival }) =>
+              arrival === null && portal.kind !== "marker"
+          )
+          .map(({ portal }) => portal.id);
+        expect(
+          world.areas.flatMap((area) => pendingPortals(world, area)),
+          `${order.join(",")} at ${id}`
+        ).toEqual(unlanded);
+      }
+    }
   });
 });

@@ -15,6 +15,8 @@ import { useSurfaces } from "./surfaces";
 
 type PortalsProps = {
   readonly portals: readonly BuiltPortal[];
+  /** Ids of the portals into an area not generated yet: drawn dark. */
+  readonly pending: readonly string[];
 };
 
 /** Keeps the void plane clear of the wall's inner face. */
@@ -33,22 +35,20 @@ const LOOKS: readonly Look[] = [
 ];
 
 /**
- * A portal into an area that is not generated yet has no arrival; a marker
- * never leads anywhere and keeps its board.
- */
-const lookOf = ({ portal, arrival }: BuiltPortal): Look =>
-  arrival === null && portal.kind !== "marker" ? "pending" : portal.kind;
-
-/**
  * One plane per portal of a look, standing on the wall's inner face and
- * facing into the room, merged into a single geometry.
+ * facing into the room, merged into a single geometry. A portal in
+ * `pending` looks pending whatever its kind.
  */
 const voidPlanes = (
   portals: readonly BuiltPortal[],
+  pending: ReadonlySet<string>,
   look: Look
 ): BufferGeometry | null => {
   const parts = portals
-    .filter((portal) => lookOf(portal) === look)
+    .filter(
+      ({ portal }) =>
+        (pending.has(portal.id) ? "pending" : portal.kind) === look
+    )
     .map((portal) => {
       const [x, y, z] = portal.frame.center;
       const { normal } = portal;
@@ -72,12 +72,12 @@ const voidPlanes = (
 };
 
 /**
- * Every portal in the world: the frames as one mesh (the same dark wood as
+ * Every portal of an area: the frames as one mesh (the same dark wood as
  * the doorways) and one plane mesh per kind, dark and faintly glowing, or
  * for a marker a dull board that closes the frame. A portal into an area
  * not generated yet stays dark until it is.
  */
-const Portals = ({ portals }: PortalsProps) => {
+const Portals = ({ portals, pending }: PortalsProps) => {
   const surfaces = useSurfaces();
   const frames = useMemo(
     () =>
@@ -87,10 +87,15 @@ const Portals = ({ portals }: PortalsProps) => {
       ),
     [portals]
   );
-  const voids = useMemo(
-    () => LOOKS.map((look) => [look, voidPlanes(portals, look)] as const),
-    [portals]
-  );
+  // Keyed on the ids, not the array: the portals stay the same objects when
+  // the area they lead into is generated, and only the looks change.
+  const pendingKey = pending.join("\n");
+  const voids = useMemo(() => {
+    const dark = new Set(pendingKey === "" ? [] : pendingKey.split("\n"));
+    return LOOKS.map(
+      (look) => [look, voidPlanes(portals, dark, look)] as const
+    );
+  }, [portals, pendingKey]);
   useEffect(
     () => () => {
       frames?.dispose();

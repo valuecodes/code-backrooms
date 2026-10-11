@@ -1,21 +1,20 @@
 import { useThree } from "@react-three/fiber";
-import type { BuiltWorld } from "@repo/types";
+import type { AreaWorld } from "@repo/types";
+import { pendingPortals } from "@repo/world-generator/areas";
 import { useEffect, useMemo } from "react";
 
-import { DoorFrames } from "./door-frames";
-import { fixturePositions } from "./fixtures";
+import { Area } from "./area";
+import { areaFixtures } from "./fixtures";
 import { LightPool } from "./lights";
-import { Portals } from "./portals";
-import { Room } from "./room";
 import { createSurfaces, SurfacesContext } from "./surfaces";
 
 type WorldProps = {
-  readonly world: BuiltWorld;
+  readonly world: AreaWorld;
 };
 
 const HAZE = "#4d441f";
 
-/** Scene-wide setup: background, fog, ambient light, shared materials, rooms. */
+/** Scene-wide setup: background, fog, ambient light, shared materials, areas. */
 const World = ({ world }: WorldProps) => {
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene);
@@ -25,25 +24,23 @@ const World = ({ world }: WorldProps) => {
     [gl]
   );
   useEffect(() => () => surfaces.dispose(), [surfaces]);
-  const fixtures = useMemo(
-    () => world.rooms.flatMap((built) => fixturePositions(built.room)),
-    [world]
-  );
-  // Compile every shader up front: with a fixed light count there is exactly
-  // one variant per material, so this is a one-off and never stalls a frame.
+  const { areas } = world;
+  const fixtures = useMemo(() => areas.flatMap(areaFixtures), [areas]);
+  // Compile every shader up front: with a fixed light count there is one
+  // variant per material, so this is a one-off. Run again when an area
+  // joins, which may bring the first mesh of a material; the programs
+  // compiled already are a cache hit.
   useEffect(() => {
     gl.compile(scene, camera);
-  }, [gl, scene, camera, world]);
+  }, [gl, scene, camera, areas]);
   return (
     <SurfacesContext value={surfaces}>
       <color attach="background" args={[HAZE]} />
       <fog attach="fog" args={[HAZE, 5, 28]} />
       <ambientLight color="#ffe9b3" intensity={0.5} />
-      {world.rooms.map((built) => (
-        <Room key={built.room.id} built={built} />
+      {areas.map((area) => (
+        <Area key={area.id} area={area} pending={pendingPortals(world, area)} />
       ))}
-      <DoorFrames doorways={world.doorways} />
-      <Portals portals={world.portals} />
       <LightPool fixtures={fixtures} />
     </SurfacesContext>
   );

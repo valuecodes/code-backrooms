@@ -80,6 +80,7 @@ const createAreaStore = ({
       pending: specs
         .map((spec) => spec.id)
         .filter((id) => !built.has(id) && !errors.has(id)),
+      failed: [...errors.keys()],
       areaOf,
     },
     errors: new Map(errors),

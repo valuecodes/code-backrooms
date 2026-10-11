@@ -60,7 +60,6 @@ const App = () => {
   // regenerates while the player moves.
   const generated = useAreaWorld(seed, worldOptions);
   const { ensurePortal } = generated;
-  const built = generated.world?.built ?? null;
   const navigation = useNavigation(seed, generated.current);
   const { onRoomChange, back, home, onPortal: stepPortal } = navigation;
 
@@ -173,9 +172,9 @@ const App = () => {
             gl.shadowMap.needsUpdate = true;
           }}
         >
-          <World world={generated.world.built} />
+          <World world={generated.world} />
           <Player
-            world={generated.world.built}
+            world={generated.world}
             enabled={locked}
             onRoomChange={onRoom}
             placement={navigation.placement}
@@ -186,9 +185,9 @@ const App = () => {
           <PointerLook />
         </Canvas>
       )}
-      {locked && mapOpen && built !== null && (
+      {locked && mapOpen && generated.world !== null && (
         <OverviewMap
-          world={built}
+          world={generated.world}
           visited={visitedIn(visits, seed)}
           current={roomId}
           feed={feed}
@@ -200,7 +199,7 @@ const App = () => {
       <Hud
         locked={locked}
         seed={seed}
-        rooms={generated.world?.graph.rooms.length ?? 0}
+        rooms={generated.rooms}
         modules={generated.modules}
         lastMs={generated.lastMs}
         preset={initial.preset}

@@ -8,11 +8,20 @@ import { Player } from "@repo/renderer/player";
 import { World } from "@repo/renderer/world";
 
 <Canvas shadows="percentage">
-  <World world={built} />
-  <Player world={built} enabled={locked} onRoomChange={setRoomId} />
+  <World world={areaWorld} />
+  <Player world={areaWorld} enabled={locked} onRoomChange={setRoomId} />
   <PointerLook />
 </Canvas>;
 ```
+
+Both take an `AreaWorld` (`@repo/types`): one area for a random or preset
+world, one per module for a code world, growing while the player walks.
+`World` renders each area on its own (`area.tsx`, memoised), so an area that
+joins mounts alone and the others keep their meshes; a portal into an area
+not generated yet is dark until it is. `Player` starts in the entry area and
+each frame looks only at the area it stands in (`areaAt`): collisions,
+rooms, portals and the door or portal in front of it. Areas lie 32 m apart,
+past the fog, so nothing of another one is in reach or in sight.
 
 `onRoomChange` fires from the render loop only when the player crosses into
 another room or corridor (and once for the start room), so a state setter is a
@@ -24,7 +33,7 @@ or a teleport), and `placement` (a position, a facing point and a nonce) puts
 the player somewhere else when it changes.
 
 Each room is five draw calls (merged walls and lintels, floor, ceiling, merged
-fixtures); every door frame in the world is one more, and the portals add
+fixtures); every door frame of an area is one more, and its portals add
 one frame mesh plus one dark plane mesh per kind. Walls and frames carry
 vertex colours (`lane-tint.ts`): white walls and dark-wood frames as built,
 and inside a function's fork a wash of the lane's colour on the walls (sage
@@ -36,6 +45,7 @@ exports `laneColour(kind)`, the same colours as CSS hex, for drawing a lane
 outside the scene (the app's overview map). Each room's walls are shaded up
 to 4 % lighter or darker by a hash of its id. Lighting is a fixed
 pool of eight point lights that follow the player to the nearest fixtures, so
-shaders compile once, and a single static shadow map that re-renders only
-when the shadow light hops to another fixture. Every light buzzes with a
+shaders compile once (and again only for a material an area brings first),
+and a single static shadow map that re-renders only
+when the shadow light hops to another fixture or an area joins. Every light buzzes with a
 phase fixed by its fixture's position, so neighbours never flicker in step.

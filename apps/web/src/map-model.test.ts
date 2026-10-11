@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ExampleName } from "./examples";
 import { EMPTY_VISITS, mapModel, visit, visitedIn } from "./map-model";
-import { codeGraphOf, worldFromCode } from "./world-from-code";
+import { areasFromCode, codeGraphOf, worldFromCode } from "./world-from-code";
 
 /** An example's world, or fails the test with the parser's message. */
 const worldOf = (name: ExampleName, seed = 1): GeneratedWorld => {
@@ -129,5 +129,29 @@ describe("mapModel", () => {
       normal: portal.normal,
     });
     expect(mapModel(world, new Set(), null).portals).toEqual([]);
+  });
+
+  it("draws one area of a world of several: only its rooms", () => {
+    const { codeGraph } = codeGraphOf("repo");
+    if (codeGraph === null) {
+      throw new Error("repo does not parse");
+    }
+    const { areas } = areasFromCode(codeGraph, 1);
+    const server = areas.find((area) => area.id === "src/server.ts");
+    if (server === undefined) {
+      throw new Error("no src/server.ts area");
+    }
+    const everywhere = new Set(
+      areas.flatMap((area) => area.graph.rooms.map((room) => room.id))
+    );
+    const own = new Set(server.built.rooms.map(({ room }) => room.id));
+    const model = mapModel(server.built, everywhere, "src/server.ts");
+    expect(model.rooms.length).toBeGreaterThan(0);
+    expect(model.rooms.every((room) => own.has(room.id))).toBe(true);
+    expect(
+      model.portals.every(({ id }) =>
+        server.built.portals.some(({ portal }) => portal.id === id)
+      )
+    ).toBe(true);
   });
 });

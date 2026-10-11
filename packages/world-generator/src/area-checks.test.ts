@@ -65,6 +65,16 @@ describe("checkAreas", () => {
     );
   });
 
+  it("accepts a portal into an area that failed", () => {
+    const world = areaWorld();
+    const failed = {
+      ...world,
+      areas: world.areas.filter((area) => area.id !== "three"),
+      failed: ["three"],
+    };
+    expect(checkAreas(failed)).toEqual([]);
+  });
+
   it("names an area no placed portal reaches", () => {
     const [, two, three] = areaGraphs;
     if (two === undefined || three === undefined) {

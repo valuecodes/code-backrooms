@@ -155,7 +155,9 @@ The areas are then set apart and joined by portals only. `codeAreaStore(graph,
 seed, { variation, eager })` does the same on demand (`createAreaStore`):
 the entrance at once, each module on its first `ensure`, its units known
 before from its world graph alone, since demoting a call door and varying
-proportions change no room; `generateCodeWorld` is the eager store's world.
+proportions change no room; `generateCodeWorld` is the eager store's world,
+and throws if a module could not be generated rather than leave it out (the
+store keeps such an error and lists the area in `world.failed`).
 The player starts in the repository entrance (`src/entrance.ts`, area and hub
 id `ENTRANCE_ID = "//entrance"`, which no normalised path can equal): a
 hub named after the directory every module lies in (`src`), else
