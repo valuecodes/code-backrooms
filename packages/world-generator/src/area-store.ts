@@ -3,9 +3,16 @@
 // moves once placed (the packing is a function of the sequence so far), so
 // a world that grows keeps every room, portal and landing it had.
 
-import type { AreaWorld, BuiltArea, GeneratedWorld, Rect } from "@repo/types";
+import type { AreaWorld, BuiltArea, GeneratedWorld } from "@repo/types";
 
-import { layoutBounds, packOffsets, placeArea } from "./areas";
+import {
+  areaZones,
+  layoutBounds,
+  packSlots,
+  placeArea,
+  stripsOf,
+} from "./areas";
+import type { Slot, ZoneSpec } from "./areas";
 
 /** An area to generate on demand. */
 type AreaSpec = {
@@ -14,6 +21,8 @@ type AreaSpec = {
   readonly units: readonly string[];
   /** Lays the area out round the origin; may throw. */
   readonly generate: () => GeneratedWorld;
+  /** The id of its zone; none for an area outside every zone. */
+  readonly zone?: string;
 };
 
 type AreaState = {
@@ -43,30 +52,37 @@ type AreaStoreOptions = {
   /** The area generated at once, at the origin; its failure throws. */
   readonly entry: string;
   readonly specs: readonly AreaSpec[];
+  /** Each zone's areas pack into a strip of their own; none by default. */
+  readonly zones?: readonly ZoneSpec[];
 };
 
 const createAreaStore = ({
   seed,
   entry,
   specs,
+  zones = [],
 }: AreaStoreOptions): AreaStore => {
   const specOf = new Map(specs.map((spec) => [spec.id, spec]));
   const areaOf = new Map(
     specs.flatMap((spec) => spec.units.map((unit) => [unit, spec.id] as const))
   );
+  const strips = stripsOf(zones, entry, specs);
   const listeners = new Set<() => void>();
   const built = new Map<string, BuiltArea>();
-  const bounds: Rect[] = [];
+  const slots: Slot[] = [];
   const areas: BuiltArea[] = [];
   const errors = new Map<string, string>();
 
   const generate = (spec: AreaSpec): BuiltArea => {
     const world = spec.generate();
-    const rect = layoutBounds(world.layout.rooms);
-    const offset = packOffsets([...bounds, rect]).at(-1) ?? { x: 0, z: 0 };
-    const area = placeArea({ id: spec.id, world }, offset);
+    const slot = {
+      rect: layoutBounds(world.layout.rooms),
+      strip: strips.get(spec.id) ?? 0,
+    };
+    const offset = packSlots([...slots, slot]).at(-1) ?? { x: 0, z: 0 };
+    const area = placeArea({ id: spec.id, world, zone: spec.zone }, offset);
     // Only a placed area takes up room: a throw above leaves no trace.
-    bounds.push(rect);
+    slots.push(slot);
     built.set(spec.id, area);
     areas.push(area);
     return area;
@@ -82,6 +98,7 @@ const createAreaStore = ({
         .filter((id) => !built.has(id) && !errors.has(id)),
       failed: [...errors.keys()],
       areaOf,
+      zones: areaZones(zones, specs, areas),
     },
     errors: new Map(errors),
     lastMs,

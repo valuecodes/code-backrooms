@@ -1,4 +1,4 @@
-import type { Rect } from "@repo/types";
+import type { Point, Rect } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,6 +6,7 @@ import {
   layoutBounds,
   mergeAreas,
   packOffsets,
+  packSlots,
   SHELF_WIDTH,
   translateLayout,
 } from "./areas";
@@ -29,6 +30,10 @@ const rect = (width: number, depth: number): Rect => ({
   minZ: -depth / 2,
   maxZ: depth / 2,
 });
+
+/** The points with -0 as 0: gridUp turns a zero into -0. */
+const unsigned = (points: readonly Point[]) =>
+  points.map(({ x, z }) => ({ x: x + 0, z: z + 0 }));
 
 /** Corridor ids of a random world, named with `prefix`. */
 const corridors = (prefix?: string) =>
@@ -72,6 +77,58 @@ describe("packOffsets", () => {
     }
     expect(packOffsets(bounds)).toEqual(offsets);
     expect(packOffsets([])).toEqual([]);
+  });
+
+  it("places exactly as before zones, through packSlots in strip 0", () => {
+    // Recorded from packOffsets before strips existed.
+    const cases: readonly (readonly [Rect[], Point[]])[] = [
+      [
+        [rect(20, 10), rect(31, 17), rect(8, 40), rect(100, 6)],
+        [
+          { x: 0, z: 0 },
+          { x: 57.5, z: 3.5 },
+          { x: 109, z: 15 },
+          { x: 195, z: -2 },
+        ],
+      ],
+      [
+        Array.from({ length: 8 }, () => rect(100, 20)),
+        [
+          { x: 0, z: 0 },
+          { x: 132, z: 0 },
+          { x: 264, z: 0 },
+          { x: 396, z: 0 },
+          { x: 0, z: 52 },
+          { x: 132, z: 52 },
+          { x: 264, z: 52 },
+          { x: 396, z: 52 },
+        ],
+      ],
+      [
+        [
+          rect(20, 10),
+          rect(300, 30),
+          rect(600, 14),
+          rect(40, 40),
+          rect(700, 9),
+          rect(30, 12),
+        ],
+        [
+          { x: 0, z: 0 },
+          { x: 192, z: 10 },
+          { x: 290, z: 64 },
+          { x: 10, z: 123 },
+          { x: 340, z: 179.5 },
+          { x: 5, z: 222 },
+        ],
+      ],
+    ];
+    for (const [bounds, offsets] of cases) {
+      expect(unsigned(packOffsets(bounds))).toEqual(offsets);
+      expect(
+        unsigned(packSlots(bounds.map((r) => ({ rect: r, strip: 0 }))))
+      ).toEqual(offsets);
+    }
   });
 
   it("starts a new row once a row would pass SHELF_WIDTH", () => {

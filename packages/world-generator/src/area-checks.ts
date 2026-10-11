@@ -1,6 +1,6 @@
 import type { AreaWorld, BuiltArea } from "@repo/types";
 
-import { AREA_GAP } from "./areas";
+import { AREA_GAP, SHELF_WIDTH, stripRange } from "./areas";
 import { rectGap } from "./fit";
 import { roomBounds } from "./geometry";
 import { blocked, checkLayout } from "./layout-checks";
@@ -70,12 +70,98 @@ const checkCrossings = (
   return reaches;
 };
 
+/** The areas reachable from `from` over `reaches`, among `among` only. */
+const reachableFrom = (
+  from: string,
+  reaches: ReadonlyMap<string, ReadonlySet<string>>,
+  among: ReadonlySet<string>
+): ReadonlySet<string> => {
+  const seen = new Set([from]);
+  const queue = [from];
+  // for...of sees areas pushed while iterating, so this is a plain BFS.
+  for (const id of queue) {
+    for (const next of reaches.get(id) ?? []) {
+      if (among.has(next) && !seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return seen;
+};
+
+/**
+ * The zones of `world`: every area's `zoneId` is the zone that lists it;
+ * every area no wider than SHELF_WIDTH inside its zone's strip (strip 0
+ * outside every zone); every zone hub led to by a portal of the entry area
+ * (known for pending hubs too); and, once all of a zone's areas are built,
+ * each reachable from its hub over portals between them. A zone with an
+ * area pending or failed is not walked: a portal from another zone may
+ * have generated an area before its hub, and areas behind a failed one are
+ * out of reach inside the zone.
+ */
+const checkZones = (
+  world: AreaWorld,
+  reaches: ReadonlyMap<string, ReadonlySet<string>>,
+  failures: string[]
+) => {
+  const entry = world.areas.find((area) => area.id === world.entry);
+  if (entry === undefined) {
+    return;
+  }
+  const zoneOf = new Map(
+    world.zones.flatMap((zone, at) =>
+      zone.areas.map((id) => [id, { zone, strip: at + 1 }] as const)
+    )
+  );
+  for (const area of world.areas) {
+    const listed = zoneOf.get(area.id);
+    if (area.zoneId !== (listed?.zone.id ?? null)) {
+      failures.push(
+        `area ${area.id} has zoneId ${area.zoneId}, expected ${listed?.zone.id ?? null}`
+      );
+    }
+    const strip = stripRange(entry.bounds.minX, listed?.strip ?? 0);
+    if (
+      area.bounds.maxX - area.bounds.minX <= SHELF_WIDTH &&
+      (area.bounds.minX < strip.minX - 1e-9 ||
+        area.bounds.maxX > strip.maxX + 1e-9)
+    ) {
+      failures.push(`area ${area.id} is outside its strip`);
+    }
+  }
+  const fromEntry = new Set(
+    (entry.graph.portals ?? []).map((portal) => world.areaOf.get(portal.to))
+  );
+  const built = new Set(world.areas.map((area) => area.id));
+  for (const zone of world.zones) {
+    const [hub] = zone.areas;
+    if (hub === undefined) {
+      continue;
+    }
+    if (!fromEntry.has(hub)) {
+      failures.push(`zone ${zone.id} hub ${hub} is not reached from the entry`);
+    }
+    if (!zone.areas.every((id) => built.has(id))) {
+      continue;
+    }
+    const seen = reachableFrom(hub, reaches, new Set(zone.areas));
+    for (const id of zone.areas) {
+      if (!seen.has(id)) {
+        failures.push(
+          `area ${id} of zone ${zone.id} is unreachable from its hub ${hub}`
+        );
+      }
+    }
+  }
+};
+
 /**
  * Every invariant of a world of areas, as failure messages: each area's own
  * `checkLayout`; room and portal ids unique across areas; areas at least
  * AREA_GAP apart, each start room at its offset; portals into other areas
  * landing in their unit; every area reachable from the entry over placed
- * portals.
+ * portals; and the zones as `checkZones` has them.
  */
 const checkAreas = (world: AreaWorld): string[] => {
   const failures: string[] = [];
@@ -112,22 +198,17 @@ const checkAreas = (world: AreaWorld): string[] => {
     }
   }
   const reaches = checkCrossings(world, failures);
-  const seen = new Set([world.entry]);
-  const queue = [world.entry];
-  // for...of sees areas pushed while iterating, so this is a plain BFS.
-  for (const id of queue) {
-    for (const next of reaches.get(id) ?? []) {
-      if (!seen.has(next)) {
-        seen.add(next);
-        queue.push(next);
-      }
-    }
-  }
+  const seen = reachableFrom(
+    world.entry,
+    reaches,
+    new Set(world.areas.map((area) => area.id))
+  );
   for (const area of world.areas) {
     if (!seen.has(area.id)) {
       failures.push(`area ${area.id} is unreachable from ${world.entry}`);
     }
   }
+  checkZones(world, reaches, failures);
   return failures;
 };
 
