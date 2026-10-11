@@ -16,6 +16,8 @@ const RING_STEP = 16;
  * gap between two diagonal neighbours still has a candidate in it.
  */
 const SLIDE_STEP = 2;
+/** Radians a parent's children fan out over, round its outward direction. */
+const FAN = Math.PI / 2;
 
 /** An area to place: its id and its bounds laid out round the origin. */
 type TreeSlot = {
@@ -109,9 +111,32 @@ const branchOf = (
 };
 
 /**
+ * The turn of `id` among its siblings: its parent's children, sorted by
+ * id, spread evenly over FAN; none for an only child, or for an area not
+ * placed beside its own parent.
+ */
+const fanOf = (
+  id: string,
+  anchor: string,
+  parents: ReadonlyMap<string, string>
+): number => {
+  if (parents.get(id) !== anchor) {
+    return 0;
+  }
+  const siblings = [...parents]
+    .filter(([, parent]) => parent === anchor)
+    .map(([child]) => child)
+    .toSorted();
+  return siblings.length < 2
+    ? 0
+    : (siblings.indexOf(id) / (siblings.length - 1) - 0.5) * FAN;
+};
+
+/**
  * The unit direction an area heads in from its anchor: away from the
- * anchor's own anchor, or for an area beside the entry its branch's share
- * of the full turn (the k-th of n branches at 2πk/n).
+ * anchor's own anchor, turned by its place among its siblings (`fanOf`),
+ * so a branch splits as it grows; or for an area beside the entry its
+ * branch's share of the full turn (the k-th of n branches at 2πk/n).
  */
 const headingOf = (
   id: string,
@@ -124,9 +149,11 @@ const headingOf = (
   if (anchor !== entry && grand !== undefined) {
     const from = centreOf(grand.rect);
     const to = centreOf(anchor.rect);
-    const length = Math.hypot(to.x - from.x, to.z - from.z);
-    if (length > 1e-9) {
-      return { x: (to.x - from.x) / length, z: (to.z - from.z) / length };
+    if (Math.hypot(to.x - from.x, to.z - from.z) > 1e-9) {
+      const angle =
+        Math.atan2(to.z - from.z, to.x - from.x) +
+        fanOf(id, anchor.id, parents);
+      return { x: Math.cos(angle), z: Math.sin(angle) };
     }
   }
   const { index, count } = branchOf(id, parents, entry.id);
