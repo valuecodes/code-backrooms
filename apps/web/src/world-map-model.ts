@@ -323,6 +323,24 @@ const playerMarker = (world: AreaWorld, placement: Placement): MapPlayer => {
   };
 };
 
+/** Before the first pose of a world with no areas: the origin, north up. */
+const NO_POSE: Placement = {
+  position: { x: 0, z: 0 },
+  facing: { x: 0, z: -1 },
+};
+
+/**
+ * Where the player starts: the entry area's start, facing what it faces
+ * (the first area's without an entry area, the origin without any).
+ */
+const startPlacement = (world: AreaWorld): Placement => {
+  const entry =
+    world.areas.find((area) => area.id === world.entry) ?? world.areas[0];
+  return entry === undefined
+    ? NO_POSE
+    : { position: entry.built.start, facing: entry.built.facing };
+};
+
 /** Label height in metres: a 140th of the map's width, kept readable. */
 const LABEL_MIN = 1.5;
 const LABEL_MAX = 5;
@@ -371,5 +389,5 @@ const worldMapModel = (
   };
 };
 
-export { labelFontSize, playerMarker, worldMapModel };
+export { labelFontSize, playerMarker, startPlacement, worldMapModel };
 export type { MapArea, MapPlayer, WorldMapModel };

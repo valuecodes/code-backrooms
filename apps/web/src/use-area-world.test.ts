@@ -1,13 +1,17 @@
 import { ENTRANCE_ID, modulePortalId } from "@repo/code-graph/ids";
 import { buildCodeGraph } from "@repo/parser";
 import type { BuiltArea } from "@repo/types";
+import { generateWorld } from "@repo/world-generator";
 import { checkAreas } from "@repo/world-generator/area-checks";
+import { createAreaStore } from "@repo/world-generator/area-store";
+import type { AreaStore } from "@repo/world-generator/area-store";
 import { mergeAreas } from "@repo/world-generator/areas";
 import { createNavigator } from "@repo/world-generator/navigation";
 import { describe, expect, it } from "vitest";
 
 import {
   builtModules,
+  ensureNext,
   storeFor,
   targetAreaOf,
   warningsOf,
@@ -76,6 +80,66 @@ describe("storeFor", () => {
     const failed = storeFor(1, options({ codeGraph: empty }));
     expect(failed.store).toBeNull();
     expect(failed.error).toContain("at least one module");
+  });
+});
+
+/** Each area of a store with where it was placed, in generation order. */
+const placed = (store: AreaStore) =>
+  store.snapshot().world.areas.map(({ id, offset }) => ({ id, offset }));
+
+describe("ensureNext", () => {
+  it("generates the first pending area and reports true", () => {
+    const store = storeOf(1);
+    const [first, ...rest] = store.snapshot().world.pending;
+    expect(ensureNext(store)).toBe(true);
+    const { world } = store.snapshot();
+    expect(world.areas.at(-1)?.id).toBe(first);
+    expect(world.pending).toEqual(rest);
+  });
+
+  it("reports false once nothing is pending", () => {
+    const store = storeOf(1);
+    store.ensureAll();
+    const before = store.snapshot();
+    expect(ensureNext(store)).toBe(false);
+    expect(store.snapshot()).toBe(before);
+  });
+
+  it("stepping to the end gives the areas ensureAll gives, in its order", () => {
+    const stepped = storeOf(3);
+    while (ensureNext(stepped)) {
+      // One area per call.
+    }
+    const all = storeOf(3);
+    all.ensureAll();
+    expect(placed(stepped)).toEqual(placed(all));
+  });
+
+  it("keeps going past an area that fails", () => {
+    const store = createAreaStore({
+      seed: 1,
+      entry: "a",
+      specs: [
+        { id: "a", units: [], generate: () => generateWorld({ seed: 1 }) },
+        {
+          id: "b",
+          units: [],
+          generate: () => {
+            throw new Error("no room");
+          },
+        },
+        { id: "c", units: [], generate: () => generateWorld({ seed: 2 }) },
+      ],
+    });
+    let steps = 0;
+    while (ensureNext(store)) {
+      steps += 1;
+    }
+    const { world, errors } = store.snapshot();
+    expect(steps).toBe(2);
+    expect(world.areas.map(({ id }) => id)).toEqual(["a", "c"]);
+    expect(world.failed).toEqual(["b"]);
+    expect(errors.get("b")).toContain("no room");
   });
 });
 

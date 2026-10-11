@@ -17,6 +17,7 @@ describe("parseWorldParams", () => {
       preset: null,
       code: null,
       eager: false,
+      view: "world",
     });
   });
 
@@ -29,7 +30,18 @@ describe("parseWorldParams", () => {
       preset: "hub",
       code: "demo",
       eager: true,
+      view: "world",
     });
+  });
+
+  it("reads ?view=map", () => {
+    expect(parseWorldParams("?code=repo&view=map").view).toBe("map");
+  });
+
+  it("falls back to the world view for an unknown view", () => {
+    expect(parseWorldParams("?view=MAP").view).toBe("world");
+    expect(parseWorldParams("?view=3d").view).toBe("world");
+    expect(parseWorldParams("?view").view).toBe("world");
   });
 
   it("is eager only for eager=1", () => {
@@ -47,6 +59,7 @@ describe("parseWorldParams", () => {
       preset: null,
       code: null,
       eager: false,
+      view: "world",
     });
     expect(parseWorldParams("?rooms=-5")).toMatchObject({ rooms: 1 });
     expect(parseWorldParams("?rooms=20junk&seed=1.5")).toMatchObject({
