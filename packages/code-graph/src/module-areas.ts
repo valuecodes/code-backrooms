@@ -2,6 +2,7 @@ import type { AreaWorld, GeneratedWorld, WorldGraph } from "@repo/types";
 import { generateWorld } from "@repo/world-generator";
 import { createAreaStore } from "@repo/world-generator/area-store";
 import type { AreaSpec, AreaStore } from "@repo/world-generator/area-store";
+import type { ZoneSpec } from "@repo/world-generator/areas";
 import { LayoutError } from "@repo/world-generator/layout";
 
 import type { CodeGraph, ModuleNode } from "./code-graph";
@@ -9,6 +10,8 @@ import { entranceGraph } from "./entrance";
 import { entryModules } from "./entrypoints";
 import { ENTRANCE_ID } from "./ids";
 import { edgeKey, toWorldGraph } from "./world-graph";
+import { zoneEntranceGraph, zoneGraph } from "./zone-graph";
+import { hasZones, zoneOfModule, zonesOf } from "./zones";
 
 /** How one module's area is laid out. */
 type AreaInput = {
@@ -103,44 +106,90 @@ const unitsOf = ({ rooms }: WorldGraph): readonly string[] =>
   rooms.map((room) => room.id);
 
 /**
- * The repository entrance, then one area per module. A module's units come
- * from its world graph alone, which is cheap: demoting a call door to a
- * portal and varying proportions change no room, so they are known before
- * the module is laid out.
+ * A hub chain's area, the entrance's or a zone's: never varied, its
+ * corridors named after its first hub.
+ */
+const hubArea = (seed: number, id: string, graph: WorldGraph): AreaSpec => ({
+  id,
+  units: unitsOf(graph),
+  generate: () =>
+    generateWorld({
+      seed,
+      graph,
+      variation: false,
+      corridorPrefix: `${id}/corridor-`,
+    }),
+});
+
+/**
+ * One area per module, in its zone when `zoned`. Its units come from its
+ * world graph alone, which is cheap: demoting a call door to a portal and
+ * varying proportions change no room, so they are known before the module
+ * is laid out.
+ */
+const moduleSpecs = (
+  graph: CodeGraph,
+  seed: number,
+  variation: boolean,
+  zoned: boolean
+): readonly AreaSpec[] =>
+  graph.modules.map((module): AreaSpec => {
+    const spec: AreaSpec = {
+      id: module.id,
+      units: unitsOf(toWorldGraph(graph, new Set(), null, module)),
+      generate: () => moduleArea({ graph, module, seed }, variation),
+    };
+    const zone = zoned ? zoneOfModule(graph, module.id) : null;
+    return zone === null ? spec : { ...spec, zone: zone.id };
+  });
+
+/**
+ * The repository entrance, then one area per zone's hub when there are
+ * several zones, then one per module. With one zone or none the entrance
+ * leads straight to the entry modules and nothing is zoned.
  */
 const codeAreaSpecs = (
   graph: CodeGraph,
   seed: number,
   variation: boolean
 ): readonly AreaSpec[] => {
-  const entrance = entranceGraph(graph, entryModules(graph));
+  if (!hasZones(graph)) {
+    return [
+      hubArea(seed, ENTRANCE_ID, entranceGraph(graph, entryModules(graph))),
+      ...moduleSpecs(graph, seed, variation, false),
+    ];
+  }
+  const zones = zonesOf(graph);
   return [
-    {
-      id: ENTRANCE_ID,
-      units: unitsOf(entrance),
-      generate: () =>
-        generateWorld({
-          seed,
-          graph: entrance,
-          variation: false,
-          corridorPrefix: `${ENTRANCE_ID}/corridor-`,
-        }),
-    },
-    ...graph.modules.map((module): AreaSpec => ({
-      id: module.id,
-      units: unitsOf(toWorldGraph(graph, new Set(), null, module)),
-      generate: () => moduleArea({ graph, module, seed }, variation),
+    hubArea(seed, ENTRANCE_ID, zoneEntranceGraph(graph, zones)),
+    ...zones.map((zone): AreaSpec => ({
+      ...hubArea(seed, zone.id, zoneGraph(graph, zone)),
+      zone: zone.id,
     })),
+    ...moduleSpecs(graph, seed, variation, true),
   ];
 };
+
+/** Each zone's strip, its hub area first; none with one zone or none. */
+const zoneSpecsOf = (graph: CodeGraph): readonly ZoneSpec[] =>
+  hasZones(graph)
+    ? zonesOf(graph).map((zone) => ({
+        id: zone.id,
+        name: zone.name,
+        hub: zone.id,
+      }))
+    : [];
 
 /**
  * The code graph as areas: the repository entrance, then one per module,
  * each laid out on its own and set apart from the others, joined by module
  * and call portals. The player starts in the entrance, whose module portals
  * lead to the entry modules (`entryModules`), from which imports reach
- * every other module. Only the entrance is generated up front unless
- * `eager`; every module waits for its first `ensure`.
+ * every other module. In a repository of several zones (`zonesOf`) they
+ * lead to each zone's hub instead, whose portals lead to the zone's entry
+ * modules, and each zone packs into a strip of its own. Only the entrance
+ * is generated up front unless `eager`; every other area waits for its
+ * first `ensure`.
  */
 const codeAreaStore = (
   graph: CodeGraph,
@@ -154,6 +203,7 @@ const codeAreaStore = (
     seed,
     entry: ENTRANCE_ID,
     specs: codeAreaSpecs(graph, seed, variation),
+    zones: zoneSpecsOf(graph),
   });
   if (eager) {
     store.ensureAll();
