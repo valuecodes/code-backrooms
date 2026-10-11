@@ -57,7 +57,9 @@ const match = (
     best = {
       prefix,
       length: mapping.key.length,
-      targets: mapping.targets.map((target) => target.replace("*", matched)),
+      targets: mapping.targets.map((target) =>
+        target.replaceAll("*", matched)
+      ),
     };
   }
   return best?.targets ?? null;
