@@ -27,6 +27,8 @@ import {
   parsePortalId,
 } from "./ids";
 import type { FlowNodeRef } from "./ids";
+import { hasZones, isZoneHub, zoneOfHub, zonesOf } from "./zones";
+import type { Zone } from "./zones";
 
 type FunctionSubject = {
   readonly fn: FunctionNode;
@@ -38,9 +40,12 @@ type RoomSubject =
       readonly kind: "entrance";
       /** The repository's name, on the entrance's walls and in the HUD. */
       readonly name: string;
-      /** The modules its portals lead to, in portal order. */
+      /** The modules its portals lead to, in portal order; none when zoned. */
       readonly modules: readonly ModuleNode[];
+      /** The zones its portals lead to when there are several, in order. */
+      readonly zones: readonly Zone[];
     }
+  | { readonly kind: "zone"; readonly zone: Zone }
   | { readonly kind: "module"; readonly module: ModuleNode }
   | {
       /** A class's lobby. */
@@ -205,9 +210,9 @@ const membersOf = (
 
 /**
  * What a room stands for: a flow room of a function, a function, a module
- * hub, a class's lobby or the repository entrance; null for corridors and
- * ids not from this graph. Flow ids also contain `::`, so they are tried
- * first.
+ * hub, a class's lobby, a zone's hub or the repository entrance; null for
+ * corridors and ids not from this graph. Flow ids also contain `::`, so
+ * they are tried first.
  */
 const roomSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
   if (parseFlowNodeId(roomId) !== null) {
@@ -218,11 +223,17 @@ const roomSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
     return subject === null ? null : { kind: "function", ...subject };
   }
   if (isEntranceHub(roomId)) {
+    const zoned = hasZones(graph);
     return {
       kind: "entrance",
       name: repositoryName(graph),
-      modules: entryModules(graph),
+      modules: zoned ? [] : entryModules(graph),
+      zones: zoned ? zonesOf(graph) : [],
     };
+  }
+  if (isZoneHub(roomId)) {
+    const zone = zoneOfHub(graph, roomId);
+    return zone === null ? null : { kind: "zone", zone };
   }
   const hub = parseHubId(roomId);
   const module = graph.modules.find((candidate) => candidate.id === hub.module);
@@ -264,10 +275,15 @@ type PortalSubject =
     }
   | {
       readonly kind: "module";
-      /** The module whose hub holds it; null for the entrance. */
+      /** The module whose hub holds it; null for the entrance or a zone's hub. */
       readonly from: ModuleNode | null;
       /** The module it leads to: one this one imports. */
       readonly module: ModuleNode;
+    }
+  | {
+      /** From the entrance into a zone's hub. */
+      readonly kind: "zone";
+      readonly zone: Zone;
     };
 
 /** What a portal stands for, or null for ids not from this graph. */
@@ -280,11 +296,16 @@ const portalSubject = (
     return null;
   }
   if (ref.kind === "module") {
-    const from = isEntranceHub(ref.from)
-      ? null
-      : graph.modules.find(
-          (candidate) => candidate.id === hubModuleId(ref.from)
-        );
+    if (isZoneHub(ref.to)) {
+      const zone = isEntranceHub(ref.from) ? zoneOfHub(graph, ref.to) : null;
+      return zone === null ? null : { kind: "zone", zone };
+    }
+    const from =
+      isEntranceHub(ref.from) || isZoneHub(ref.from)
+        ? null
+        : graph.modules.find(
+            (candidate) => candidate.id === hubModuleId(ref.from)
+          );
     const module = graph.modules.find((candidate) => candidate.id === ref.to);
     return from === undefined || module === undefined
       ? null

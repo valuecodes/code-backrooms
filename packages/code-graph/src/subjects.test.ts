@@ -7,7 +7,13 @@ import type {
   ImportRecord,
   SourceSpan,
 } from "./code-graph";
-import { demoGraph, fixtureGraph, importOf } from "./fixture";
+import {
+  demoGraph,
+  fixtureGraph,
+  importOf,
+  packageNode,
+  withPackages,
+} from "./fixture";
 import { branch, fnWith, step } from "./flow-fixture";
 import { layoutFlow, planFlow } from "./flow-layout";
 import { classId, ENTRANCE_ID, modulePortalId, parseFlowNodeId } from "./ids";
@@ -26,6 +32,17 @@ const callPortalId = (
   );
   return `portal:${site?.id ?? "?"}`;
 };
+
+/** Two packages, `app` depending on `lib`, a module each. */
+const twoPackages = () =>
+  withPackages(
+    fixtureGraph(
+      { path: "app/main.ts", functions: [], imports: [importOf("lib/a.ts")] },
+      { path: "lib/a.ts", functions: [] }
+    ),
+    packageNode("app", "app", ["lib"]),
+    packageNode("lib", "lib")
+  );
 
 describe("roomSubject", () => {
   const graph = demoGraph();
@@ -96,6 +113,20 @@ describe("roomSubject", () => {
     expect(roomSubject(graph, classId("m.ts", "Other"))).toBeNull();
     expect(roomSubject(graph, classId("x.ts", "Svc"))).toBeNull();
   });
+
+  it("names a zone's hubs by the zone, and the entrance by its zones", () => {
+    const zoned = twoPackages();
+    const lib = { kind: "zone", zone: { id: "//zone:lib", name: "lib" } };
+    expect(roomSubject(zoned, "//zone:lib")).toMatchObject(lib);
+    expect(roomSubject(zoned, "//zone:lib#2")).toMatchObject(lib);
+    expect(roomSubject(zoned, "//zone:nope")).toBeNull();
+    expect(roomSubject(zoned, ENTRANCE_ID)).toMatchObject({
+      kind: "entrance",
+      name: "repository",
+      modules: [],
+      zones: [{ name: "app" }, { name: "lib" }],
+    });
+  });
 });
 
 describe("portalSubject", () => {
@@ -153,6 +184,26 @@ describe("portalSubject", () => {
     expect(
       portalSubject(linked, modulePortalId(ENTRANCE_ID, "c.ts"))
     ).toBeNull();
+  });
+
+  it("names the zone an entrance portal leads to, and a zone hub's module", () => {
+    const zoned = twoPackages();
+    expect(
+      portalSubject(zoned, modulePortalId(ENTRANCE_ID, "//zone:lib"))
+    ).toMatchObject({ kind: "zone", zone: { name: "lib" } });
+    expect(
+      portalSubject(zoned, modulePortalId(ENTRANCE_ID, "//zone:nope"))
+    ).toBeNull();
+    expect(
+      portalSubject(zoned, modulePortalId("//zone:app", "//zone:lib"))
+    ).toBeNull();
+    expect(
+      portalSubject(zoned, modulePortalId("//zone:lib#2", "lib/a.ts"))
+    ).toMatchObject({
+      kind: "module",
+      from: null,
+      module: { path: "lib/a.ts" },
+    });
   });
 
   it("returns null for anything else", () => {

@@ -71,8 +71,8 @@ const subjectOf = (
 
 /**
  * `Class.method()` for a function or one of its rooms, the path for a hub,
- * `class Svc` for a lobby, the repository's name for the entrance, the id
- * otherwise.
+ * `class Svc` for a lobby, the repository's name for the entrance, the
+ * package's for a zone's hub, the id otherwise.
  */
 const labelOf = (codeGraph: CodeGraph | null, roomId: string): string => {
   const subject = subjectOf(codeGraph, roomId);
@@ -81,6 +81,9 @@ const labelOf = (codeGraph: CodeGraph | null, roomId: string): string => {
   }
   if (subject.kind === "entrance") {
     return subject.name;
+  }
+  if (subject.kind === "zone") {
+    return subject.zone.name;
   }
   if (subject.kind === "class") {
     return `class ${subject.node.name}`;
@@ -91,9 +94,11 @@ const labelOf = (codeGraph: CodeGraph | null, roomId: string): string => {
 };
 
 /**
- * The HUD line for a room: the repository's name in the entrance, the file
- * for a hub, `file · class Svc` for a lobby, `file · Class.method()` for a function, `file · Class.method() · await fetch(…)` for a room of its
- * flow, and the raw id for anything else (corridors, preset rooms).
+ * The HUD line for a room: the repository's name in the entrance, the
+ * package's in a zone's hub, the file for a hub, `file · class Svc` for a
+ * lobby, `file · Class.method()` for a function, `file · Class.method() ·
+ * await fetch(…)` for a room of its flow, and the raw id for anything else
+ * (corridors, preset rooms).
  */
 const describeRoom = (codeGraph: CodeGraph | null, roomId: string): string => {
   const subject = subjectOf(codeGraph, roomId);
@@ -102,6 +107,9 @@ const describeRoom = (codeGraph: CodeGraph | null, roomId: string): string => {
   }
   if (subject.kind === "entrance") {
     return subject.name;
+  }
+  if (subject.kind === "zone") {
+    return subject.zone.name;
   }
   if (subject.kind === "module") {
     return subject.module.path;
@@ -172,6 +180,9 @@ const promptOf = (
   }
   if (subject.kind === "module") {
     return `→ ${subject.module.path}`;
+  }
+  if (subject.kind === "zone") {
+    return `→ ${subject.zone.name}`;
   }
   // A marker leads nowhere: it names the calls the world cannot follow.
   if (subject.kind === "marker") {

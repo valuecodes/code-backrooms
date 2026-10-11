@@ -12,6 +12,7 @@ import type {
   FunctionNode,
   ImportRecord,
   ModuleNode,
+  PackageNode,
   SourceSpan,
 } from "./code-graph";
 import { callSiteId, classId, flowNodeId, functionId } from "./ids";
@@ -240,6 +241,19 @@ const importOf = (target: string, name = "x"): ImportRecord => ({
   span: spanAt(1, 1),
 });
 
+/** A workspace package at `dir`, its id its name, with no exports or paths. */
+const packageNode = (
+  name: string,
+  dir: string,
+  deps: readonly string[] = []
+): PackageNode => ({ id: name, name, dir, exports: [], paths: [], deps });
+
+/** The graph with these packages, as the parser attaches manifests. */
+const withPackages = (
+  graph: CodeGraph,
+  ...packages: readonly PackageNode[]
+): CodeGraph => ({ ...graph, packages });
+
 /** The reference demo from the product plan (section 23). */
 const demoGraph = (): CodeGraph =>
   fixtureGraph({
@@ -257,4 +271,4 @@ const demoGraph = (): CodeGraph =>
     ],
   });
 
-export { demoGraph, fixtureGraph, importOf };
+export { demoGraph, fixtureGraph, importOf, packageNode, withPackages };

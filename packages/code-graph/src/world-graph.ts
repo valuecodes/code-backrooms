@@ -21,6 +21,7 @@ import { MODULE_PORTALS_PER_HUB, planHubs } from "./hub-plan";
 import { modulePortalId } from "./ids";
 import { moduleLinks } from "./module-links";
 import { columnJitter } from "./variation";
+import { zoneLabels } from "./zone-labels";
 
 /** Functions nobody else calls, from the directed edges, in source order. */
 const rootsOf = (
@@ -269,8 +270,7 @@ const moduleWorld = (
       new Set([...(treeCallees.get(edge.source) ?? []), edge.target])
     );
   }
-  const nameOf = (id: string): string =>
-    graph.functions.find((fn) => fn.id === id)?.name ?? id;
+  const { calleeLabel } = zoneLabels(graph, module);
   const rooms: GraphRoom[] = [];
   const calls: Portal[] = [];
   const returns: Portal[] = [];
@@ -285,7 +285,7 @@ const moduleWorld = (
       cluster,
       treeCallees.get(fn.id) ?? new Set(),
       module.id,
-      nameOf
+      calleeLabel
     );
     rooms.push({
       id: fn.id,
@@ -337,7 +337,7 @@ const moduleWorld = (
  * call, and a closed marker in every room holding calls the world cannot
  * follow (ambiguous, dynamic, external or unresolved; never a portal to a
  * guess). The hub holds a module portal to every module it imports or
- * re-exports from. Portals into other modules lead to units of their
+ * re-exports from. Portals into another zone name it (`zoneLabels`). Portals into other modules lead to units of their
  * areas, listed in `external`; the hub is the start room. Edges in
  * `portalOnly` (`source->target`) never become doors. A `seed` varies the
  * widths of columns and hubs, never what is connected; null keeps them plain.
@@ -353,8 +353,7 @@ const toWorldGraph = (
   }
   const links = moduleLinks(graph, module);
   const world = moduleWorld(graph, module, links.length, portalOnly, seed);
-  const pathOf = (id: string): string =>
-    graph.modules.find((candidate) => candidate.id === id)?.path ?? id;
+  const { moduleLabel } = zoneLabels(graph, module);
   const rooms = [...world.hubs, ...world.lobbies, ...world.rooms];
   const portals = [
     ...world.portals,
@@ -366,7 +365,7 @@ const toWorldGraph = (
         kind: "module",
         from,
         to,
-        label: pathOf(to),
+        label: moduleLabel(to),
       };
     }),
   ];

@@ -3,7 +3,7 @@ import { validateGraph } from "@repo/world-generator/graph";
 import { describe, expect, it } from "vitest";
 
 import { entranceGraph, repositoryName } from "./entrance";
-import { demoGraph, fixtureGraph } from "./fixture";
+import { demoGraph, fixtureGraph, packageNode, withPackages } from "./fixture";
 import { ENTRANCE_ID, modulePortalId } from "./ids";
 
 /** A graph of `count` empty modules, `m0.ts` and on. */
@@ -92,6 +92,22 @@ describe("repositoryName", () => {
         )
       )
     ).toBe("pkg/src");
+  });
+
+  it("is the root package's name when there is one", () => {
+    const graph = fixtureGraph({ path: "packages/a/x.ts", functions: [] });
+    expect(
+      repositoryName(
+        withPackages(
+          graph,
+          packageNode("a", "packages/a"),
+          packageNode("mono", "")
+        )
+      )
+    ).toBe("mono");
+    expect(
+      repositoryName(withPackages(graph, packageNode("a", "packages/a")))
+    ).toBe("packages/a");
   });
 
   it("is `repository` when the modules share no directory", () => {
