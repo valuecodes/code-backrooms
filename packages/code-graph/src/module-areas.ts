@@ -44,8 +44,10 @@ type Plan = {
 };
 
 /**
- * One module's world under `plan`: varied when `varied` (with the module's
- * own seed), its corridors named after the module.
+ * One module's world under `plan`: varied when `varied` (column and hub
+ * widths from the module's own seed), its corridors named after the
+ * module. The layout always searches with the plan's seed, so a module
+ * the plain layout needed a derived seed for can still be varied.
  */
 const layOut = (
   { graph, module, seed }: AreaInput,
@@ -53,7 +55,7 @@ const layOut = (
   varied: boolean
 ): GeneratedWorld =>
   generateWorld({
-    seed: varied ? seed : layoutSeed,
+    seed: layoutSeed,
     graph: toWorldGraph(
       graph,
       portalOnly,

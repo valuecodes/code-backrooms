@@ -21,7 +21,7 @@ vi.mock("@repo/world-generator", async (importOriginal) => {
   return {
     ...actual,
     generateWorld: (options: GenerateWorldOptions) => {
-      const doors = options.graph.connections.filter(
+      const doors = (options.graph?.connections ?? []).filter(
         ({ from, to }) => from === "wide.ts" || to === "wide.ts"
       );
       const [first] = doors;
