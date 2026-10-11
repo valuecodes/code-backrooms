@@ -138,6 +138,23 @@ describe("worldMapModel", () => {
     ).toEqual(areaLinksOf(graph));
   });
 
+  it("links a top-level call into another module, which has no call edge", () => {
+    const graph = buildCodeGraph([
+      {
+        path: "src/main.ts",
+        source: 'import { run } from "./run";\nrun();\nrun();\n',
+      },
+      { path: "src/run.ts", source: "export function run() {}" },
+    ]);
+    expect(graph.edges.filter((edge) => edge.type === "call")).toEqual([]);
+    expect(areaLinksOf(graph)).toContainEqual({
+      fromArea: "src/main.ts",
+      toArea: "src/run.ts",
+      kind: "call",
+      count: 2,
+    });
+  });
+
   it("starts a link at its source's ghost, then at its portal once generated", () => {
     const graph = repo();
     const store = codeAreaStore(graph, 1);
