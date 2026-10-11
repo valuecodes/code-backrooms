@@ -178,15 +178,17 @@ const byPath = (files: readonly SourceFile[]): readonly SourceFile[] =>
  * carries `packages` only when they name at least one.
  */
 const buildCodeGraph = (files: readonly SourceFile[]): CodeGraph => {
-  const { manifests, sources } = splitFiles(byPath(files));
-  const analysed = sources.map(analyseModule);
+  const sorted = byPath(files);
   const seen = new Set<string>();
-  for (const { module } of analysed) {
-    if (seen.has(module.id)) {
-      throw new Error(`Duplicate module path "${module.id}"`);
+  for (const file of sorted) {
+    const id = moduleId(file.path);
+    if (seen.has(id)) {
+      throw new Error(`Duplicate module path "${id}"`);
     }
-    seen.add(module.id);
+    seen.add(id);
   }
+  const { manifests, sources } = splitFiles(sorted);
+  const analysed = sources.map(analyseModule);
   const packages = packagesOf(manifests);
   const parsed = linkModules(analysed, packages).map(finishModule);
   return {
