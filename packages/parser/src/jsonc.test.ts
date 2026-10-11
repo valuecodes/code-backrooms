@@ -41,6 +41,12 @@ describe("parseJsonc", () => {
     expect(parseJsonc("a.json", '{"a": ",}"}')).toEqual({ a: ",}" });
   });
 
+  it("rejects an unterminated block comment", () => {
+    expect(() => parseJsonc("package.json", '{ "name": "pkg" } /*')).toThrow(
+      /^package\.json: Unterminated block comment/
+    );
+  });
+
   it("names the file in a syntax error", () => {
     expect(() => parseJsonc("apps/web/tsconfig.json", "{ nope }")).toThrow(
       /^apps\/web\/tsconfig\.json: /

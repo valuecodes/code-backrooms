@@ -29,7 +29,12 @@ const withoutComments = (text: string): string => {
       stop = end === -1 ? text.length : end;
     } else if (char === "/" && next === "*") {
       const end = text.indexOf("*/", index + 2);
-      stop = end === -1 ? text.length : end + 2;
+      if (end === -1) {
+        throw new SyntaxError(
+          `Unterminated block comment at position ${index}`
+        );
+      }
+      stop = end + 2;
     }
     const piece = text.slice(index, stop);
     out += char === "/" && stop - index > 1 ? blank(piece) : piece;

@@ -5,7 +5,7 @@
 // repository. tsconfig `extends` chains are not followed.
 
 import type { ExportEntry, PackageNode, PathAlias } from "@repo/code-graph";
-import { normalisePath, uniqueNames } from "@repo/code-graph/ids";
+import { normalisePath } from "@repo/code-graph/ids";
 
 import { parseJsonc } from "./jsonc";
 
@@ -216,8 +216,17 @@ const packagesOf = (manifests: readonly Manifest[]): readonly PackageNode[] => {
     }
   }
   const sorted = found.toSorted(byDir);
-  const unique = uniqueNames();
-  const ids = sorted.map((item) => unique(item.name));
+  // Suffixes are checked against every id handed out, so a package that is
+  // literally named `a~2` never shares an id with the second `a`.
+  const used = new Set<string>();
+  const ids = sorted.map((item) => {
+    let id = item.name;
+    for (let count = 2; used.has(id); count += 1) {
+      id = `${item.name}~${count}`;
+    }
+    used.add(id);
+    return id;
+  });
   const idOfName = new Map<string, string>();
   sorted.forEach((item, index) => {
     const id = ids[index];
