@@ -233,6 +233,10 @@ const placeNext = (
       ) +
         AREA_GAP +
         GRID);
+  if (!Number.isFinite(reach)) {
+    // An area without rooms has no bounds: nothing to keep apart.
+    return place({ x: 0, z: 0 });
+  }
   for (let distance = 0; ; distance += RING_STEP) {
     const at = Math.min(distance, reach);
     const offset = {
