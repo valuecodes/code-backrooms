@@ -14,7 +14,8 @@
     "./module-resolver": "./src/module-resolver.ts",
     "./packages": "./src/packages.ts",
     "./subjects": "./src/subjects.ts",
-    "./world-graph": "./src/world-graph.ts"
+    "./world-graph": "./src/world-graph.ts",
+    "./zones": "./src/zones.ts"
   },
   "scripts": {
     "typecheck": "tsc",

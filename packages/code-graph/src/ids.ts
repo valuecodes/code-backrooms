@@ -100,6 +100,12 @@ const callSiteId = (callerId: string, offset: number): string =>
 /** Module ids are paths and never contain `::`; function ids always do. */
 const isFunctionId = (id: string): boolean => id.includes(FUNCTION_SEPARATOR);
 
+/** The module a function (or caller) id lies in: `a.ts::f` → `a.ts`, `a.ts` → `a.ts`. */
+const functionModuleId = (id: string): string => {
+  const separator = id.indexOf(FUNCTION_SEPARATOR);
+  return separator === -1 ? id : id.slice(0, separator);
+};
+
 /** The kinds a flow node id may carry: every FlowNode kind plus a switch case. */
 type FlowIdKind = FlowNode["kind"] | "case";
 
@@ -339,6 +345,7 @@ export {
   ENTRANCE_ID,
   flowNodeId,
   functionId,
+  functionModuleId,
   hubModuleId,
   isEntranceHub,
   isFunctionId,

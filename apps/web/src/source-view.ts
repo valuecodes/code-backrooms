@@ -77,8 +77,8 @@ const clamp = (span: SourceSpan, within: SourceSpan): Range | null => {
 /**
  * What the source panel shows for a room: the whole file for a hub, the
  * whole class for a lobby, the whole function for a function room, and the function with the room's
- * code marked for a flow room. Null for the entrance (no file of its
- * own), corridors and ids not from this graph.
+ * code marked for a flow room. Null for the entrance and a zone's hub (no
+ * file of their own), corridors and ids not from this graph.
  */
 const sourceView = (
   codeGraph: CodeGraph | null,
@@ -89,7 +89,8 @@ const sourceView = (
     codeGraph === null || roomId === null
       ? null
       : roomSubject(codeGraph, roomId);
-  const subject = found?.kind === "entrance" ? null : found;
+  const subject =
+    found?.kind === "entrance" || found?.kind === "zone" ? null : found;
   const source = subject === null ? undefined : sources.get(subject.module.id);
   if (subject === null || source === undefined) {
     return null;

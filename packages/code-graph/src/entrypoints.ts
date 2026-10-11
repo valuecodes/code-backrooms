@@ -1,6 +1,7 @@
 // Where a repository starts: the modules the entrance leads to.
 
 import type { CodeGraph, ModuleNode } from "./code-graph";
+import { functionModuleId } from "./ids";
 import { moduleLinks } from "./module-links";
 
 /** Basenames that usually start a program. */
@@ -50,30 +51,40 @@ const byPath = (a: ModuleNode, b: ModuleNode): number => {
 };
 
 /**
- * The modules the entrance leads to, best first. Every module nobody
- * imports is one (nothing else leads there), ranked by `entryScore`, ties
- * by path. Modules only cycles reach then add the best of what is still
- * out of reach, one at a time, until imports from the entries reach every
- * module. Never empty for a graph with modules.
+ * The modules the entrance leads to, best first, among `modules` (all of
+ * the graph's by default; a zone's for its hub), counting only imports and
+ * calls between those. Every module nobody imports is one (nothing else
+ * leads there), ranked by `entryScore`, ties by path. Modules only cycles
+ * reach then add the best of what is still out of reach, one at a time,
+ * until imports from the entries reach every module. Never empty for a
+ * non-empty `modules`.
  */
-const entryModules = (graph: CodeGraph): readonly ModuleNode[] => {
+const entryModules = (
+  graph: CodeGraph,
+  modules: readonly ModuleNode[] = graph.modules
+): readonly ModuleNode[] => {
+  const inside = new Set(modules.map((module) => module.id));
   const links = new Map(
-    graph.modules.map((module) => [module.id, moduleLinks(graph, module)])
+    modules.map((module) => [
+      module.id,
+      moduleLinks(graph, module).filter((id) => inside.has(id)),
+    ])
   );
   const imported = new Set([...links.values()].flat());
   const called = new Set(
     graph.edges.flatMap((edge) =>
-      edge.type === "call" && edge.source !== edge.target ? [edge.target] : []
+      edge.type === "call" &&
+      edge.source !== edge.target &&
+      inside.has(functionModuleId(edge.source))
+        ? [edge.target]
+        : []
     )
   );
   const scores = new Map(
-    graph.modules.map((module) => [
-      module.id,
-      entryScore(module, graph, called),
-    ])
+    modules.map((module) => [module.id, entryScore(module, graph, called)])
   );
-  const ranked = (modules: readonly ModuleNode[]): readonly ModuleNode[] =>
-    modules.toSorted(
+  const ranked = (group: readonly ModuleNode[]): readonly ModuleNode[] =>
+    group.toSorted(
       (a, b) =>
         (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0) || byPath(a, b)
     );
@@ -93,8 +104,8 @@ const entryModules = (graph: CodeGraph): readonly ModuleNode[] => {
   };
   const entries: ModuleNode[] = [];
   for (const module of [
-    ...ranked(graph.modules.filter((module) => !imported.has(module.id))),
-    ...ranked(graph.modules.filter((module) => imported.has(module.id))),
+    ...ranked(modules.filter((module) => !imported.has(module.id))),
+    ...ranked(modules.filter((module) => imported.has(module.id))),
   ]) {
     if (!reached.has(module.id)) {
       entries.push(module);

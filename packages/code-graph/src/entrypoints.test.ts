@@ -15,6 +15,47 @@ const api = (count: number) =>
   }));
 
 describe("entryModules", () => {
+  it("counts only imports and calls among the modules it is given", () => {
+    const graph = fixtureGraph(
+      {
+        path: "app/main.ts",
+        functions: [{ name: "run", calls: ["lib/a.ts::load"] }],
+        imports: [importOf("lib/a.ts")],
+      },
+      {
+        path: "lib/a.ts",
+        functions: [{ name: "load", exported: true }],
+        imports: [importOf("lib/b.ts")],
+      },
+      { path: "lib/b.ts", functions: [{ name: "parse", exported: true }] }
+    );
+    const lib = graph.modules.filter((module) => module.id.startsWith("lib/"));
+    // Across the graph, the app imports a.ts, so a.ts is not a way in.
+    expect(idsOf(graph)).toEqual(["app/main.ts"]);
+    // Within the library nothing imports a.ts, and b.ts is reached from it.
+    expect(entryModules(graph, lib).map((module) => module.id)).toEqual([
+      "lib/a.ts",
+    ]);
+  });
+
+  it("scores a function called only from outside the modules as API", () => {
+    const graph = fixtureGraph(
+      {
+        path: "app/main.ts",
+        functions: [{ name: "run", calls: ["lib/z.ts::load"] }],
+      },
+      { path: "lib/a.ts", functions: [] },
+      { path: "lib/z.ts", functions: [{ name: "load", exported: true }] }
+    );
+    const lib = graph.modules.filter((module) => module.id.startsWith("lib/"));
+    // Counting the app's call, load is not API and the path breaks the tie;
+    // within the library nobody calls it, which ranks z.ts first.
+    expect(entryModules(graph, lib).map((module) => module.id)).toEqual([
+      "lib/z.ts",
+      "lib/a.ts",
+    ]);
+  });
+
   it("returns the one module of a one-module graph", () => {
     expect(idsOf(demoGraph())).toEqual(["demo.ts"]);
   });
