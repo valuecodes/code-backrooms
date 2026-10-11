@@ -196,20 +196,53 @@ const byDir = (a: Found, b: Found): number => {
   return a.dir < b.dir ? -1 : 1;
 };
 
+/** Reports a file that could not be read and drops it, instead of throwing. */
+type OnParseError = (path: string, message: string) => void;
+
+/** The manifest's JSON, or null when it is malformed and `onParseError` takes it. */
+const parseManifest = (
+  file: Manifest,
+  onParseError: OnParseError | undefined
+): { readonly json: unknown } | null => {
+  if (onParseError === undefined) {
+    return { json: parseJsonc(file.path, file.source) };
+  }
+  try {
+    return { json: parseJsonc(file.path, file.source) };
+  } catch (error) {
+    onParseError(
+      file.path,
+      error instanceof Error ? error.message : String(error)
+    );
+    return null;
+  }
+};
+
 /**
  * The packages the manifests describe, by `dir` in code-unit order. A
  * `package.json` without a name is not a package; a repeated name gets a
- * `~2` id, and dependencies on it point at the first by `dir`.
+ * `~2` id, and dependencies on it point at the first by `dir`. With
+ * `onParseError`, a malformed manifest is reported and ignored.
  */
-const packagesOf = (manifests: readonly Manifest[]): readonly PackageNode[] => {
+const packagesOf = (
+  manifests: readonly Manifest[],
+  onParseError?: OnParseError
+): readonly PackageNode[] => {
   const found: Found[] = [];
   const tsconfigs = new Map<string, unknown>();
   for (const file of manifests) {
     const { dir, base } = split(file.path);
+    if (base !== "tsconfig.json" && base !== "package.json") {
+      continue;
+    }
+    const parsed = parseManifest(file, onParseError);
+    if (parsed === null) {
+      continue;
+    }
     if (base === "tsconfig.json") {
-      tsconfigs.set(dir, parseJsonc(file.path, file.source));
-    } else if (base === "package.json") {
-      const json = parseJsonc(file.path, file.source);
+      tsconfigs.set(dir, parsed.json);
+    } else {
+      const { json } = parsed;
       if (isObject(json) && typeof json.name === "string" && json.name !== "") {
         found.push({ dir, name: json.name, json });
       }
@@ -248,3 +281,4 @@ const packagesOf = (manifests: readonly Manifest[]): readonly PackageNode[] => {
 };
 
 export { isManifest, packagesOf, splitFiles };
+export type { OnParseError };

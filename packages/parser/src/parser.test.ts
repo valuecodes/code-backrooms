@@ -325,6 +325,45 @@ describe("buildCodeGraph", () => {
       ])
     ).toThrow(/Duplicate module path/);
   });
+
+  const broken = [
+    { path: "b.ts", source: "function (" },
+    { path: "a.ts", source: 'import { b } from "./b";\nfunction a() { b(); }' },
+  ];
+
+  it("drops a broken file and reports it when asked", () => {
+    const reported: string[] = [];
+    const graph = buildCodeGraph(broken, {
+      onParseError: (path, message) => {
+        reported.push(path);
+        expect(message).toMatch(/^b\.ts: /);
+      },
+    });
+    expect(reported).toEqual(["b.ts"]);
+    expect(graph.modules.map((module) => module.id)).toEqual(["a.ts"]);
+    expect(graph.callSites.map((site) => site.resolution)).toEqual([
+      "unresolved",
+    ]);
+  });
+
+  it("still throws on a broken file without the callback", () => {
+    expect(() => buildCodeGraph(broken)).toThrow(/^b\.ts: /);
+  });
+
+  it("ignores and reports a malformed manifest when asked", () => {
+    const files = [
+      { path: "package.json", source: '{ "name": ' },
+      { path: "a.ts", source: "function a() {}" },
+    ];
+    const reported: string[] = [];
+    const graph = buildCodeGraph(files, {
+      onParseError: (path) => reported.push(path),
+    });
+    expect(reported).toEqual(["package.json"]);
+    expect(graph.modules.map((module) => module.id)).toEqual(["a.ts"]);
+    expect(graph.packages).toBeUndefined();
+    expect(() => buildCodeGraph(files)).toThrow(/^package\.json: /);
+  });
 });
 
 /** What `hashSource` hashes for one file `a.ts` holding `n`. */

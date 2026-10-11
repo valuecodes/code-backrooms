@@ -11,7 +11,7 @@ import {
 import type { RoomSubject } from "@repo/code-graph/subjects";
 import { awayZone, zonedPath } from "@repo/code-graph/zone-labels";
 import { hasZones, zoneOfModule } from "@repo/code-graph/zones";
-import { buildCodeGraph, hashSource } from "@repo/parser";
+import { buildCodeGraph, hashSource, isManifest } from "@repo/parser";
 import type { SourceFile } from "@repo/parser";
 import type { AreaWorld, GeneratedWorld } from "@repo/types";
 import { mergeAreas } from "@repo/world-generator/areas";
@@ -28,6 +28,8 @@ type CodeResult =
       readonly codeGraph: CodeGraph;
       /** Each module's source by module id, for the source panel. */
       readonly sources: ReadonlyMap<string, string>;
+      /** Files left out because they did not parse, in the order reported. */
+      readonly skipped: readonly string[];
       readonly error: null;
     }
   | { readonly codeGraph: null; readonly error: string };
@@ -36,15 +38,42 @@ type CodeResult =
 const sourceSeedOf = (files: readonly SourceFile[]): number =>
   hashSource(files);
 
-/** Parses an example's files; a syntax error becomes a value, never a throw. */
+/** How many skipped paths the "none could be parsed" error names. */
+const NAMED_PATHS = 3;
+
+/** Why a graph with no modules cannot become a world. */
+const emptyGraphError = (
+  files: readonly SourceFile[],
+  skipped: readonly string[]
+): string => {
+  const sourceCount = files.filter((file) => !isManifest(file.path)).length;
+  if (sourceCount === 0) {
+    return "no JavaScript or TypeScript sources found";
+  }
+  const named = skipped.slice(0, NAMED_PATHS).join(", ");
+  const more = skipped.length > NAMED_PATHS ? "…" : "";
+  return `none of the ${sourceCount} source files could be parsed: ${named}${more}`;
+};
+
+/**
+ * Parses the files; a file that does not parse is left out and listed in
+ * `skipped`. Anything else that fails, or a graph with no module left
+ * (generation needs one), becomes an error value, never a throw.
+ */
 const codeGraphOf = (files: readonly SourceFile[]): CodeResult => {
+  const skipped: string[] = [];
   try {
-    const codeGraph = buildCodeGraph(files);
+    const codeGraph = buildCodeGraph(files, {
+      onParseError: (path) => skipped.push(path),
+    });
+    if (codeGraph.modules.length === 0) {
+      return { codeGraph: null, error: emptyGraphError(files, skipped) };
+    }
     // Modules come out sorted by path, each id normalised from its path.
     const sources = new Map(
       files.map((file) => [moduleId(file.path), file.source])
     );
-    return { codeGraph, sources, error: null };
+    return { codeGraph, sources, skipped, error: null };
   } catch (error) {
     return { codeGraph: null, error: String(error) };
   }
