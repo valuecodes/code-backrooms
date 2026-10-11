@@ -98,6 +98,8 @@ const Layers = ({ model, clip }: LayersProps) => {
         const colour = outlineOf(area);
         return (
           <g key={area.id} data-area={area.id} data-area-state={area.state}>
+            {/* On the group, so hovering the label shows it too. */}
+            {area.error !== null && <title>{area.error}</title>}
             <clipPath id={id}>
               <rect {...rectProps(area.rect)} />
             </clipPath>
@@ -109,9 +111,7 @@ const Layers = ({ model, clip }: LayersProps) => {
               strokeOpacity={area.state === "generated" ? 0.7 : 0.6}
               strokeDasharray={area.state === "pending" ? "4 3" : undefined}
               vectorEffect="non-scaling-stroke"
-            >
-              {area.error !== null && <title>{area.error}</title>}
-            </rect>
+            />
             {area.rooms.map((room) => (
               <rect
                 key={room.id}

@@ -94,7 +94,10 @@ describe("WorldMap", () => {
       { errors: new Map([[failed, "no room for the hub"]]) }
     );
     expect(countOf(markup, 'data-area-state="failed"')).toBe(1);
-    expect(markup).toContain("<title>no room for the hub</title>");
+    // On the area's group, so hovering its label shows the message too.
+    expect(markup).toContain(
+      `data-area-state="failed"><title>no room for the hub</title>`
+    );
   });
 
   it("names each zone on its band and draws the player", () => {
