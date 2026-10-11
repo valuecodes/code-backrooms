@@ -31,9 +31,32 @@ const counter = (times: number) => {
   return { step, calls: () => calls };
 };
 
+/** A visible page whose frames run only when `paint` is called. */
+const visiblePage = () => {
+  const frames = new Map<number, () => void>();
+  let next = 0;
+  vi.stubGlobal("document", { visibilityState: "visible" });
+  vi.stubGlobal("requestAnimationFrame", (callback: () => void) => {
+    next += 1;
+    frames.set(next, callback);
+    return next;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
+  return {
+    paint: () => {
+      const due = [...frames.values()];
+      frames.clear();
+      for (const callback of due) {
+        callback();
+      }
+    },
+  };
+};
+
 describe("generateAll", () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it("runs one step per scheduled callback", () => {
@@ -76,6 +99,35 @@ describe("generateAll", () => {
     generateAll(step, nextFrame);
     expect(calls()).toBe(0);
     vi.advanceTimersByTime(0);
+    expect(calls()).toBe(1);
+    vi.runAllTimers();
+    expect(calls()).toBe(3);
+  });
+
+  it("nextFrame steps after a painted frame on a visible page, once", () => {
+    vi.useFakeTimers();
+    const { paint } = visiblePage();
+    // One step only, so no later step's own fallback timer is pending.
+    const { step, calls } = counter(1);
+    generateAll(step, nextFrame);
+    vi.advanceTimersByTime(0);
+    expect(calls()).toBe(0);
+    paint();
+    vi.advanceTimersByTime(0);
+    expect(calls()).toBe(1);
+    // The frame already ran it: the fallback timer must not run it again.
+    vi.advanceTimersByTime(100);
+    expect(calls()).toBe(1);
+  });
+
+  it("nextFrame still steps when the frame never comes (a tab hidden meanwhile)", () => {
+    vi.useFakeTimers();
+    visiblePage();
+    const { step, calls } = counter(3);
+    generateAll(step, nextFrame);
+    vi.advanceTimersByTime(99);
+    expect(calls()).toBe(0);
+    vi.advanceTimersByTime(1);
     expect(calls()).toBe(1);
     vi.runAllTimers();
     expect(calls()).toBe(3);

@@ -15,7 +15,8 @@ import {
 } from "~/world-setup";
 
 // `?view=map`: the whole world as one SVG, generated an area at a time, with
-// no WebGL. Headless tools wait for `svg[data-state="done"]`.
+// no WebGL. Headless tools wait for `[data-state="done"]` (the map) or
+// `[data-state="failed"]` (no world to draw).
 
 /**
  * Never up front: `?eager=1` would generate every area before the first
@@ -36,7 +37,9 @@ const downloadSvg = (svg: SVGSVGElement, fileName: string): void => {
   link.href = url;
   link.download = fileName;
   link.click();
-  URL.revokeObjectURL(url);
+  // Revoked on the next task: some browsers drop a download whose URL is
+  // revoked in the same task as the click.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
 const WorldMapPage = () => {
@@ -84,8 +87,11 @@ const WorldMapPage = () => {
           Download SVG
         </button>
       </div>
+      {/* Nothing to draw: the end state headless tools wait for instead. */}
       {generated.error !== null && (
-        <p className="text-red-400">{generated.error}</p>
+        <p className="text-red-400" data-state="failed">
+          {generated.error}
+        </p>
       )}
       {errors.size > 0 && (
         <ul className="text-red-400">

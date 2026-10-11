@@ -12,10 +12,15 @@ const nextTask: Schedule = (run) => {
   return () => clearTimeout(timer);
 };
 
+/** How long a frame may take before the next step runs without it. */
+const FRAME_TIMEOUT_MS = 100;
+
 /**
  * After the next frame has painted, while the page is visible: zero-delay
  * timers alone can run several areas inside one frame. A hidden tab gets no
- * frames, so it falls back to the next task and still finishes.
+ * frames, so it falls back to the next task, and a tab hidden while waiting
+ * for its frame runs the step after `FRAME_TIMEOUT_MS`: either way it
+ * finishes in the background.
  */
 const nextFrame: Schedule = (run) => {
   if (
@@ -25,12 +30,22 @@ const nextFrame: Schedule = (run) => {
   ) {
     return nextTask(run);
   }
+  let ran = false;
+  const once = () => {
+    if (!ran) {
+      ran = true;
+      run();
+    }
+  };
   let cancelTask: (() => void) | null = null;
   const frame = requestAnimationFrame(() => {
-    cancelTask = nextTask(run);
+    cancelTask = nextTask(once);
   });
+  const timeout = setTimeout(once, FRAME_TIMEOUT_MS);
   return () => {
+    ran = true;
     cancelAnimationFrame(frame);
+    clearTimeout(timeout);
     cancelTask?.();
   };
 };
