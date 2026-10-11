@@ -256,6 +256,9 @@ importers:
       '@repo/world-generator':
         specifier: workspace:*
         version: link:../../packages/world-generator
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
       react:
         specifier: 'catalog:'
         version: 19.3.0

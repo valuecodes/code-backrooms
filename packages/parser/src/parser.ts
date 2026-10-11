@@ -17,6 +17,7 @@ import type { Discovered } from "./functions";
 import { exportedLocalNames, exportsOf, importsOf } from "./imports";
 import { linkModules } from "./link";
 import { packagesOf, splitFiles } from "./manifests";
+import type { OnParseError } from "./manifests";
 import type { DiscoveredFunction } from "./scope";
 import { lineCountOf } from "./span";
 import { topLevelOf } from "./top-level";
@@ -170,14 +171,49 @@ const byPath = (files: readonly SourceFile[]): readonly SourceFile[] =>
     })
     .map(({ file }) => file);
 
+type BuildOptions = {
+  /**
+   * Called once per file that cannot be analysed (a source) or read (a
+   * manifest), which is then left out instead of failing the whole graph.
+   * Imports into a dropped source stay unresolved.
+   */
+  readonly onParseError?: OnParseError;
+};
+
+/** Each source analysed; with `onParseError`, the ones that fail are dropped. */
+const analyseAll = (
+  sources: readonly SourceFile[],
+  onParseError: OnParseError | undefined
+): readonly Analysed[] => {
+  if (onParseError === undefined) {
+    return sources.map(analyseModule);
+  }
+  return sources.flatMap((file) => {
+    try {
+      return [analyseModule(file)];
+    } catch (error) {
+      onParseError(
+        file.path,
+        error instanceof Error ? error.message : String(error)
+      );
+      return [];
+    }
+  });
+};
+
 /**
  * Files sorted by path, so neither ids nor order depend on how they were
  * found; calls through imports are linked across them. Manifests
  * (`package.json`, `tsconfig*.json`) never reach the parser: they describe
  * the packages that bare and aliased imports resolve through, and the graph
- * carries `packages` only when they name at least one.
+ * carries `packages` only when they name at least one. Duplicate paths
+ * always throw, whatever `options` says.
  */
-const buildCodeGraph = (files: readonly SourceFile[]): CodeGraph => {
+const buildCodeGraph = (
+  files: readonly SourceFile[],
+  options: BuildOptions = {}
+): CodeGraph => {
+  const { onParseError } = options;
   const sorted = byPath(files);
   const seen = new Set<string>();
   for (const file of sorted) {
@@ -188,8 +224,8 @@ const buildCodeGraph = (files: readonly SourceFile[]): CodeGraph => {
     seen.add(id);
   }
   const { manifests, sources } = splitFiles(sorted);
-  const analysed = sources.map(analyseModule);
-  const packages = packagesOf(manifests);
+  const analysed = analyseAll(sources, onParseError);
+  const packages = packagesOf(manifests, onParseError);
   const parsed = linkModules(analysed, packages).map(finishModule);
   return {
     modules: parsed.map((item) => item.module),
@@ -217,4 +253,5 @@ const hashSource = (files: readonly SourceFile[]): number =>
   ) % SEED_RANGE;
 
 export { buildCodeGraph, hashSource, parseModule };
+export { isManifest } from "./manifests";
 export type { ParsedModule, SourceFile };

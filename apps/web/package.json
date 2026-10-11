@@ -19,6 +19,7 @@
     "@repo/renderer": "workspace:*",
     "@repo/types": "workspace:*",
     "@repo/world-generator": "workspace:*",
+    "fflate": "0.8.3",
     "react": "catalog:",
     "react-dom": "19.3.0",
     "three": "catalog:"
