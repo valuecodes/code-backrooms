@@ -12,3 +12,12 @@ body {
   overflow: hidden;
   background: #000;
 }
+
+/*
+ * The world map zoomed out: rooms and area labels are too small to read.
+ * Here rather than in the svg, which the CSP's `style-src 'self'` would
+ * block; a downloaded map carries no such rule and keeps every detail.
+ */
+[data-detail="overview"] .map-detail {
+  display: none;
+}

@@ -24,18 +24,6 @@ const worldName = initial.code ?? initial.preset ?? "random";
 /** The view before there is a world to fit. */
 const NO_VIEW: ViewBox = { x: 0, y: 0, width: 1, height: 1 };
 
-/**
- * `svg` as a file's markup at full detail: the map shows rooms and labels
- * at any width once nothing hides them.
- */
-const fullMapMarkup = (svg: SVGSVGElement): string => {
-  const copy = svg.cloneNode(true);
-  if (copy instanceof SVGSVGElement) {
-    copy.dataset.detail = "full";
-  }
-  return new XMLSerializer().serializeToString(copy);
-};
-
 /** Saves `markup` as a file, through a blob URL the page's CSP allows. */
 const downloadSvg = (markup: string, fileName: string): void => {
   const url = URL.createObjectURL(
@@ -85,10 +73,13 @@ const MapPageBody = ({ setup }: { readonly setup: WorldSetup }) => {
   const { atFit } = view;
   const container = useRef<HTMLDivElement>(null);
   // The whole world whatever the zoom, so the file matches every other run.
+  // It carries no `globals.css`, so nothing in it hides rooms or labels.
   const onDownload = useCallback(() => {
     const markup = atFit(() => {
       const svg = container.current?.querySelector("svg");
-      return svg === null || svg === undefined ? null : fullMapMarkup(svg);
+      return svg === null || svg === undefined
+        ? null
+        : new XMLSerializer().serializeToString(svg);
     });
     if (markup !== null) {
       downloadSvg(markup, svgFileName(worldName, startSeed));

@@ -43,9 +43,13 @@ const useViewBox = (fit: ViewBox): ViewBoxControls => {
     saved.current = zoomed;
   });
 
+  // A view as wide as `fit` is the whole world: follow `fit` again, or a
+  // wheel or drag at the home view would pin it while the world grows.
   const show = useCallback((next: ViewBox | null) => {
-    shown.current = next ?? home.current;
-    setZoomed(next);
+    const zoomedIn =
+      next !== null && next.width < home.current.width ? next : null;
+    shown.current = zoomedIn ?? home.current;
+    setZoomed(zoomedIn);
   }, []);
 
   const ref = useCallback(
@@ -62,14 +66,14 @@ const useViewBox = (fit: ViewBox): ViewBoxControls => {
           x: event.clientX,
           y: event.clientY,
         });
-        const next = zoomAbout(
-          box,
-          wheelFactor(event.deltaY, event.deltaMode),
-          point,
-          home.current
+        show(
+          zoomAbout(
+            box,
+            wheelFactor(event.deltaY, event.deltaMode),
+            point,
+            home.current
+          )
         );
-        // Zoomed all the way out: follow `fit` again.
-        show(next.width >= home.current.width ? null : next);
       };
       const onPointerDown = (event: PointerEvent) => {
         if (event.button !== 0) {
