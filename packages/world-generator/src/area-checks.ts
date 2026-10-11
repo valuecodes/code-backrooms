@@ -27,15 +27,15 @@ const shared = (
 /**
  * Every portal into another area: it leads to a unit some area has, lands
  * inside that unit's room there, clear of the walls; one into an area not
- * generated yet only has to name a unit of it. Returns the areas each
- * area's placed portals reach.
+ * generated yet, or one that failed, only has to name a unit of it.
+ * Returns the areas each area's placed portals reach.
  */
 const checkCrossings = (
   world: AreaWorld,
   failures: string[]
 ): ReadonlyMap<string, ReadonlySet<string>> => {
   const byId = new Map(world.areas.map((area) => [area.id, area]));
-  const pending = new Set(world.pending);
+  const pending = new Set([...world.pending, ...world.failed]);
   const reaches = new Map<string, Set<string>>();
   for (const area of world.areas) {
     const own = new Set<string>();

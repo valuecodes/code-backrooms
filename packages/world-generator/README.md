@@ -11,11 +11,12 @@ const { built } = generateWorld({ seed: 12345, roomCount: 15 });
 Subpaths: `./graph` (`generateGraph`, `validateGraph`), `./layout`
 (`generateLayout`), `./layout-checks` (`checkLayout`: every invariant, as a
 list of failures for tests), `./geometry` (`buildWorld`), `./collision`,
-`./locate` (`roomRects`, `roomAt`: which room a point is in), `./navigation`
+`./locate` (`roomRects`, `roomAt`, `areaAt`: which room or area a point is
+in), `./navigation`
 (the exploration stack), `./interaction` (what the player can step into or is
 facing), `./random`, `./config`, `./presets` (hand-written graphs: `lobby`,
 `linear`, `branching`, `hub`, `cycle`), `./areas` (`assembleAreas`,
-`mergeAreas`), `./area-store` (`createAreaStore`: areas generated on
+`mergeAreas`, `pendingPortals`), `./area-store` (`createAreaStore`: areas generated on
 demand), `./area-checks` (`checkAreas`).
 
 Supported graphs: unique ids, dimensions on the 0.5 m grid and at least 2 m,
@@ -87,9 +88,13 @@ on from a hall of portals, even one chained to more of the hall.
 parts)` packs the areas on shelves, the entry first at the origin, each
 other one 32 m beyond the last (past the fog) and rows 512 m wide, moves
 their layouts there and builds them again. `mergeAreas` joins them into one
-world for the renderer and `createNavigator`, cross-area arrivals resolved
-through `areaOf` and the target's `entries`; its graph has one component per
-area, so `checkLayout` does not apply to it. `checkAreas` does: every area's
+world for `createNavigator`, cross-area arrivals resolved through `areaOf`
+and the target's `entries`; its graph has one component per area, so
+`checkLayout` does not apply to it. The renderer draws the areas one by one
+instead: `areaAt(areas, point, preferredId)` finds the area under a point
+by its bounds, and `pendingPortals(world, area)` names an area's portals
+into an area not generated (or failed), which have nowhere to land yet.
+`checkAreas` validates the areas: every area's
 own `checkLayout`, ids unique across areas, areas 32 m apart, each start
 room at its offset, cross-area portals landing in their unit, and every area
 reachable from the entry over placed portals.
@@ -102,7 +107,7 @@ so an area never moves and a world that grows keeps every room, portal and
 landing it had: lazily, areas are placed in the order the player reaches
 them; `ensureAll()` gives what `assembleAreas` does. `snapshot()` is the same
 object until something changes: `world` (an `AreaWorld` whose `pending`
-lists the areas not generated yet; `checkAreas` accepts a portal into one),
-`errors` (an area whose generation threw, kept and not retried) and `lastMs`
+lists the areas not generated yet and `failed` those whose generation threw;
+`checkAreas` accepts a portal into either), `errors` (an area whose generation threw, kept and not retried) and `lastMs`
 (how long the last generating `ensure` took). `subscribe` fits React's
 `useSyncExternalStore`.

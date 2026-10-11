@@ -25,10 +25,15 @@ type WorldOptions = {
 };
 
 type AreaView = {
-  /** Every area generated so far as one world, or null after an error. */
-  readonly world: GeneratedWorld | null;
-  /** The same, as of this moment: an area joined since the render is there. */
+  /** The areas generated so far, or null after an error. */
+  readonly world: AreaWorld | null;
+  /**
+   * The same as one world, as of this moment, for the navigator: an area
+   * joined since the render is there, and portals across areas land.
+   */
   readonly current: () => GeneratedWorld | null;
+  /** Rooms (and corridors) of every area so far. */
+  readonly rooms: number;
   /** Generates the area a portal leads into, unless it exists or failed. */
   readonly ensurePortal: (portalId: string) => void;
   /** The area a portal leads into when that area could not be generated. */
@@ -88,7 +93,10 @@ const storeFor = (seed: number, options: WorldOptions): Source => {
   }
 };
 
-/** One merged world per set of areas, so the same snapshot gives the same object. */
+/**
+ * One merged world per set of areas, so the same snapshot gives the same
+ * object: the navigator keeps one per world.
+ */
 const merged = new WeakMap<AreaWorld, GeneratedWorld>();
 
 const mergedOf = (world: AreaWorld): GeneratedWorld => {
@@ -114,13 +122,17 @@ const targetAreaOf = (world: AreaWorld, portalId: string): string | null => {
 
 /** The HUD's warnings: what the generated areas left out, then the areas that failed. */
 const warningsOf = (
-  world: GeneratedWorld,
+  world: AreaWorld,
   errors: ReadonlyMap<string, string>
 ): readonly string[] => [
-  ...world.layout.unresolved.map(
-    ({ from, to }) => `${from} -> ${to} could not be laid out`
+  ...world.areas.flatMap(({ layout }) =>
+    layout.unresolved.map(
+      ({ from, to }) => `${from} -> ${to} could not be laid out`
+    )
   ),
-  ...world.layout.unplacedPortals.map(({ id }) => `${id} has no wall space`),
+  ...world.areas.flatMap(({ layout }) =>
+    layout.unplacedPortals.map(({ id }) => `${id} has no wall space`)
+  ),
   ...[...errors].map(
     ([area, error]) => `${area} could not be generated: ${error}`
   ),
@@ -142,12 +154,13 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
     subscribe,
     useCallback(() => store?.snapshot() ?? null, [store])
   );
-  const world = state === null ? null : mergedOf(state.world);
+  const world = state?.world ?? null;
   const warnings = useMemo(
-    () =>
-      state === null || world === null ? [] : warningsOf(world, state.errors),
-    [state, world]
+    () => (state === null ? [] : warningsOf(state.world, state.errors)),
+    [state]
   );
+  const rooms =
+    world?.areas.reduce((sum, area) => sum + area.graph.rooms.length, 0) ?? 0;
   const current = useCallback(
     () => (store === null ? null : mergedOf(store.snapshot().world)),
     [store]
@@ -184,6 +197,7 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
   return {
     world,
     current,
+    rooms,
     ensurePortal,
     failedArea,
     modules: { built, total },

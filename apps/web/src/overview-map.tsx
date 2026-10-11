@@ -1,5 +1,6 @@
 import { laneColour } from "@repo/renderer/lane-tint";
-import type { BuiltWorld, PortalKind } from "@repo/types";
+import type { AreaWorld, PortalKind } from "@repo/types";
+import { areaAt } from "@repo/world-generator/locate";
 import { useMemo, useSyncExternalStore } from "react";
 
 import { mapModel } from "~/map-model";
@@ -7,7 +8,8 @@ import type { MapPortal, MapRoom } from "~/map-model";
 import type { PoseFeed } from "~/pose-feed";
 
 type OverviewMapProps = {
-  readonly world: BuiltWorld;
+  /** The areas so far: the map draws the one the player stands in. */
+  readonly world: AreaWorld;
   readonly visited: ReadonlySet<string>;
   /** The room the player stands in, or null between rooms. */
   readonly current: string | null;
@@ -23,6 +25,11 @@ const DOOR_SIZE = 0.8;
 const PORTAL_HALF = 0.6;
 /** No lane: the amber of the HUD text. */
 const PLAIN = "#fde68a";
+
+/** Before the first pose of a world with no areas: the origin, north up. */
+const NO_POSE = { position: { x: 0, z: 0 }, facing: { x: 0, z: -1 } };
+
+const EMPTY_MODEL = { rooms: [], doors: [], portals: [] };
 
 const PORTAL_COLOURS: Record<PortalKind, string> = {
   call: "#f59e0b",
@@ -57,14 +64,19 @@ const portalBar = ({ point, normal }: MapPortal) => {
  * already at the top.
  */
 const OverviewMap = ({ world, visited, current, feed }: OverviewMapProps) => {
-  const pose = useSyncExternalStore(feed.subscribe, feed.get) ?? {
-    position: world.start,
-    facing: world.facing,
-  };
-
+  const entry =
+    world.areas.find((area) => area.id === world.entry) ?? world.areas[0];
+  const start =
+    entry === undefined
+      ? NO_POSE
+      : { position: entry.built.start, facing: entry.built.facing };
+  const pose = useSyncExternalStore(feed.subscribe, feed.get) ?? start;
+  // Only the area under the player: no other is within the map's 40 m.
+  const area = areaAt(world.areas, pose.position, null) ?? entry;
   const model = useMemo(
-    () => mapModel(world, visited, current),
-    [world, visited, current]
+    () =>
+      area === undefined ? EMPTY_MODEL : mapModel(area.built, visited, current),
+    [area, visited, current]
   );
   const { x, z } = pose.position;
   const heading =

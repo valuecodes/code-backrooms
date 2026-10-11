@@ -138,7 +138,7 @@ const assembleAreas = (
       area.graph.rooms.map((room) => [room.id, area.id] as const)
     )
   );
-  return { seed, entry, areas, pending: [], areaOf };
+  return { seed, entry, areas, pending: [], failed: [], areaOf };
 };
 
 /** Where a portal into another area's unit lands, or null if nothing has it. */
@@ -149,7 +149,29 @@ const arrivalIn = (world: AreaWorld, unit: string): Placement | null => {
 };
 
 /**
- * Every area as one world, for the renderer and the navigator: rooms,
+ * The portals of `area` that lead into an area not generated yet (or one
+ * that failed): no arrival, not a marker, and no area of `world` has the
+ * target. Within one area every cross-area portal has a null arrival, so
+ * this is what tells a dark portal from a live one.
+ */
+const pendingPortals = (
+  world: AreaWorld,
+  area: BuiltArea
+): readonly string[] => {
+  const built = new Set(world.areas.map(({ id }) => id));
+  return area.built.portals
+    .filter(({ portal, arrival }) => {
+      if (arrival !== null || portal.kind === "marker") {
+        return false;
+      }
+      const target = world.areaOf.get(portal.to);
+      return target === undefined || !built.has(target);
+    })
+    .map(({ portal }) => portal.id);
+};
+
+/**
+ * Every area as one world, for the navigator: rooms,
  * walls and portals together, cross-area arrivals resolved, the start in
  * the entry area. Not a layout to validate: its graph has one component
  * per area, so `checkLayout` does not apply; `checkAreas` does.
@@ -204,6 +226,7 @@ export {
   layoutBounds,
   mergeAreas,
   packOffsets,
+  pendingPortals,
   placeArea,
   SHELF_WIDTH,
   translateLayout,

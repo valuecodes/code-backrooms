@@ -81,22 +81,34 @@ describe("targetAreaOf", () => {
   });
 });
 
+/** The area with one connection and one portal from `id` left out. */
+const withGaps = (area: BuiltArea, id: string): BuiltArea => ({
+  ...area,
+  layout: {
+    ...area.layout,
+    unresolved: [{ from: id, to: "b" }],
+    unplacedPortals: [
+      { id: `portal:${id}>b`, kind: "call" as const, from: id, to: "b" },
+    ],
+  },
+});
+
 describe("warningsOf", () => {
-  it("lists what was left out, then the areas that failed", () => {
-    const world = mergeAreas(storeOf(1).snapshot().world);
+  it("lists what every area left out, then the areas that failed", () => {
+    const world = storeOf(1, { eager: true }).snapshot().world;
+    const [first, second, ...rest] = world.areas;
+    if (first === undefined || second === undefined) {
+      throw new Error("repo has fewer than two areas");
+    }
     const gaps = {
       ...world,
-      layout: {
-        ...world.layout,
-        unresolved: [{ from: "a", to: "b" }],
-        unplacedPortals: [
-          { id: "portal:a>b", kind: "call" as const, from: "a", to: "b" },
-        ],
-      },
+      areas: [withGaps(first, "a"), withGaps(second, "c"), ...rest],
     };
     expect(warningsOf(gaps, new Map([["src/x.ts", "no room"]]))).toEqual([
       "a -> b could not be laid out",
+      "c -> b could not be laid out",
       "portal:a>b has no wall space",
+      "portal:c>b has no wall space",
       "src/x.ts could not be generated: no room",
     ]);
   });

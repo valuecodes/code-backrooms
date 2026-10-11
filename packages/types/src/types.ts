@@ -369,6 +369,11 @@ type AreaWorld = {
    * have no arrival until they are.
    */
   readonly pending: readonly string[];
+  /**
+   * Areas that could not be generated: neither built nor pending, and
+   * portals into them never land.
+   */
+  readonly failed: readonly string[];
   /** The area of every unit (graph room) of every area, pending ones too. */
   readonly areaOf: ReadonlyMap<string, string>;
 };

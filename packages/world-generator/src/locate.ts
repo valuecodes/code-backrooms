@@ -1,4 +1,4 @@
-import type { Point, Rect, RoomData, RoomKind } from "@repo/types";
+import type { BuiltArea, Point, Rect, RoomData, RoomKind } from "@repo/types";
 
 import { roomBounds } from "./geometry";
 
@@ -41,5 +41,24 @@ const roomAt = (
   return rects.find((room) => containsPoint(room.rect, point)) ?? null;
 };
 
-export { containsPoint, roomAt, roomRects };
+/**
+ * The area under a point, by its rooms' footprint. `preferredId` is checked
+ * first, as in `roomAt`; areas lie AREA_GAP apart, so at most one other can
+ * match. Null between areas.
+ */
+const areaAt = (
+  areas: readonly BuiltArea[],
+  point: Point,
+  preferredId: string | null
+): BuiltArea | null => {
+  if (preferredId !== null) {
+    const preferred = areas.find((area) => area.id === preferredId);
+    if (preferred !== undefined && containsPoint(preferred.bounds, point)) {
+      return preferred;
+    }
+  }
+  return areas.find((area) => containsPoint(area.bounds, point)) ?? null;
+};
+
+export { areaAt, containsPoint, roomAt, roomRects };
 export type { RoomRect };

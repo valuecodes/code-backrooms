@@ -1,8 +1,9 @@
 import type { Point } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
-import { roomAt, roomRects } from "./locate";
+import { areaAt, roomAt, roomRects } from "./locate";
 import type { RoomRect } from "./locate";
+import { areaWorld } from "./portal-world";
 import { presets } from "./presets";
 import { generateWorld } from "./world-generator";
 
@@ -52,5 +53,43 @@ describe("roomAt", () => {
     expect(roomAt(both, edge, "twin")?.id).toBe("twin");
     expect(roomAt(both, edge, "a")?.id).toBe("a");
     expect(roomAt(both, edge, "elsewhere")?.id).toBe("a");
+  });
+});
+
+describe("areaAt", () => {
+  const world = areaWorld(1);
+  const { areas } = world;
+
+  it("finds the area of every room's centre and of each area's start", () => {
+    for (const area of areas) {
+      for (const rect of roomRects(area.layout.rooms)) {
+        expect(areaAt(areas, centre(rect), null)?.id).toBe(area.id);
+      }
+      expect(areaAt(areas, area.built.start, null)?.id).toBe(area.id);
+    }
+  });
+
+  it("is null between areas and with no areas", () => {
+    const [first, second] = areas;
+    if (first === undefined || second === undefined) {
+      throw new Error("areaWorld has fewer than two areas");
+    }
+    // Just past the first area's edge, in the gap before the second.
+    const gap = { x: first.bounds.maxX + 1, z: first.bounds.minZ };
+    expect(areaAt(areas, gap, first.id)).toBeNull();
+    expect(areaAt([], first.built.start, null)).toBeNull();
+  });
+
+  it("prefers the current area where two footprints overlap", () => {
+    const [first] = areas;
+    if (first === undefined) {
+      throw new Error("areaWorld has no areas");
+    }
+    const twin = { ...first, id: "twin" };
+    const both = [first, twin];
+    const { start } = first.built;
+    expect(areaAt(both, start, null)?.id).toBe(first.id);
+    expect(areaAt(both, start, "twin")?.id).toBe("twin");
+    expect(areaAt(both, start, "elsewhere")?.id).toBe(first.id);
   });
 });

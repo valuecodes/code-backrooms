@@ -1,4 +1,4 @@
-import type { RoomData } from "@repo/types";
+import type { BuiltArea, RoomData } from "@repo/types";
 import { WALL_HEIGHT } from "@repo/world-generator/config";
 
 /** Distance between fluorescent panels in the ceiling grid. */
@@ -35,5 +35,21 @@ const fixturePositions = (room: RoomData): readonly FixturePoint[] => {
   return positions;
 };
 
-export { FIXTURE_DROP, fixturePositions, LIGHT_DROP };
+/** Each area's fixtures, worked out once: an area never changes once built. */
+const fixturesByArea = new WeakMap<BuiltArea, readonly FixturePoint[]>();
+
+/** Every fixture of an area's rooms, in room order. */
+const areaFixtures = (area: BuiltArea): readonly FixturePoint[] => {
+  const known = fixturesByArea.get(area);
+  if (known !== undefined) {
+    return known;
+  }
+  const created = area.built.rooms.flatMap((built) =>
+    fixturePositions(built.room)
+  );
+  fixturesByArea.set(area, created);
+  return created;
+};
+
+export { areaFixtures, FIXTURE_DROP, fixturePositions, LIGHT_DROP };
 export type { FixturePoint };
