@@ -40,9 +40,9 @@ type RoomSubject =
       readonly kind: "entrance";
       /** The repository's name, on the entrance's walls and in the HUD. */
       readonly name: string;
-      /** The modules its portals lead to, in portal order; none when zoned. */
+      /** The modules its portals lead to, in portal order. */
       readonly modules: readonly ModuleNode[];
-      /** The zones its portals lead to when there are several, in order. */
+      /** The repository's zones when there are several, in order. */
       readonly zones: readonly Zone[];
     }
   | { readonly kind: "zone"; readonly zone: Zone }
@@ -223,12 +223,11 @@ const roomSubject = (graph: CodeGraph, roomId: string): RoomSubject | null => {
     return subject === null ? null : { kind: "function", ...subject };
   }
   if (isEntranceHub(roomId)) {
-    const zoned = hasZones(graph);
     return {
       kind: "entrance",
       name: repositoryName(graph),
-      modules: zoned ? [] : entryModules(graph),
-      zones: zoned ? zonesOf(graph) : [],
+      modules: entryModules(graph),
+      zones: hasZones(graph) ? zonesOf(graph) : [],
     };
   }
   if (isZoneHub(roomId)) {

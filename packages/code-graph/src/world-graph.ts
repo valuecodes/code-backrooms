@@ -337,8 +337,9 @@ const moduleWorld = (
  * call, and a closed marker in every room holding calls the world cannot
  * follow (ambiguous, dynamic, external or unresolved; never a portal to a
  * guess). The hub holds a module portal to every module it imports or
- * re-exports from. Portals into another zone name it (`zoneLabels`). Portals into other modules lead to units of their
- * areas, listed in `external`; the hub is the start room. Edges in
+ * re-exports from; portals into another zone name it (`zoneLabels`).
+ * Portals into other modules lead to units of their areas, listed in
+ * `external`; the hub is the start room. Edges in
  * `portalOnly` (`source->target`) never become doors. A `seed` varies the
  * widths of columns and hubs, never what is connected; null keeps them plain.
  */

@@ -91,6 +91,7 @@ describe("zone ids", () => {
     expect(zoneId("@repo/lib")).toBe("//zone:@repo/lib");
     expect(zoneId(null)).toBe("//zone");
     expect(zoneId("odd#2")).toBe("//zone:odd%232");
+    expect(zoneId("odd%232")).toBe("//zone:odd%25232");
   });
 
   it("knows every hub of a zone's chain and nothing else", () => {
@@ -115,18 +116,22 @@ describe("zone ids", () => {
     expect(zoneOfModule(graph, "missing.ts")).toBeNull();
   });
 
-  it("keeps a package whose name ends like a chain apart from the chain", () => {
+  it("keeps names that look like chains or escapes apart", () => {
     const graph = withPackages(
       fixtureGraph(
         { path: "a/x.ts", functions: [] },
-        { path: "b/y.ts", functions: [] }
+        { path: "b/y.ts", functions: [] },
+        { path: "c/z.ts", functions: [] }
       ),
       packageNode("a", "a"),
-      packageNode("a#2", "b")
+      packageNode("a#2", "b"),
+      packageNode("a%232", "c")
     );
     const ids = zonesOf(graph).map((zone) => zone.id);
-    expect(ids).toEqual(["//zone:a", "//zone:a%232"]);
+    expect(new Set(ids).size).toBe(3);
+    expect(ids).toEqual(["//zone:a", "//zone:a%232", "//zone:a%25232"]);
     expect(zoneOfHub(graph, "//zone:a#2")?.name).toBe("a");
     expect(zoneOfHub(graph, "//zone:a%232")?.name).toBe("a#2");
+    expect(zoneOfHub(graph, "//zone:a%25232#2")?.name).toBe("a%232");
   });
 });
