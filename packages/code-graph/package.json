@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/code-graph.ts",
+    "./area-links": "./src/area-links.ts",
     "./cfg": "./src/cfg.ts",
     "./cfg-checks": "./src/cfg-checks.ts",
     "./flow": "./src/flow.ts",
