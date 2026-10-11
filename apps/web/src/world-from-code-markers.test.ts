@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import { examples } from "./examples";
 import { codeGraphOf, promptOf, worldFromCode } from "./world-from-code";
 
 /** Parses an example or fails the test with the parser's message. */
 const graphOf = (name: "external" | "resolution") => {
-  const { codeGraph, error } = codeGraphOf(name);
+  const { codeGraph, error } = codeGraphOf(examples[name]);
   if (codeGraph === null) {
     throw new Error(`${name}: ${error}`);
   }

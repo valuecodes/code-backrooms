@@ -10,6 +10,7 @@ import { containsPoint } from "@repo/world-generator/locate";
 import { createNavigator } from "@repo/world-generator/navigation";
 import { describe, expect, it } from "vitest";
 
+import { examples } from "./examples";
 import { sourceView } from "./source-view";
 import {
   areaLabelOf,
@@ -22,7 +23,7 @@ import {
 
 /** The repo example, parsed, or the test fails with the parser's message. */
 const parsed = () => {
-  const result = codeGraphOf("repo");
+  const result = codeGraphOf(examples.repo);
   if (result.codeGraph === null) {
     throw new Error(`repo: ${result.error}`);
   }

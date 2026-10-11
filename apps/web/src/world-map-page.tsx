@@ -1,28 +1,19 @@
 import { useCallback, useMemo, useRef } from "react";
 
+import { ExampleLoading } from "~/example-loading";
 import { mapHeader, svgFileName } from "~/map-page-text";
 import type { WorldOptions } from "~/use-area-world";
 import { useAreaWorld } from "~/use-area-world";
 import { useGenerateAll } from "~/use-generate-all";
 import { WorldMap } from "~/world-map";
 import { playerMarker, startPlacement, worldMapModel } from "~/world-map-model";
-import {
-  areaLinks,
-  initial,
-  labelOfArea,
-  startSeed,
-  worldOptions,
-} from "~/world-setup";
+import { initial, useWorldSetup } from "~/world-setup";
+import type { WorldSetup } from "~/world-setup";
 
 // `?view=map`: the whole world as one SVG, generated an area at a time, with
 // no WebGL. Headless tools wait for `[data-state="done"]` (the map) or
-// `[data-state="failed"]` (no world to draw).
-
-/**
- * Never up front: `?eager=1` would generate every area before the first
- * paint, and the page is here to show them arrive.
- */
-const mapOptions: WorldOptions = { ...worldOptions, eager: false };
+// `[data-state="failed"]` (no world to draw, an example that failed to load
+// included).
 
 /** What the page shows the world of: the example, the preset, or random. */
 const worldName = initial.code ?? initial.preset ?? "random";
@@ -42,7 +33,14 @@ const downloadSvg = (svg: SVGSVGElement, fileName: string): void => {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
-const WorldMapPage = () => {
+const MapPageBody = ({ setup }: { readonly setup: WorldSetup }) => {
+  const { areaLinks, labelOfArea, startSeed, worldOptions } = setup;
+  // Never up front: `?eager=1` would generate every area before the first
+  // paint, and the page is here to show them arrive.
+  const mapOptions: WorldOptions = useMemo(
+    () => ({ ...worldOptions, eager: false }),
+    [worldOptions]
+  );
   const generated = useAreaWorld(startSeed, mapOptions);
   const { world, errors } = generated;
   useGenerateAll(generated.ensureNext, true);
@@ -55,7 +53,7 @@ const WorldMapPage = () => {
             labelOf: labelOfArea,
             links: areaLinks,
           }),
-    [world, errors]
+    [world, errors, labelOfArea, areaLinks]
   );
   const player = useMemo(
     () => (world === null ? null : playerMarker(world, startPlacement(world))),
@@ -68,7 +66,7 @@ const WorldMapPage = () => {
     if (svg !== null && svg !== undefined) {
       downloadSvg(svg, svgFileName(worldName, startSeed));
     }
-  }, []);
+  }, [startSeed]);
 
   return (
     <div className="flex h-dvh w-screen flex-col gap-2 bg-black p-4 font-mono text-xs text-amber-100/70">
@@ -113,6 +111,16 @@ const WorldMapPage = () => {
         )}
       </div>
     </div>
+  );
+};
+
+/** The map page, once the URL's example has its files (`?code=self` waits). */
+const WorldMapPage = () => {
+  const setup = useWorldSetup();
+  return setup === null ? (
+    <ExampleLoading name={initial.code} />
+  ) : (
+    <MapPageBody setup={setup} />
   );
 };
 

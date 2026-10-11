@@ -1,11 +1,12 @@
 import { codeAreaStore } from "@repo/code-graph/module-areas";
 import { describe, expect, it } from "vitest";
 
+import { examples } from "./examples";
 import { mapHeader, svgFileName } from "./map-page-text";
 import { codeGraphOf } from "./world-from-code";
 
 const repo = () => {
-  const { codeGraph, error } = codeGraphOf("repo");
+  const { codeGraph, error } = codeGraphOf(examples.repo);
   if (codeGraph === null) {
     throw new Error(`repo: ${error}`);
   }

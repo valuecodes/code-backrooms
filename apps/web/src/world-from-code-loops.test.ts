@@ -6,6 +6,7 @@ import { containsPoint } from "@repo/world-generator/locate";
 import { createNavigator } from "@repo/world-generator/navigation";
 import { describe, expect, it } from "vitest";
 
+import { examples } from "./examples";
 import {
   areasFromCode,
   codeGraphOf,
@@ -16,7 +17,7 @@ import {
 
 /** Parses an example or fails the test with the parser's message. */
 const graphOf = (name: "loops" | "switches") => {
-  const { codeGraph, error } = codeGraphOf(name);
+  const { codeGraph, error } = codeGraphOf(examples[name]);
   if (codeGraph === null) {
     throw new Error(`${name}: ${error}`);
   }

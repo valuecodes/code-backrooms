@@ -5,6 +5,7 @@ import { World } from "@repo/renderer/world";
 import type { Target } from "@repo/world-generator/interaction";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ExampleLoading } from "~/example-loading";
 import { Hud } from "~/hud";
 import { mapKeyAction } from "~/map-keys";
 import { EMPTY_VISITS, visit, visitedIn } from "~/map-model";
@@ -17,20 +18,15 @@ import { useAreaWorld, zoneProgress } from "~/use-area-world";
 import { useNavigation } from "~/use-navigation";
 import { breadcrumbOf, describeRoom, promptOf } from "~/world-from-code";
 import { WorldMapOverlay } from "~/world-map-overlay";
-import {
-  areaLinks,
-  code,
-  codeGraph,
-  initial,
-  labelOfArea,
-  startSeed,
-  worldOptions,
-} from "~/world-setup";
+import { initial, useWorldSetup } from "~/world-setup";
+import type { WorldSetup } from "~/world-setup";
 
 // Fed from the render loop and read only by the open maps, never by the app.
 const feed = createPoseFeed();
 
-const App = () => {
+const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
+  const { areaLinks, code, codeGraph, labelOfArea, startSeed, worldOptions } =
+    setup;
   const [locked, setLocked] = useState(false);
   const [seed, setSeed] = useState(startSeed);
   const [roomId, setRoomId] = useState<string | null>(null);
@@ -122,7 +118,7 @@ const App = () => {
         withSeed(globalThis.location.search, seed)
       );
     }
-  }, [seed]);
+  }, [seed, startSeed]);
 
   // The browser owns the lock state: one listener covers locks, Esc, and a
   // failed generation unmounting the Canvas mid-lock.
@@ -141,7 +137,7 @@ const App = () => {
   const sources = code?.error === null ? code.sources : null;
   const source = useMemo(
     () => (sources === null ? null : sourceView(codeGraph, sources, roomId)),
-    [sources, roomId]
+    [codeGraph, sources, roomId]
   );
   const failed =
     target?.kind === "portal" ? generated.failedArea(target.portalId) : null;
@@ -224,6 +220,16 @@ const App = () => {
         />
       )}
     </div>
+  );
+};
+
+/** The 3D world, once the URL's example has its files (`?code=self` waits). */
+const App = () => {
+  const setup = useWorldSetup();
+  return setup === null ? (
+    <ExampleLoading name={initial.code} />
+  ) : (
+    <WorldApp setup={setup} />
   );
 };
 

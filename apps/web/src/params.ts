@@ -1,8 +1,8 @@
 import { isPresetName } from "@repo/world-generator/presets";
 import type { PresetName } from "@repo/world-generator/presets";
 
-import { isExampleName } from "~/examples";
-import type { ExampleName } from "~/examples";
+import { isExampleName } from "~/example-files";
+import type { ExampleName } from "~/example-files";
 
 /** What the URL asks the generator for. */
 type WorldParams = {
@@ -44,7 +44,7 @@ const parseInteger = <T>(
 
 /**
  * `?seed=12345&rooms=15`, `?graph=branching`, `?code=demo&eager=1` or
- * `?code=repo&view=map`; anything odd falls back.
+ * `?code=self&view=map`; anything odd falls back.
  */
 const parseWorldParams = (search: string): WorldParams => {
   const params = new URLSearchParams(search);

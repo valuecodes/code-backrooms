@@ -1,7 +1,8 @@
 import type { GeneratedWorld } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
-import type { ExampleName } from "./examples";
+import { examples } from "./examples";
+import type { BundledName } from "./examples";
 import { sourceView } from "./source-view";
 import {
   breadcrumbOf,
@@ -12,8 +13,8 @@ import {
 } from "./world-from-code";
 
 /** Parses an example or fails the test with the parser's message. */
-const parsed = (name: ExampleName) => {
-  const result = codeGraphOf(name);
+const parsed = (name: BundledName) => {
+  const result = codeGraphOf(examples[name]);
   if (result.error !== null) {
     throw new Error(`${name}: ${result.error}`);
   }

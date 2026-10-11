@@ -6,6 +6,7 @@ import type { AreaWorld, Point, Rect } from "@repo/types";
 import { AREA_GAP, stripRange } from "@repo/world-generator/areas";
 import { describe, expect, it } from "vitest";
 
+import { examples } from "./examples";
 import { codeGraphOf } from "./world-from-code";
 import {
   labelFontSize,
@@ -16,7 +17,7 @@ import {
 import type { MapArea, WorldMapModel } from "./world-map-model";
 
 const repo = () => {
-  const { codeGraph, error } = codeGraphOf("repo");
+  const { codeGraph, error } = codeGraphOf(examples.repo);
   if (codeGraph === null) {
     throw new Error(`repo: ${error}`);
   }
