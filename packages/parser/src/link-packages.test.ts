@@ -139,6 +139,17 @@ describe("linking through packages", () => {
     expect(buildCodeGraph(files.toReversed())).toEqual(graph);
   });
 
+  it("rejects a manifest path given twice, as it does a source", () => {
+    const files = filesOf(workspace);
+    const manifest = files.find((file) => file.path === "package.json");
+    if (manifest === undefined) {
+      throw new Error("Expected the root manifest");
+    }
+    expect(() => buildCodeGraph([...files, manifest])).toThrow(
+      'Duplicate module path "package.json"'
+    );
+  });
+
   it("changes the seed when a manifest changes", () => {
     const files = filesOf(workspace);
     const renamed = filesOf({

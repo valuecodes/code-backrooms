@@ -143,6 +143,19 @@ describe("createResolver", () => {
     expect(resolve(fromApp, "/abs/path")).toBeNull();
   });
 
+  it("prefers the longer pattern when prefixes tie, whatever the order", () => {
+    const ids = new Set(["lib/generic.ts", "lib/specific.ts"]);
+    const patterns = [
+      { subpath: "./*/bar", targets: ["lib/generic"] },
+      { subpath: "./*/foo/bar", targets: ["lib/specific"] },
+    ];
+    for (const exports of [patterns, patterns.toReversed()]) {
+      const tied = createResolver(ids, [pkg("lib", "lib", exports)]);
+      expect(tied("x.ts", "lib/x/foo/bar")).toBe("lib/specific.ts");
+      expect(tied("x.ts", "lib/x/bar")).toBe("lib/generic.ts");
+    }
+  });
+
   it("without packages, resolves only relative specifiers", () => {
     const plain = createResolver(modules, []);
     expect(plain(fromApp, "./hud")).toBe("apps/web/src/hud.tsx");

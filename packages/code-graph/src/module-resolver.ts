@@ -17,9 +17,10 @@ type Mapping = {
 
 /**
  * The targets `key` maps to: an exact key first, else the single-`*` key
- * with the longest literal prefix that matches, its match put in place of
- * each target's `*`. Null when nothing matches; an exact key with no
- * targets (blocked) yields `[]`, so a pattern never overrides it.
+ * with the longest literal prefix that matches (on a tie the longer key, as
+ * Node orders patterns), its match put in place of each target's `*`. Null
+ * when nothing matches; an exact key with no targets (blocked) yields `[]`,
+ * so a pattern never overrides it.
  */
 const match = (
   mappings: readonly Mapping[],
@@ -29,8 +30,11 @@ const match = (
   if (exact !== undefined) {
     return exact.targets;
   }
-  let best: { readonly prefix: string; readonly targets: string[] } | null =
-    null;
+  let best: {
+    readonly prefix: string;
+    readonly length: number;
+    readonly targets: string[];
+  } | null = null;
   for (const mapping of mappings) {
     const star = mapping.key.indexOf("*");
     if (star === -1 || mapping.key.includes("*", star + 1)) {
@@ -42,13 +46,17 @@ const match = (
       key.length < prefix.length + suffix.length ||
       !key.startsWith(prefix) ||
       !key.endsWith(suffix) ||
-      (best !== null && prefix.length <= best.prefix.length)
+      (best !== null &&
+        (prefix.length < best.prefix.length ||
+          (prefix.length === best.prefix.length &&
+            mapping.key.length <= best.length)))
     ) {
       continue;
     }
     const matched = key.slice(prefix.length, key.length - suffix.length);
     best = {
       prefix,
+      length: mapping.key.length,
       targets: mapping.targets.map((target) => target.replace("*", matched)),
     };
   }
