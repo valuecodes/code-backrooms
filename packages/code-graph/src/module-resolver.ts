@@ -57,8 +57,10 @@ const match = (
     best = {
       prefix,
       length: mapping.key.length,
+      // Node replaces every `*` of a target (`./*/*.ts`); tsconfig allows one.
+      // A callback, so a `$` in the match is never a replacement pattern.
       targets: mapping.targets.map((target) =>
-        target.replaceAll("*", matched)
+        target.replaceAll("*", () => matched)
       ),
     };
   }

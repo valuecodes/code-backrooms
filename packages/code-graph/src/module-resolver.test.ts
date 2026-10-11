@@ -156,6 +156,22 @@ describe("createResolver", () => {
     }
   });
 
+  it("puts the match in place of every `*` of a target", () => {
+    const ids = new Set(["lib/feature/feature.ts"]);
+    const repeated = createResolver(ids, [
+      pkg("lib", "lib", [{ subpath: "./*", targets: ["lib/*/*.ts"] }]),
+    ]);
+    expect(repeated("x.ts", "lib/feature")).toBe("lib/feature/feature.ts");
+  });
+
+  it("takes a `$` in the match literally", () => {
+    const ids = new Set(["lib/src/$&.ts"]);
+    const dollar = createResolver(ids, [
+      pkg("lib", "lib", [{ subpath: "./*", targets: ["lib/src/*.ts"] }]),
+    ]);
+    expect(dollar("x.ts", "lib/$&")).toBe("lib/src/$&.ts");
+  });
+
   it("without packages, resolves only relative specifiers", () => {
     const plain = createResolver(modules, []);
     expect(plain(fromApp, "./hud")).toBe("apps/web/src/hud.tsx");

@@ -162,6 +162,15 @@ describe("packagesOf", () => {
     expect(packages[2]?.deps).toEqual(["dup"]);
   });
 
+  it("never gives a generated suffix to a package literally named so", () => {
+    const packages = packagesOf([
+      manifest("a/package.json", { name: "a" }),
+      manifest("b/package.json", { name: "a" }),
+      manifest("c/package.json", { name: "a~2" }),
+    ]);
+    expect(packages.map((pkg) => pkg.id)).toEqual(["a", "a~2", "a~2~2"]);
+  });
+
   it("reads paths from the JSONC tsconfig beside the manifest", () => {
     const packages = packagesOf([
       manifest("apps/web/package.json", { name: "web" }),
