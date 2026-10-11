@@ -19,6 +19,13 @@ import { hubRatio } from "./variation";
 const MAX_HUB_DOORS = 5;
 
 /**
+ * The doors per hub a module is laid out with, tried in order: a hub with
+ * many roots and long walls taken by its neighbours can still leave no room
+ * for one more door, and smaller hubs further along the chain then fit.
+ */
+const HUB_DOOR_LADDER = [MAX_HUB_DOORS, 4, 3] as const;
+
+/**
  * Module portals per hub: a hub stops growing at 20 x 20 m, about eight
  * openings of wall, so a module importing more files spreads its module
  * portals along the hub chain, chaining further hubs when it runs out.
@@ -34,20 +41,21 @@ const linksOn = (index: number, links: number): number =>
 
 /**
  * Splits what hangs off a hub chain over its hubs so that no hub exceeds
- * MAX_HUB_DOORS once its links to the previous and next hub count;
+ * `maxDoors` once its links to the previous and next hub count;
  * `incoming` is the door into the first one from outside the chain (a
  * lobby's from its module hub). Module portals are not doors, so they do
  * not count. Always at least one group, possibly empty.
  */
 const hubGroups = <T>(
   items: readonly T[],
-  incoming = 0
+  incoming: number,
+  maxDoors: number
 ): readonly (readonly T[])[] => {
   const groups: (readonly T[])[] = [];
   let remaining = items;
   do {
     const links = groups.length > 0 ? 1 : incoming;
-    let take = Math.max(1, MAX_HUB_DOORS - links);
+    let take = Math.max(1, maxDoors - links);
     if (remaining.length > take) {
       take = Math.max(1, take - 1);
     }
@@ -88,6 +96,8 @@ type HubPlanInput = {
   /** Module portals on the hubs, MODULE_PORTALS_PER_HUB to each from the first on. */
   readonly links: number;
   readonly seed: number | null;
+  /** Doors per hub and lobby, chain links included; MAX_HUB_DOORS by default. */
+  readonly maxDoors?: number;
 };
 
 type HubPlan = {
@@ -102,9 +112,10 @@ type HubPlan = {
 const lobbyChain = (
   cls: ClassNode,
   methods: readonly FunctionNode[],
-  seed: number | null
+  seed: number | null,
+  maxDoors: number
 ): { readonly rooms: GraphRoom[]; readonly connections: Connection[] } => {
-  const groups = hubGroups(methods, 1);
+  const groups = hubGroups(methods, 1, maxDoors);
   const rooms = groups.map((group, index): GraphRoom => {
     const id = lobbyId(cls.id, index);
     // The door in (from the module hub or the previous lobby), and on.
@@ -145,6 +156,7 @@ const planHubs = ({
   classes,
   links,
   seed,
+  maxDoors = MAX_HUB_DOORS,
 }: HubPlanInput): HubPlan => {
   const members = new Map<ClassNode, FunctionNode[]>();
   const items: string[] = [];
@@ -162,7 +174,7 @@ const planHubs = ({
       methods.push(fn);
     }
   }
-  const rootGroups = hubGroups(items);
+  const rootGroups = hubGroups(items, 0, maxDoors);
   const groups = [
     ...rootGroups,
     ...Array.from(
@@ -204,11 +216,18 @@ const planHubs = ({
   });
   const lobbies: GraphRoom[] = [];
   for (const [cls, methods] of members) {
-    const chain = lobbyChain(cls, methods, seed);
+    const chain = lobbyChain(cls, methods, seed, maxDoors);
     lobbies.push(...chain.rooms);
     connections.push(...chain.connections);
   }
   return { hubs, lobbies, connections };
 };
 
-export { classOf, linksOn, MODULE_PORTALS_PER_HUB, planHubs };
+export {
+  classOf,
+  HUB_DOOR_LADDER,
+  linksOn,
+  MAX_HUB_DOORS,
+  MODULE_PORTALS_PER_HUB,
+  planHubs,
+};

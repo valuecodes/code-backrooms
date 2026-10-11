@@ -1,116 +1,13 @@
-import type { AreaWorld, Point, Rect, WorldGraph } from "@repo/types";
+import type { AreaWorld, WorldGraph } from "@repo/types";
 import { describe, expect, it } from "vitest";
 
 import { checkAreas } from "./area-checks";
 import { createAreaStore } from "./area-store";
 import type { AreaSpec } from "./area-store";
-import {
-  AREA_GAP,
-  assembleAreas,
-  packSlots,
-  SHELF_WIDTH,
-  stripRange,
-} from "./areas";
-import type { Slot, ZoneSpec } from "./areas";
-import { rectGap } from "./fit";
+import { assembleAreas } from "./areas";
+import type { ZoneSpec } from "./areas";
 import { areaGraphs } from "./portal-world";
-import { createRng, nextInt } from "./random";
 import { generateWorld } from "./world-generator";
-
-const moved = (rect: Rect, { x, z }: Point): Rect => ({
-  minX: rect.minX + x,
-  maxX: rect.maxX + x,
-  minZ: rect.minZ + z,
-  maxZ: rect.maxZ + z,
-});
-
-/** Random off-grid rects in strips 0-3, about one in eight wider than a shelf. */
-const randomSlots = (seed: number, count: number): Slot[] => {
-  const rng = createRng(seed);
-  return Array.from({ length: count }, (_, index) => {
-    const width =
-      nextInt(rng, 1, 8) === 1
-        ? nextInt(rng, SHELF_WIDTH + 1, 700)
-        : nextInt(rng, 16, 640) / 4;
-    const depth = nextInt(rng, 16, 400) / 4;
-    const minX = -nextInt(rng, 0, Math.floor(width));
-    const minZ = -nextInt(rng, 0, Math.floor(depth));
-    return {
-      rect: { minX, maxX: minX + width, minZ, maxZ: minZ + depth },
-      strip: index === 0 ? 0 : nextInt(rng, 0, 3),
-    };
-  });
-};
-
-const wide = (rect: Rect) => rect.maxX - rect.minX > SHELF_WIDTH;
-
-describe("packSlots", () => {
-  const sequences = [
-    ...[1, 2, 3, 4, 5, 6].map((seed) => randomSlots(seed, 40)),
-    // A wide entry raises the floor before anything else is placed.
-    [
-      { rect: { minX: -300, maxX: 300, minZ: -5, maxZ: 5 }, strip: 0 },
-      ...randomSlots(7, 30).slice(1),
-    ],
-  ];
-
-  it("is prefix-stable: an area never moves when more are added", () => {
-    for (const slots of sequences) {
-      const offsets = packSlots(slots);
-      for (let n = 0; n <= slots.length; n += 1) {
-        expect(packSlots(slots.slice(0, n))).toEqual(offsets.slice(0, n));
-      }
-    }
-  });
-
-  it("keeps every pair AREA_GAP apart, each area in its strip", () => {
-    for (const [index, slots] of sequences.entries()) {
-      const offsets = packSlots(slots);
-      const left = slots[0]?.rect.minX ?? 0;
-      const placed = slots.map(({ rect }, at) =>
-        moved(rect, offsets[at] ?? { x: 0, z: 0 })
-      );
-      expect(placed.some((rect, at) => at > 0 && wide(rect))).toBe(true);
-      for (const [i, a] of placed.entries()) {
-        for (const [j, b] of placed.slice(i + 1).entries()) {
-          expect(
-            rectGap(a, b),
-            `sequence ${index}: ${i} and ${i + 1 + j}`
-          ).toBeGreaterThanOrEqual(AREA_GAP - 1e-9);
-        }
-      }
-      const outside = placed.flatMap((a, i) => {
-        const strip = stripRange(left, slots[i]?.strip ?? 0);
-        return !wide(a) &&
-          (a.minX < strip.minX - 1e-9 || a.maxX > strip.maxX + 1e-9)
-          ? [i]
-          : [];
-      });
-      expect(outside, `sequence ${index}`).toEqual([]);
-      const risen = placed.flatMap((a, i) =>
-        i > 0 &&
-        wide(a) &&
-        a.minZ <
-          Math.max(...placed.slice(0, i).map((r) => r.maxZ)) + AREA_GAP - 1e-9
-          ? [i]
-          : []
-      );
-      expect(risen, `sequence ${index}`).toEqual([]);
-    }
-  });
-
-  it("packs each strip from its own left edge, rows starting level", () => {
-    const square = { minX: -10, maxX: 10, minZ: -10, maxZ: 10 };
-    const offsets = packSlots([
-      { rect: square, strip: 0 },
-      { rect: square, strip: 2 },
-      { rect: square, strip: 1 },
-    ]);
-    expect(offsets[1]?.x).toBe(stripRange(-10, 2).minX + 10);
-    expect(offsets[2]?.x).toBe(stripRange(-10, 1).minX + 10);
-    expect(offsets.map(({ z }) => z + 0)).toEqual([0, 0, 0]);
-  });
-});
 
 /**
  * The portal world's three areas plus a fourth hub the second leads to, and
@@ -167,6 +64,13 @@ const zoneOf: Readonly<Record<string, string>> = {
   three: "b",
 };
 
+/** The area each is reached from: the hubs off the entry, four off two. */
+const parentOf: Readonly<Record<string, string>> = {
+  two: "one",
+  three: "one",
+  four: "two",
+};
+
 const worldOf = (seed: number, id: string) => {
   const graph = graphs.find(([name]) => name === id)?.[1];
   if (graph === undefined) {
@@ -181,6 +85,7 @@ const specsOf = (seed: number): readonly AreaSpec[] =>
     units: graph.rooms.map((room) => room.id),
     generate: () => worldOf(seed, id),
     ...(zoneOf[id] === undefined ? {} : { zone: zoneOf[id] }),
+    ...(parentOf[id] === undefined ? {} : { parent: parentOf[id] }),
   }));
 
 /** Every area assembled at once, in `order` after the entry. */
@@ -197,6 +102,7 @@ const assembled = (
       id,
       world: worldOf(seed, id),
       ...(zoneIds[id] === undefined ? {} : { zone: zoneIds[id] }),
+      ...(parentOf[id] === undefined ? {} : { parent: parentOf[id] }),
     })),
     zoning
   );
@@ -321,22 +227,30 @@ describe("createAreaStore with zones", () => {
       })
     ).toThrow('Unknown zone "b" of area "three"');
   });
+
+  it("throws at creation for an unknown parent and a parented entry", () => {
+    const withParent = (id: string, parent: string) =>
+      specsOf(1).map((spec) => (spec.id === id ? { ...spec, parent } : spec));
+    expect(() =>
+      createAreaStore({
+        seed: 1,
+        entry: "one",
+        specs: withParent("four", "nowhere"),
+        zones,
+      })
+    ).toThrow('Unknown parent "nowhere" of area "four"');
+    expect(() =>
+      createAreaStore({
+        seed: 1,
+        entry: "one",
+        specs: withParent("one", "two"),
+        zones,
+      })
+    ).toThrow('Entry area "one" cannot have a parent');
+  });
 });
 
 describe("checkAreas on zones", () => {
-  it("names an area outside its strip", () => {
-    const world = assembled(1, ["two", "three", "four"]);
-    const shifted: AreaWorld = {
-      ...world,
-      areas: world.areas.map((area) =>
-        area.id === "three"
-          ? { ...area, bounds: moved(area.bounds, { x: -100, z: 0 }) }
-          : area
-      ),
-    };
-    expect(checkAreas(shifted)).toContain("area three is outside its strip");
-  });
-
   it("names a zone hub the entry does not lead to", () => {
     const world = assembled(
       1,

@@ -10,6 +10,9 @@ const DOOR_HEIGHT = 2.1;
 /** Room edges snap to this lattice, so shared edges compare exactly. */
 const GRID = 0.5;
 
+/** Metres between two areas: past the fog (28 m), so a neighbour never shows. */
+const AREA_GAP = 32;
+
 /** The width of a closing corridor, and of every corridor without variation. */
 const CORRIDOR_WIDTH = 2;
 /** Widths a tree corridor may take when variation is on, the narrowest first. */
@@ -93,6 +96,7 @@ const FLOW_PORTAL_PITCH = 2;
 const FLOW_BUDGET = { width: 32, depth: 96, rooms: 64 } as const;
 
 export {
+  AREA_GAP,
   ARRIVAL_INSET,
   CORRIDOR_LENGTHS,
   CORRIDOR_WIDTH,

@@ -106,6 +106,28 @@ describe("createAreaStore", () => {
     expect(checkAreas(world)).toEqual([]);
   });
 
+  it("owns the rooms an area has beyond its units once it is placed", () => {
+    // Area two's spec lists none of its rooms, as when a module chains
+    // more hubs than its units planned for.
+    const store = createAreaStore({
+      seed: 1,
+      entry: "one",
+      specs: specsOf(1).map((spec) =>
+        spec.id === "two" ? { ...spec, units: [] } : spec
+      ),
+    });
+    const before = store.snapshot().world;
+    expect(before.areaOf.get("work")).toBeUndefined();
+    store.ensure("two");
+    const after = store.snapshot().world;
+    const two = after.areas.find((area) => area.id === "two");
+    for (const room of two?.graph.rooms ?? []) {
+      expect(after.areaOf.get(room.id), `room ${room.id}`).toBe("two");
+    }
+    // An earlier snapshot keeps the map it had.
+    expect(before.areaOf.get("work")).toBeUndefined();
+  });
+
   it("keeps the snapshot until something changes and generates once", () => {
     const calls = new Map<string, number>();
     const store = storeOf(1, calls);

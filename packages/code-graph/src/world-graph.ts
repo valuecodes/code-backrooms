@@ -17,7 +17,7 @@ import type {
   ModuleNode,
 } from "./code-graph";
 import { layoutFlow, planFlow } from "./flow-layout";
-import { MODULE_PORTALS_PER_HUB, planHubs } from "./hub-plan";
+import { MAX_HUB_DOORS, MODULE_PORTALS_PER_HUB, planHubs } from "./hub-plan";
 import { modulePortalId } from "./ids";
 import { moduleLinks } from "./module-links";
 import { columnJitter } from "./variation";
@@ -226,7 +226,8 @@ const moduleWorld = (
   module: ModuleNode,
   links: number,
   portalOnly: ReadonlySet<string>,
-  seed: number | null
+  seed: number | null,
+  maxDoors: number
 ): ModuleWorld => {
   const functions = graph.functions.filter((fn) => fn.moduleId === module.id);
   const sites = sitesByCaller(graph.callSites);
@@ -309,6 +310,7 @@ const moduleWorld = (
     classes: graph.classes.filter((cls) => cls.moduleId === module.id),
     links,
     seed,
+    maxDoors,
   });
   const connections = [
     ...hubConnections,
@@ -342,18 +344,27 @@ const moduleWorld = (
  * `external`; the hub is the start room. Edges in
  * `portalOnly` (`source->target`) never become doors. A `seed` varies the
  * widths of columns and hubs, never what is connected; null keeps them plain.
+ * `maxDoors` caps the doors of each hub and lobby (`HUB_DOOR_LADDER`).
  */
 const toWorldGraph = (
   graph: CodeGraph,
   portalOnly: ReadonlySet<string> = new Set(),
   seed: number | null = null,
-  module: ModuleNode | undefined = graph.modules[0]
+  module: ModuleNode | undefined = graph.modules[0],
+  maxDoors: number = MAX_HUB_DOORS
 ): WorldGraph => {
   if (module === undefined) {
     return { rooms: [], connections: [], portals: [] };
   }
   const links = moduleLinks(graph, module);
-  const world = moduleWorld(graph, module, links.length, portalOnly, seed);
+  const world = moduleWorld(
+    graph,
+    module,
+    links.length,
+    portalOnly,
+    seed,
+    maxDoors
+  );
   const { moduleLabel } = zoneLabels(graph, module);
   const rooms = [...world.hubs, ...world.lobbies, ...world.rooms];
   const portals = [
