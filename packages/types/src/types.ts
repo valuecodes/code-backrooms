@@ -356,6 +356,18 @@ type BuiltArea = GeneratedWorld & {
   readonly offset: Point;
   /** The footprint of its rooms, once moved. */
   readonly bounds: Rect;
+  /** The zone it was placed in, or null outside every zone. */
+  readonly zoneId: string | null;
+};
+
+/** A package's areas, packed side by side in a strip of their own. */
+type AreaZone = {
+  readonly id: string;
+  readonly name: string;
+  /** Every area of the zone, generated or not: its hub first. */
+  readonly areas: readonly string[];
+  /** The footprint of its generated areas, or null while none is. */
+  readonly bounds: Rect | null;
 };
 
 type AreaWorld = {
@@ -376,10 +388,13 @@ type AreaWorld = {
   readonly failed: readonly string[];
   /** The area of every unit (graph room) of every area, pending ones too. */
   readonly areaOf: ReadonlyMap<string, string>;
+  /** The zones, in strip order; empty when nothing is zoned. */
+  readonly zones: readonly AreaZone[];
 };
 
 export type {
   AreaWorld,
+  AreaZone,
   BuiltArea,
   BuiltPortal,
   BuiltRoom,
