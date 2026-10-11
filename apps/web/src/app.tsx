@@ -217,6 +217,7 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
           labelOf={labelOfArea}
           links={areaLinks}
           feed={feed}
+          locked={locked}
         />
       )}
     </div>

@@ -3,6 +3,8 @@ import type { AreaWorld } from "@repo/types";
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
 import type { PoseFeed } from "~/pose-feed";
+import { useViewBox } from "~/use-view-box";
+import { fitViewBox } from "~/view-box";
 import { WorldMap } from "~/world-map";
 import { playerMarker, startPlacement, worldMapModel } from "~/world-map-model";
 
@@ -16,7 +18,12 @@ type WorldMapOverlayProps = {
   readonly links: readonly AreaLink[];
   /** Where the player is; only the marker follows it. */
   readonly feed: PoseFeed;
+  /** Walking: the locked pointer sends the map no wheel or drag. */
+  readonly locked: boolean;
 };
+
+/** How the map moves, once the pointer is free. */
+const ZOOM_HINT = "wheel zooms · drag pans · double-click resets";
 
 const keepClick = (event: MouseEvent) => {
   event.stopPropagation();
@@ -32,11 +39,14 @@ const WorldMapOverlay = ({
   labelOf,
   links,
   feed,
+  locked,
 }: WorldMapOverlayProps) => {
   const model = useMemo(
     () => worldMapModel(world, { errors, labelOf, links }),
     [world, errors, labelOf, links]
   );
+  const fit = useMemo(() => fitViewBox(model.bounds), [model]);
+  const view = useViewBox(fit);
   const pose =
     useSyncExternalStore(feed.subscribe, feed.get) ?? startPlacement(world);
   const player = useMemo(() => playerMarker(world, pose), [world, pose]);
@@ -55,10 +65,13 @@ const WorldMapOverlay = ({
     <div ref={backdrop} className="pointer-events-auto absolute inset-0 p-4">
       <div className="flex h-full flex-col gap-2 rounded bg-black/80 p-3">
         <p className="font-mono text-xs text-amber-100/70">
-          {built}/{total} areas · Tab or Esc closes
+          {built}/{total} areas · Tab or Esc closes ·{" "}
+          {locked ? "Esc frees the pointer to zoom" : ZOOM_HINT}
         </p>
         <WorldMap
-          className="min-h-0 w-full flex-1"
+          className="min-h-0 w-full flex-1 cursor-grab touch-none"
+          viewBox={view.viewBox}
+          svgRef={view.ref}
           model={model}
           player={player}
           done={world.pending.length === 0}

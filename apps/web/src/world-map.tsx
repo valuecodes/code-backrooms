@@ -1,7 +1,10 @@
 import type { Rect } from "@repo/types";
 import { memo, useId } from "react";
+import type { Ref } from "react";
 
 import { PORTAL_COLOURS } from "~/map-model";
+import { detailLevel, fitViewBox, zoneLabelSize } from "~/view-box";
+import type { ViewBox } from "~/view-box";
 import { labelFontSize } from "~/world-map-model";
 import type { MapArea, MapPlayer, WorldMapModel } from "~/world-map-model";
 
@@ -12,6 +15,9 @@ type WorldMapProps = {
   readonly player: MapPlayer | null;
   /** Every area generated or given up on: `data-state="done"`. */
   readonly done: boolean;
+  /** What part of the world shows; the whole of it by default. */
+  readonly viewBox?: ViewBox;
+  readonly svgRef?: Ref<SVGSVGElement>;
   readonly className?: string;
 };
 
@@ -21,8 +27,13 @@ const BRIGHT = "#fffbeb";
 const PENDING = "#9ca3af";
 const FAILED = "#f87171";
 const BACKGROUND = "#0c0a09";
-/** Zone names are drawn this much larger than area labels. */
+/** Zone names are drawn at least this much larger than area labels. */
 const ZONE_LABEL_SCALE = 1.6;
+/**
+ * Zoomed out, rooms and area labels are too small to read: hidden by a rule
+ * rather than unmounted, so zooming re-renders none of the area shapes.
+ */
+const DETAIL_RULE = "[data-detail=overview] .map-detail{display:none}";
 
 const rectProps = ({ minX, maxX, minZ, maxZ }: Rect) => ({
   x: minX,
@@ -50,7 +61,6 @@ type LayersProps = {
 /** Zone bands, links and areas with their labels. */
 const Layers = ({ model, clip }: LayersProps) => {
   const size = labelFontSize(model.bounds);
-  const zoneSize = size * ZONE_LABEL_SCALE;
   // A label's baseline sits one line into its area, or the clip hides it.
   const inset = size * 0.3;
   return (
@@ -58,25 +68,16 @@ const Layers = ({ model, clip }: LayersProps) => {
       {model.zones.map(
         (zone) =>
           zone.rect !== null && (
-            <g key={zone.id} data-zone={zone.id}>
-              <rect
-                {...rectProps(zone.rect)}
-                fill={PLAIN}
-                fillOpacity={0.04}
-                stroke={PLAIN}
-                strokeOpacity={0.3}
-                vectorEffect="non-scaling-stroke"
-              />
-              <text
-                x={zone.rect.minX + zoneSize * 0.3}
-                y={zone.rect.minZ + zoneSize}
-                fontSize={zoneSize}
-                fill={PLAIN}
-                fillOpacity={0.8}
-              >
-                {`${zone.name} ${zone.built}/${zone.total}`}
-              </text>
-            </g>
+            <rect
+              key={zone.id}
+              data-zone={zone.id}
+              {...rectProps(zone.rect)}
+              fill={PLAIN}
+              fillOpacity={0.04}
+              stroke={PLAIN}
+              strokeOpacity={0.3}
+              vectorEffect="non-scaling-stroke"
+            />
           )
       )}
       {model.links.map((link) => (
@@ -115,6 +116,7 @@ const Layers = ({ model, clip }: LayersProps) => {
             {area.rooms.map((room) => (
               <rect
                 key={room.id}
+                className="map-detail"
                 {...rectProps(room.rect)}
                 fill={PLAIN}
                 fillOpacity={room.kind === "corridor" ? 0.06 : 0.14}
@@ -124,6 +126,7 @@ const Layers = ({ model, clip }: LayersProps) => {
               />
             ))}
             <text
+              className="map-detail"
               x={area.rect.minX + inset}
               y={area.rect.minZ + size}
               fontSize={size}
@@ -145,41 +148,87 @@ const Layers = ({ model, clip }: LayersProps) => {
  */
 const MapLayers = memo(Layers);
 
+type ZoneNamesProps = {
+  readonly model: WorldMapModel;
+  /** Width of the view in metres: names grow as the map zooms out. */
+  readonly viewWidth: number;
+};
+
+/** Each zone's name and progress on its band, readable at any zoom. */
+const ZoneNames = ({ model, viewWidth }: ZoneNamesProps) => {
+  const base = labelFontSize(model.bounds) * ZONE_LABEL_SCALE;
+  return model.zones.map((zone) => {
+    if (zone.rect === null) {
+      return null;
+    }
+    const text = `${zone.name} ${zone.built}/${zone.total}`;
+    const size = zoneLabelSize(
+      viewWidth,
+      base,
+      zone.rect.maxX - zone.rect.minX,
+      text
+    );
+    return (
+      <text
+        key={zone.id}
+        data-zone-name={zone.id}
+        x={zone.rect.minX + size * 0.3}
+        y={zone.rect.minZ + size}
+        fontSize={size}
+        fill={PLAIN}
+        fillOpacity={0.8}
+      >
+        {text}
+      </text>
+    );
+  });
+};
+
 /**
- * The whole world from above, north up, scaled to fit: zone bands, every
- * area (pending ones dashed, failed ones red), the links between them and
- * the player. Screen y is world z, as on the local map.
+ * The whole world from above, north up: zone bands, every area (pending
+ * ones dashed, failed ones red), the links between them and the player.
+ * Screen y is world z, as on the local map. Shows `viewBox`, the whole world
+ * by default; zoomed out past `DETAIL_WIDTH` rooms and area labels hide.
  */
-const WorldMap = ({ model, player, done, className }: WorldMapProps) => {
+const WorldMap = ({
+  model,
+  player,
+  done,
+  viewBox,
+  svgRef,
+  className,
+}: WorldMapProps) => {
   // `useId` gives `«r0»`-like ids; a clip path id must be a plain name.
   const clip = `world-map-${useId().replaceAll(/[^\w-]/g, "")}`;
   const size = labelFontSize(model.bounds);
-  const { minX, maxX, minZ, maxZ } = model.bounds;
-  const pad = size;
-  const width = Math.max(maxX - minX + pad * 2, 1);
-  const height = Math.max(maxZ - minZ + pad * 2, 1);
+  const fit = fitViewBox(model.bounds);
+  const view = viewBox ?? fit;
   const heading =
     player === null
       ? 0
       : (Math.atan2(player.heading.z, player.heading.x) * 180) / Math.PI;
   return (
     <svg
+      ref={svgRef}
       role="img"
       aria-label="World map"
       className={className}
-      viewBox={`${minX - pad} ${minZ - pad} ${width} ${height}`}
+      viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
       preserveAspectRatio="xMidYMid meet"
       data-state={done ? "done" : "generating"}
+      data-detail={detailLevel(view.width)}
       fontFamily="ui-monospace, monospace"
     >
+      <style>{DETAIL_RULE}</style>
       <rect
-        x={minX - pad}
-        y={minZ - pad}
-        width={width}
-        height={height}
+        x={fit.x}
+        y={fit.y}
+        width={fit.width}
+        height={fit.height}
         fill={BACKGROUND}
       />
       <MapLayers model={model} clip={clip} />
+      <ZoneNames model={model} viewWidth={view.width} />
       {player !== null && (
         <polygon
           points="0.9,0 -0.5,0.55 -0.5,-0.55"
