@@ -22,7 +22,9 @@ whole world as a 2D map instead: it loads no WebGL, generates every area one
 at a time and marks its `<svg>` `data-state="done"` once all are generated, for
 headless screenshots. When no world can be generated at all (a parse error),
 the error is shown with `data-state="failed"` instead, so wait for
-`[data-state="done"], [data-state="failed"]`.
+`[data-state="done"], [data-state="failed"]`. On the map the wheel zooms, a
+drag pans and a double-click shows the whole world again; Download SVG always
+saves the whole world.
 
 `?code=self` turns this repository itself into the world: its workspace
 packages become zones. Its sources and manifests are bundled into a chunk of

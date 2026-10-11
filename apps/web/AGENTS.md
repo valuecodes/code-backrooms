@@ -146,7 +146,10 @@ not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   every area not generated yet as a dashed ghost on a shelf above its zone
   (failed ones red, the error on hover), the module and call links between
   areas, and the player's marker. M keeps the local map; clicks on the
-  world map do not lock the mouse.
+  world map do not lock the mouse. Once the mouse is free (Esc), the wheel
+  zooms about the cursor, a drag pans and a double-click goes back to the
+  whole world, on `?view=map` too; wider than 600 m the map hides rooms and
+  area labels and draws zone names larger, each within its band.
 
 ---
 
@@ -185,6 +188,8 @@ src/
   world-map-overlay.tsx  the Tab overlay: the whole world, the player's marker on it
   world-map.tsx       the whole-world SVG: zone bands, areas, ghosts, links, player
   world-map-model.ts  areas, ghosts, zone bands and links the world map draws, pure
+  view-box.ts         the world map's view: fit, wheel zoom, pan, level of detail, pure
+  use-view-box.ts     wheel, drag and double-click on the world map's svg -> its view
   pose-feed.ts        the player's position from the render loop to the map, no app render
   params.ts           URL query -> { seed, rooms, preset, code }, with clamping
   examples.ts         bundled example programs for ?code=<name>

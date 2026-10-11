@@ -29,11 +29,6 @@ const FAILED = "#f87171";
 const BACKGROUND = "#0c0a09";
 /** Zone names are drawn at least this much larger than area labels. */
 const ZONE_LABEL_SCALE = 1.6;
-/**
- * Zoomed out, rooms and area labels are too small to read: hidden by a rule
- * rather than unmounted, so zooming re-renders none of the area shapes.
- */
-const DETAIL_RULE = "[data-detail=overview] .map-detail{display:none}";
 
 const rectProps = ({ minX, maxX, minZ, maxZ }: Rect) => ({
   x: minX,
@@ -188,7 +183,9 @@ const ZoneNames = ({ model, viewWidth }: ZoneNamesProps) => {
  * The whole world from above, north up: zone bands, every area (pending
  * ones dashed, failed ones red), the links between them and the player.
  * Screen y is world z, as on the local map. Shows `viewBox`, the whole world
- * by default; zoomed out past `DETAIL_WIDTH` rooms and area labels hide.
+ * by default. Zoomed out, `data-detail="overview"` hides rooms and area
+ * labels (`.map-detail`, in `globals.css`): hidden rather than unmounted, so
+ * zooming re-renders none of the area shapes.
  */
 const WorldMap = ({
   model,
@@ -219,7 +216,6 @@ const WorldMap = ({
       data-detail={detailLevel(view.width)}
       fontFamily="ui-monospace, monospace"
     >
-      <style>{DETAIL_RULE}</style>
       <rect
         x={fit.x}
         y={fit.y}
