@@ -48,6 +48,7 @@ describe("awayZone", () => {
 
   it("is null for ids not from the graph", () => {
     expect(awayZone(graph, "apps/web/src/main.ts", "nope.ts")).toBeNull();
+    expect(awayZone(graph, "nope.ts", "packages/lib/src/load.ts")).toBeNull();
   });
 });
 
