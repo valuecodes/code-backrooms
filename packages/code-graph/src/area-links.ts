@@ -51,9 +51,10 @@ const hubAreaLinks = (graph: CodeGraph): readonly AreaLink[] => {
 };
 
 /**
- * Calls from each module into other modules: call edges by the module of
- * their caller (a function, or the module itself for top-level calls) and
- * of their callee, counted per pair, callees in the order first called.
+ * Calls from each module into other modules: resolved call sites by the
+ * module of their caller (a function, or the module itself for top-level
+ * calls, which have no call edge) and of their callee, counted per pair,
+ * callees in the order first called.
  */
 const callLinks = (
   graph: CodeGraph
