@@ -5,6 +5,9 @@ import { mapHeader, svgFileName } from "~/map-page-text";
 import type { WorldOptions } from "~/use-area-world";
 import { useAreaWorld } from "~/use-area-world";
 import { useGenerateAll } from "~/use-generate-all";
+import { useViewBox } from "~/use-view-box";
+import { fitViewBox } from "~/view-box";
+import type { ViewBox } from "~/view-box";
 import { WorldMap } from "~/world-map";
 import { playerMarker, startPlacement, worldMapModel } from "~/world-map-model";
 import { initial, useWorldSetup } from "~/world-setup";
@@ -18,9 +21,23 @@ import type { WorldSetup } from "~/world-setup";
 /** What the page shows the world of: the example, the preset, or random. */
 const worldName = initial.code ?? initial.preset ?? "random";
 
-/** Saves `svg` as a file, through a blob URL the page's CSP allows. */
-const downloadSvg = (svg: SVGSVGElement, fileName: string): void => {
-  const markup = new XMLSerializer().serializeToString(svg);
+/** The view before there is a world to fit. */
+const NO_VIEW: ViewBox = { x: 0, y: 0, width: 1, height: 1 };
+
+/**
+ * `svg` as a file's markup at full detail: the map shows rooms and labels
+ * at any width once nothing hides them.
+ */
+const fullMapMarkup = (svg: SVGSVGElement): string => {
+  const copy = svg.cloneNode(true);
+  if (copy instanceof SVGSVGElement) {
+    copy.dataset.detail = "full";
+  }
+  return new XMLSerializer().serializeToString(copy);
+};
+
+/** Saves `markup` as a file, through a blob URL the page's CSP allows. */
+const downloadSvg = (markup: string, fileName: string): void => {
   const url = URL.createObjectURL(
     new Blob([markup], { type: "image/svg+xml" })
   );
@@ -60,13 +77,23 @@ const MapPageBody = ({ setup }: { readonly setup: WorldSetup }) => {
     [world]
   );
   const done = world !== null && world.pending.length === 0;
+  const fit = useMemo(
+    () => (model === null ? NO_VIEW : fitViewBox(model.bounds)),
+    [model]
+  );
+  const view = useViewBox(fit);
+  const { atFit } = view;
   const container = useRef<HTMLDivElement>(null);
+  // The whole world whatever the zoom, so the file matches every other run.
   const onDownload = useCallback(() => {
-    const svg = container.current?.querySelector("svg");
-    if (svg !== null && svg !== undefined) {
-      downloadSvg(svg, svgFileName(worldName, startSeed));
+    const markup = atFit(() => {
+      const svg = container.current?.querySelector("svg");
+      return svg === null || svg === undefined ? null : fullMapMarkup(svg);
+    });
+    if (markup !== null) {
+      downloadSvg(markup, svgFileName(worldName, startSeed));
     }
-  }, [startSeed]);
+  }, [atFit, startSeed]);
 
   return (
     <div className="flex h-dvh w-screen flex-col gap-2 bg-black p-4 font-mono text-xs text-amber-100/70">
@@ -84,6 +111,7 @@ const MapPageBody = ({ setup }: { readonly setup: WorldSetup }) => {
         >
           Download SVG
         </button>
+        <p>wheel zooms · drag pans · double-click resets</p>
       </div>
       {/* Nothing to draw: the end state headless tools wait for instead. */}
       {generated.error !== null && (
@@ -103,7 +131,9 @@ const MapPageBody = ({ setup }: { readonly setup: WorldSetup }) => {
       <div ref={container} className="flex min-h-0 flex-1">
         {model !== null && (
           <WorldMap
-            className="min-h-0 w-full flex-1"
+            className="min-h-0 w-full flex-1 cursor-grab touch-none"
+            viewBox={view.viewBox}
+            svgRef={view.ref}
             model={model}
             player={player}
             done={done}

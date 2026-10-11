@@ -6,6 +6,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { examples } from "./examples";
+import { fitViewBox } from "./view-box";
+import type { ViewBox } from "./view-box";
 import { areaLabelOf, codeGraphOf } from "./world-from-code";
 import { WorldMap } from "./world-map";
 import { playerMarker, worldMapModel } from "./world-map-model";
@@ -118,6 +120,66 @@ describe("WorldMap", () => {
     }
     expect(world.zones).toHaveLength(2);
     expect(countOf(markup, "<polygon")).toBe(1);
+  });
+
+  it("shows the given view, hiding rooms and labels zoomed out", () => {
+    const store = codeAreaStore(workspace(), 1);
+    store.ensureAll();
+    const world = store.snapshot().world;
+    const model = worldMapModel(world);
+    const fit = fitViewBox(model.bounds);
+    const markupAt = (viewBox?: ViewBox) =>
+      renderToStaticMarkup(
+        <WorldMap model={model} player={null} done viewBox={viewBox} />
+      );
+
+    const whole = markupAt();
+    expect(whole).toContain(
+      `viewBox="${fit.x} ${fit.y} ${fit.width} ${fit.height}"`
+    );
+    expect(markupAt(fit)).toBe(whole);
+
+    const near = markupAt({ x: 1, y: 2, width: 300, height: 100 });
+    expect(near).toContain('viewBox="1 2 300 100"');
+    expect(near).toContain('data-detail="full"');
+    expect(markupAt({ x: 0, y: 0, width: 900, height: 300 })).toContain(
+      'data-detail="overview"'
+    );
+
+    // Every room and area label can hide; zone names never do.
+    const rooms = world.areas.reduce(
+      (total, area) => total + area.layout.rooms.length,
+      0
+    );
+    expect(countOf(near, 'class="map-detail"')).toBe(
+      rooms + model.areas.length
+    );
+    expect(near).not.toMatch(/<text class="map-detail" data-zone-name/);
+  });
+
+  it("draws zone names larger as the view widens", () => {
+    const store = codeAreaStore(workspace(), 1);
+    store.ensureAll();
+    const model = worldMapModel(store.snapshot().world);
+    const zone = model.zones[0];
+    if (zone === undefined) {
+      throw new Error("no zone");
+    }
+    const sizeAt = (width: number): number => {
+      const markup = renderToStaticMarkup(
+        <WorldMap
+          model={model}
+          player={null}
+          done
+          viewBox={{ x: 0, y: 0, width, height: width / 3 }}
+        />
+      );
+      const match = new RegExp(
+        `data-zone-name="${zone.id}"[^>]*font-size="([\\d.]+)"`
+      ).exec(markup);
+      return Number(match?.[1]);
+    };
+    expect(sizeAt(1800)).toBeGreaterThan(sizeAt(100));
   });
 
   it("gives each map its own clip paths", () => {
