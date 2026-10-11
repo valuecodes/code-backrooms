@@ -7,7 +7,7 @@ import { AREA_GAP, stripRange } from "@repo/world-generator/areas";
 import { describe, expect, it } from "vitest";
 
 import { codeGraphOf } from "./world-from-code";
-import { playerMarker, worldMapModel } from "./world-map-model";
+import { labelFontSize, playerMarker, worldMapModel } from "./world-map-model";
 import type { MapArea, WorldMapModel } from "./world-map-model";
 
 const repo = () => {
@@ -344,6 +344,23 @@ describe("worldMapModel", () => {
       heading: { x: 0.6, z: 0.8 },
       areaId: ENTRANCE_ID,
     });
+  });
+});
+
+/** A map `width` metres across. */
+const across = (width: number): Rect => ({
+  minX: -10,
+  maxX: width - 10,
+  minZ: 0,
+  maxZ: 5,
+});
+
+describe("labelFontSize", () => {
+  it("is a 140th of the map's width, between 1.5 and 5 m", () => {
+    expect(labelFontSize(across(70))).toBe(1.5);
+    expect(labelFontSize(across(0))).toBe(1.5);
+    expect(labelFontSize(across(420))).toBe(3);
+    expect(labelFontSize(across(10_000))).toBe(5);
   });
 });
 

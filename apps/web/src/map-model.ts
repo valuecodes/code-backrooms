@@ -52,6 +52,15 @@ type MapModel = {
   readonly portals: readonly MapPortal[];
 };
 
+/** A portal's colour by kind, on both maps: call amber, module green. */
+const PORTAL_COLOURS: Record<PortalKind, string> = {
+  call: "#f59e0b",
+  return: "#fef3c7",
+  jump: "#9ca3af",
+  marker: "#57534e",
+  module: "#4ade80",
+};
+
 const NO_ROOMS: ReadonlySet<string> = new Set();
 
 const EMPTY_VISITS: Visits = { seed: null, rooms: NO_ROOMS };
@@ -126,5 +135,5 @@ const mapModel = (
   return { rooms, doors: [...doors.values()], portals };
 };
 
-export { EMPTY_VISITS, mapModel, visit, visitedIn };
+export { EMPTY_VISITS, PORTAL_COLOURS, mapModel, visit, visitedIn };
 export type { MapPortal, MapRoom };

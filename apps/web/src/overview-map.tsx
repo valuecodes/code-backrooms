@@ -1,9 +1,9 @@
 import { laneColour } from "@repo/renderer/lane-tint";
-import type { AreaWorld, PortalKind } from "@repo/types";
+import type { AreaWorld } from "@repo/types";
 import { areaAt } from "@repo/world-generator/locate";
 import { useMemo, useSyncExternalStore } from "react";
 
-import { mapModel } from "~/map-model";
+import { mapModel, PORTAL_COLOURS } from "~/map-model";
 import type { MapPortal, MapRoom } from "~/map-model";
 import type { PoseFeed } from "~/pose-feed";
 
@@ -30,14 +30,6 @@ const PLAIN = "#fde68a";
 const NO_POSE = { position: { x: 0, z: 0 }, facing: { x: 0, z: -1 } };
 
 const EMPTY_MODEL = { rooms: [], doors: [], portals: [] };
-
-const PORTAL_COLOURS: Record<PortalKind, string> = {
-  call: "#f59e0b",
-  return: "#fef3c7",
-  jump: "#9ca3af",
-  marker: "#57534e",
-  module: "#4ade80",
-};
 
 const roomFill = (room: MapRoom): string => {
   if (!room.visited) {

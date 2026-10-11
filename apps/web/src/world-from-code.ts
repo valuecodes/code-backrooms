@@ -2,6 +2,7 @@ import type { CodeGraph } from "@repo/code-graph";
 import { laneText, markerText } from "@repo/code-graph/flow-text";
 import { moduleId } from "@repo/code-graph/ids";
 import { generateCodeWorld } from "@repo/code-graph/module-areas";
+import { relativeToPackage } from "@repo/code-graph/packages";
 import {
   packageOf,
   portalSubject,
@@ -9,6 +10,7 @@ import {
 } from "@repo/code-graph/subjects";
 import type { RoomSubject } from "@repo/code-graph/subjects";
 import { awayZone, zonedPath } from "@repo/code-graph/zone-labels";
+import { hasZones, zoneOfModule } from "@repo/code-graph/zones";
 import { buildCodeGraph, hashSource } from "@repo/parser";
 import type { AreaWorld, GeneratedWorld } from "@repo/types";
 import { mergeAreas } from "@repo/world-generator/areas";
@@ -125,6 +127,33 @@ const describeRoom = (codeGraph: CodeGraph | null, roomId: string): string => {
   return subject.kind === "flow" ? `${head} · ${subject.text}` : head;
 };
 
+/**
+ * What the world map writes on an area: the repository's name on the
+ * entrance, the package's on a zone's hub, and the file on a module's area,
+ * relative to its package when there are zones (the band names the
+ * package); the id otherwise.
+ */
+const areaLabelOf = (codeGraph: CodeGraph | null, areaId: string): string => {
+  const subject = subjectOf(codeGraph, areaId);
+  if (codeGraph === null || subject === null) {
+    return areaId;
+  }
+  if (subject.kind === "entrance") {
+    return subject.name;
+  }
+  if (subject.kind === "zone") {
+    return subject.zone.name;
+  }
+  if (subject.kind !== "module") {
+    return areaId;
+  }
+  const { module } = subject;
+  const zone = hasZones(codeGraph) ? zoneOfModule(codeGraph, module.id) : null;
+  return zone === null || zone.pkg === null
+    ? module.path
+    : relativeToPackage(zone.pkg, module.path);
+};
+
 /** `main() → login() → validateUser()`: every caller on the stack, then here. */
 const breadcrumbOf = (
   codeGraph: CodeGraph | null,
@@ -213,6 +242,7 @@ const promptOf = (
 };
 
 export {
+  areaLabelOf,
   areasFromCode,
   breadcrumbOf,
   codeGraphOf,

@@ -1,4 +1,5 @@
 import { Canvas } from "@react-three/fiber";
+import { areaLinksOf } from "@repo/code-graph/area-links";
 import { PointerLook } from "@repo/renderer/controls";
 import { Player } from "@repo/renderer/player";
 import { World } from "@repo/renderer/world";
@@ -6,6 +7,7 @@ import type { Target } from "@repo/world-generator/interaction";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Hud } from "~/hud";
+import { mapKeyAction } from "~/map-keys";
 import { EMPTY_VISITS, visit, visitedIn } from "~/map-model";
 import { OverviewMap } from "~/overview-map";
 import { initialSeed, nextSeed, parseWorldParams, withSeed } from "~/params";
@@ -16,12 +18,14 @@ import { useAreaWorld, zoneProgress } from "~/use-area-world";
 import type { WorldOptions } from "~/use-area-world";
 import { useNavigation } from "~/use-navigation";
 import {
+  areaLabelOf,
   breadcrumbOf,
   codeGraphOf,
   describeRoom,
   promptOf,
   sourceSeedOf,
 } from "~/world-from-code";
+import { WorldMapOverlay } from "~/world-map-overlay";
 
 const initial = parseWorldParams(globalThis.location.search);
 
@@ -45,8 +49,13 @@ const startSeed = initialSeed(
   initial.code === null ? null : sourceSeedOf(initial.code)
 );
 
-// Fed from the render loop and read only by the open map, never by the app.
+// Fed from the render loop and read only by the open maps, never by the app.
 const feed = createPoseFeed();
+
+// The world map's links and labels, made once like the code graph, so the
+// map is rebuilt only when the world grows.
+const areaLinks = codeGraph === null ? [] : areaLinksOf(codeGraph);
+const labelOfArea = (areaId: string): string => areaLabelOf(codeGraph, areaId);
 
 const App = () => {
   const [locked, setLocked] = useState(false);
@@ -55,6 +64,7 @@ const App = () => {
   const [target, setTarget] = useState<Target | null>(null);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
+  const [worldMapOpen, setWorldMapOpen] = useState(false);
   const [visits, setVisits] = useState(EMPTY_VISITS);
   // Generated once per seed, then grown an area at a time: it never
   // regenerates while the player moves.
@@ -92,19 +102,27 @@ const App = () => {
   }, [target, ensurePortal, generated.world]);
 
   // N: next seed (the only thing that regenerates the world). Backspace and
-  // R navigate, E shows the source and M or Tab the map, only while walking,
-  // so a free pointer leaves them alone.
+  // R navigate, E shows the source and M the local map, only while walking,
+  // so a free pointer leaves them alone. Tab shows the world map while
+  // walking and, like Esc once the pointer is free, closes it (`map-keys`).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // Ctrl/Cmd+R and friends belong to the browser.
       if (event.ctrlKey || event.metaKey || event.altKey) {
         return;
       }
-      // Tab would otherwise move the focus, held down too.
-      if (locked && event.code === "Tab") {
+      const map = mapKeyAction(event, { locked, worldMapOpen });
+      if (map.preventDefault) {
         event.preventDefault();
       }
-      if (event.repeat) {
+      if (map.action === "toggle-map") {
+        setMapOpen((open) => !open);
+      } else if (map.action === "toggle-world-map") {
+        setWorldMapOpen((open) => !open);
+      } else if (map.action === "close-world-map") {
+        setWorldMapOpen(false);
+      }
+      if (event.repeat || map.action !== null) {
         return;
       }
       if (event.code === "KeyN") {
@@ -116,13 +134,11 @@ const App = () => {
         home();
       } else if (locked && event.code === "KeyE") {
         setSourceOpen((open) => !open);
-      } else if (locked && (event.code === "KeyM" || event.code === "Tab")) {
-        setMapOpen((open) => !open);
       }
     };
     globalThis.addEventListener("keydown", onKeyDown);
     return () => globalThis.removeEventListener("keydown", onKeyDown);
-  }, [locked, back, home]);
+  }, [locked, worldMapOpen, back, home]);
 
   // Keep the URL shareable: it always names the seed on screen.
   useEffect(() => {
@@ -225,6 +241,15 @@ const App = () => {
         warnings={generated.warnings}
         error={generated.error}
       />
+      {worldMapOpen && generated.world !== null && (
+        <WorldMapOverlay
+          world={generated.world}
+          errors={generated.errors}
+          labelOf={labelOfArea}
+          links={areaLinks}
+          feed={feed}
+        />
+      )}
     </div>
   );
 };

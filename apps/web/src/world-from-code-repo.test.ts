@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import { sourceView } from "./source-view";
 import {
+  areaLabelOf,
   areasFromCode,
   breadcrumbOf,
   codeGraphOf,
@@ -63,6 +64,18 @@ describe("the repo example", () => {
       "src/server.ts",
       "src/util/log.ts",
     ]);
+  });
+
+  it("labels each area on the world map: the entrance by name, a file by path", () => {
+    expect(areaLabelOf(codeGraph, ENTRANCE_ID)).toBe(
+      describeRoom(codeGraph, ENTRANCE_ID)
+    );
+    expect(areaLabelOf(codeGraph, "src/index.ts")).toBe("src/index.ts");
+    expect(areaLabelOf(codeGraph, "src/handlers/auth.ts")).toBe(
+      "src/handlers/auth.ts"
+    );
+    expect(areaLabelOf(codeGraph, "nowhere")).toBe("nowhere");
+    expect(areaLabelOf(null, "src/index.ts")).toBe("src/index.ts");
   });
 
   it("lays each file out as its own area and starts in the entrance", () => {
