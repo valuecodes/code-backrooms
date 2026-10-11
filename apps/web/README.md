@@ -20,7 +20,9 @@ Shift sprints, Esc releases the mouse.
 Add `&view=map` to a world's URL (for example `/?code=repo&view=map`) for the
 whole world as a 2D map instead: it loads no WebGL, generates every area one
 at a time and marks its `<svg>` `data-state="done"` once all are generated, for
-headless screenshots.
+headless screenshots. When no world can be generated at all (a parse error),
+the error is shown with `data-state="failed"` instead, so wait for
+`[data-state="done"], [data-state="failed"]`.
 
 ## Getting started
 
