@@ -93,8 +93,8 @@ const reachableFrom = (
 /**
  * The zones of `world`: every area's `zoneId` is the zone that lists it;
  * every area no wider than SHELF_WIDTH inside its zone's strip (strip 0
- * outside every zone); every zone hub led to by a portal of the entry area
- * (known for pending hubs too); and, once all of a zone's areas are built,
+ * outside every zone); every zone hub led to by a placed portal of the
+ * entry area (built for pending hubs too); and, once all of a zone's areas are built,
  * each reachable from its hub over portals between them. A zone with an
  * area pending or failed is not walked: a portal from another zone may
  * have generated an area before its hub, and areas behind a failed one are
@@ -130,8 +130,10 @@ const checkZones = (
       failures.push(`area ${area.id} is outside its strip`);
     }
   }
+  // Placed portals only: one left unplaced has no door. A placed portal into
+  // a pending area is built too, with no arrival yet.
   const fromEntry = new Set(
-    (entry.graph.portals ?? []).map((portal) => world.areaOf.get(portal.to))
+    entry.built.portals.map(({ portal }) => world.areaOf.get(portal.to))
   );
   const built = new Set(world.areas.map((area) => area.id));
   for (const zone of world.zones) {
