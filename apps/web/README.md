@@ -17,6 +17,11 @@ room model and the layout of `src/game/`.
 Click the scene to lock the mouse. WASD or arrow keys move, the mouse looks,
 Shift sprints, Esc releases the mouse.
 
+Add `&view=map` to a world's URL (for example `/?code=repo&view=map`) for the
+whole world as a 2D map instead: it loads no WebGL, generates every area one
+at a time and marks its `<svg>` `data-state="done"` once all are generated, for
+headless screenshots.
+
 ## Getting started
 
 From the repo root:

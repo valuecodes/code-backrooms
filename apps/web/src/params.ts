@@ -14,6 +14,8 @@ type WorldParams = {
   readonly code: ExampleName | null;
   /** `?eager=1`: generate every module of a code world up front. */
   readonly eager: boolean;
+  /** `?view=map`: the whole world as a 2D map, without WebGL. */
+  readonly view: "world" | "map";
 };
 
 /** Random and preset worlds without a `?seed`. */
@@ -41,8 +43,8 @@ const parseInteger = <T>(
 };
 
 /**
- * `?seed=12345&rooms=15`, `?graph=branching` or `?code=demo&eager=1`;
- * anything odd falls back.
+ * `?seed=12345&rooms=15`, `?graph=branching`, `?code=demo&eager=1` or
+ * `?code=repo&view=map`; anything odd falls back.
  */
 const parseWorldParams = (search: string): WorldParams => {
   const params = new URLSearchParams(search);
@@ -59,6 +61,7 @@ const parseWorldParams = (search: string): WorldParams => {
     preset: graph !== null && isPresetName(graph) ? graph : null,
     code: code !== null && isExampleName(code) ? code : null,
     eager: params.get("eager") === "1",
+    view: params.get("view") === "map" ? "map" : "world",
   };
 };
 

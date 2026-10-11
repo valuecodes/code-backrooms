@@ -1,10 +1,10 @@
 import type { AreaLink } from "@repo/code-graph/area-links";
-import type { AreaWorld, Placement } from "@repo/types";
+import type { AreaWorld } from "@repo/types";
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
 import type { PoseFeed } from "~/pose-feed";
 import { WorldMap } from "~/world-map";
-import { playerMarker, worldMapModel } from "~/world-map-model";
+import { playerMarker, startPlacement, worldMapModel } from "~/world-map-model";
 
 type WorldMapOverlayProps = {
   readonly world: AreaWorld;
@@ -16,12 +16,6 @@ type WorldMapOverlayProps = {
   readonly links: readonly AreaLink[];
   /** Where the player is; only the marker follows it. */
   readonly feed: PoseFeed;
-};
-
-/** Before the first pose of a world with no areas: the origin, north up. */
-const NO_POSE: Placement = {
-  position: { x: 0, z: 0 },
-  facing: { x: 0, z: -1 },
 };
 
 const keepClick = (event: MouseEvent) => {
@@ -43,13 +37,8 @@ const WorldMapOverlay = ({
     () => worldMapModel(world, { errors, labelOf, links }),
     [world, errors, labelOf, links]
   );
-  const entry =
-    world.areas.find((area) => area.id === world.entry) ?? world.areas[0];
-  const start =
-    entry === undefined
-      ? NO_POSE
-      : { position: entry.built.start, facing: entry.built.facing };
-  const pose = useSyncExternalStore(feed.subscribe, feed.get) ?? start;
+  const pose =
+    useSyncExternalStore(feed.subscribe, feed.get) ?? startPlacement(world);
   const player = useMemo(() => playerMarker(world, pose), [world, pose]);
   // PointerLockControls locks the pointer on any click that reaches the
   // document: a click on the map must stop short of it.

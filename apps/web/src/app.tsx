@@ -1,5 +1,4 @@
 import { Canvas } from "@react-three/fiber";
-import { areaLinksOf } from "@repo/code-graph/area-links";
 import { PointerLook } from "@repo/renderer/controls";
 import { Player } from "@repo/renderer/player";
 import { World } from "@repo/renderer/world";
@@ -10,52 +9,26 @@ import { Hud } from "~/hud";
 import { mapKeyAction } from "~/map-keys";
 import { EMPTY_VISITS, visit, visitedIn } from "~/map-model";
 import { OverviewMap } from "~/overview-map";
-import { initialSeed, nextSeed, parseWorldParams, withSeed } from "~/params";
+import { nextSeed, withSeed } from "~/params";
 import { createPoseFeed } from "~/pose-feed";
 import { SourcePanel } from "~/source-panel";
 import { sourceView } from "~/source-view";
 import { useAreaWorld, zoneProgress } from "~/use-area-world";
-import type { WorldOptions } from "~/use-area-world";
 import { useNavigation } from "~/use-navigation";
-import {
-  areaLabelOf,
-  breadcrumbOf,
-  codeGraphOf,
-  describeRoom,
-  promptOf,
-  sourceSeedOf,
-} from "~/world-from-code";
+import { breadcrumbOf, describeRoom, promptOf } from "~/world-from-code";
 import { WorldMapOverlay } from "~/world-map-overlay";
-
-const initial = parseWorldParams(globalThis.location.search);
-
-// Parsed once: a syntax error in a bundled example does not depend on the
-// seed, and it is shown in the HUD rather than thrown through the renderer.
-const code = initial.code === null ? null : codeGraphOf(initial.code);
-const codeGraph = code?.codeGraph ?? null;
-
-const worldOptions: WorldOptions = {
+import {
+  areaLinks,
+  code,
   codeGraph,
-  codeError: code?.error ?? null,
-  eager: initial.eager,
-  rooms: initial.rooms,
-  preset: initial.preset,
-};
-
-// A code world without `?seed` takes its source's own seed, so the same
-// program reloads into the same world; `?seed` and N override it.
-const startSeed = initialSeed(
   initial,
-  initial.code === null ? null : sourceSeedOf(initial.code)
-);
+  labelOfArea,
+  startSeed,
+  worldOptions,
+} from "~/world-setup";
 
 // Fed from the render loop and read only by the open maps, never by the app.
 const feed = createPoseFeed();
-
-// The world map's links and labels, made once like the code graph, so the
-// map is rebuilt only when the world grows.
-const areaLinks = codeGraph === null ? [] : areaLinksOf(codeGraph);
-const labelOfArea = (areaId: string): string => areaLabelOf(codeGraph, areaId);
 
 const App = () => {
   const [locked, setLocked] = useState(false);

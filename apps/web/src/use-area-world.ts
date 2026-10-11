@@ -37,6 +37,8 @@ type AreaView = {
   readonly rooms: number;
   /** Generates the area a portal leads into, unless it exists or failed. */
   readonly ensurePortal: (portalId: string) => void;
+  /** Generates the first pending area; false once none is left. */
+  readonly ensureNext: () => boolean;
   /** The area a portal leads into when that area could not be generated. */
   readonly failedArea: (portalId: string) => string | null;
   /** Modules generated so far and in all; areas of other worlds count as one. */
@@ -128,6 +130,20 @@ const targetAreaOf = (world: AreaWorld, portalId: string): string | null => {
     }
   }
   return null;
+};
+
+/**
+ * Generates the first area still pending and reports true, or false when
+ * none is: called until false, it generates them in `ensureAll`'s order. A
+ * failure leaves the pending list too, so the calls always end.
+ */
+const ensureNext = (store: AreaStore): boolean => {
+  const next = store.snapshot().world.pending[0];
+  if (next === undefined) {
+    return false;
+  }
+  store.ensure(next);
+  return true;
 };
 
 /** The HUD's warnings: what the generated areas left out, then the areas that failed. */
@@ -235,6 +251,10 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
     },
     [store]
   );
+  const next = useCallback(
+    () => (store === null ? false : ensureNext(store)),
+    [store]
+  );
   const failedArea = useCallback(
     (portalId: string) => {
       if (state === null) {
@@ -253,6 +273,7 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
     current,
     rooms,
     ensurePortal,
+    ensureNext: next,
     failedArea,
     modules: { built, total },
     lastMs: options.eager ? null : (state?.lastMs ?? null),
@@ -264,6 +285,7 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
 
 export {
   builtModules,
+  ensureNext,
   storeFor,
   targetAreaOf,
   useAreaWorld,

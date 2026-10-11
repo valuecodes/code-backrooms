@@ -1,0 +1,113 @@
+import { useCallback, useMemo, useRef } from "react";
+
+import { mapHeader, svgFileName } from "~/map-page-text";
+import type { WorldOptions } from "~/use-area-world";
+import { useAreaWorld } from "~/use-area-world";
+import { useGenerateAll } from "~/use-generate-all";
+import { WorldMap } from "~/world-map";
+import { playerMarker, startPlacement, worldMapModel } from "~/world-map-model";
+import {
+  areaLinks,
+  initial,
+  labelOfArea,
+  startSeed,
+  worldOptions,
+} from "~/world-setup";
+
+// `?view=map`: the whole world as one SVG, generated an area at a time, with
+// no WebGL. Headless tools wait for `svg[data-state="done"]`.
+
+/**
+ * Never up front: `?eager=1` would generate every area before the first
+ * paint, and the page is here to show them arrive.
+ */
+const mapOptions: WorldOptions = { ...worldOptions, eager: false };
+
+/** What the page shows the world of: the example, the preset, or random. */
+const worldName = initial.code ?? initial.preset ?? "random";
+
+/** Saves `svg` as a file, through a blob URL the page's CSP allows. */
+const downloadSvg = (svg: SVGSVGElement, fileName: string): void => {
+  const markup = new XMLSerializer().serializeToString(svg);
+  const url = URL.createObjectURL(
+    new Blob([markup], { type: "image/svg+xml" })
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+const WorldMapPage = () => {
+  const generated = useAreaWorld(startSeed, mapOptions);
+  const { world, errors } = generated;
+  useGenerateAll(generated.ensureNext, true);
+  const model = useMemo(
+    () =>
+      world === null
+        ? null
+        : worldMapModel(world, {
+            errors,
+            labelOf: labelOfArea,
+            links: areaLinks,
+          }),
+    [world, errors]
+  );
+  const player = useMemo(
+    () => (world === null ? null : playerMarker(world, startPlacement(world))),
+    [world]
+  );
+  const done = world !== null && world.pending.length === 0;
+  const container = useRef<HTMLDivElement>(null);
+  const onDownload = useCallback(() => {
+    const svg = container.current?.querySelector("svg");
+    if (svg !== null && svg !== undefined) {
+      downloadSvg(svg, svgFileName(worldName, startSeed));
+    }
+  }, []);
+
+  return (
+    <div className="flex h-dvh w-screen flex-col gap-2 bg-black p-4 font-mono text-xs text-amber-100/70">
+      <div className="flex items-center gap-4">
+        <p>
+          {world === null
+            ? `${worldName} · seed ${startSeed}`
+            : mapHeader({ name: worldName, seed: startSeed, world })}
+        </p>
+        <button
+          type="button"
+          className="rounded border border-amber-100/30 px-2 py-0.5 hover:bg-amber-100/10 disabled:opacity-40"
+          disabled={!done}
+          onClick={onDownload}
+        >
+          Download SVG
+        </button>
+      </div>
+      {generated.error !== null && (
+        <p className="text-red-400">{generated.error}</p>
+      )}
+      {errors.size > 0 && (
+        <ul className="text-red-400">
+          {[...errors].map(([area, message]) => (
+            <li key={area}>
+              {area}: {message}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div ref={container} className="flex min-h-0 flex-1">
+        {model !== null && (
+          <WorldMap
+            className="min-h-0 w-full flex-1"
+            model={model}
+            player={player}
+            done={done}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
+export { WorldMapPage };

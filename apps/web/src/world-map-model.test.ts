@@ -7,7 +7,12 @@ import { AREA_GAP, stripRange } from "@repo/world-generator/areas";
 import { describe, expect, it } from "vitest";
 
 import { codeGraphOf } from "./world-from-code";
-import { labelFontSize, playerMarker, worldMapModel } from "./world-map-model";
+import {
+  labelFontSize,
+  playerMarker,
+  startPlacement,
+  worldMapModel,
+} from "./world-map-model";
 import type { MapArea, WorldMapModel } from "./world-map-model";
 
 const repo = () => {
@@ -380,6 +385,37 @@ describe("playerMarker", () => {
       position,
       heading: { x: 0, z: 1 },
       areaId: null,
+    });
+  });
+});
+
+describe("startPlacement", () => {
+  const store = codeAreaStore(repo(), 1);
+  store.ensure(INDEX);
+  const world = store.snapshot().world;
+  const entrance = world.areas.find((area) => area.id === ENTRANCE_ID);
+
+  it("is the entry area's start, facing what it faces", () => {
+    expect(world.areas[0]?.id).toBe(ENTRANCE_ID);
+    expect(startPlacement(world)).toEqual({
+      position: entrance?.built.start,
+      facing: entrance?.built.facing,
+    });
+  });
+
+  it("is the first area's start without the entry area", () => {
+    const rest = world.areas.slice(1);
+    expect(rest[0]?.id).toBe(INDEX);
+    expect(startPlacement({ ...world, areas: rest })).toEqual({
+      position: rest[0]?.built.start,
+      facing: rest[0]?.built.facing,
+    });
+  });
+
+  it("faces north at the origin for a world without areas", () => {
+    expect(startPlacement({ ...world, areas: [] })).toEqual({
+      position: { x: 0, z: 0 },
+      facing: { x: 0, z: -1 },
     });
   });
 });
