@@ -58,6 +58,32 @@ describe("areaLinksOf", () => {
     expect(links.filter((link) => link.fromArea === link.toArea)).toEqual([]);
   });
 
+  it("includes and counts resolved top-level call sites", () => {
+    const graph = fixtureGraph(
+      { path: "a.ts", functions: [{ name: "main", calls: ["b.ts::run"] }] },
+      { path: "b.ts", functions: [{ name: "run" }] }
+    );
+    const [site] = graph.callSites;
+    if (site === undefined) {
+      throw new Error("Fixture call site is missing");
+    }
+    const links = areaLinksOf({
+      ...graph,
+      callSites: [
+        ...graph.callSites,
+        { ...site, id: "a.ts@top-level-1", callerId: "a.ts" },
+        { ...site, id: "a.ts@top-level-2", callerId: "a.ts" },
+      ],
+    });
+
+    expect(links).toContainEqual({
+      fromArea: "a.ts",
+      toArea: "b.ts",
+      kind: "call",
+      count: 3,
+    });
+  });
+
   it("leads from the entrance to the zones' hubs and from each hub to its entries", () => {
     expect(areaLinksOf(monorepo())).toEqual([
       { fromArea: ENTRANCE_ID, toArea: "//zone:web", kind: "module", count: 1 },

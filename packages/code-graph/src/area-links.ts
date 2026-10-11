@@ -63,12 +63,12 @@ const callLinks = (
     ...graph.functions.map((fn): [string, string] => [fn.id, fn.moduleId]),
   ]);
   const counts = new Map<string, Map<string, number>>();
-  for (const edge of graph.edges) {
-    if (edge.type !== "call") {
+  for (const site of graph.callSites) {
+    if (site.calleeId === null) {
       continue;
     }
-    const from = moduleOf.get(edge.source);
-    const to = moduleOf.get(edge.target);
+    const from = moduleOf.get(site.callerId);
+    const to = moduleOf.get(site.calleeId);
     if (from === undefined || to === undefined || from === to) {
       continue;
     }
@@ -96,7 +96,7 @@ const known = new WeakMap<CodeGraph, readonly AreaLink[]>();
  * Every link between the code world's areas, pending ones too: the hub
  * areas' module portals first, then for each module in order the modules
  * it imports or re-exports from (`moduleLinks`), then the modules it calls
- * into with how many call edges. Never a link from an area to itself.
+ * into with how many call sites. Never a link from an area to itself.
  */
 const areaLinksOf = (graph: CodeGraph): readonly AreaLink[] => {
   const found = known.get(graph);
