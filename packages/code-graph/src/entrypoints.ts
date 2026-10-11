@@ -19,14 +19,20 @@ const MAX_API_SCORE = 3;
 /**
  * How much a module looks like a way in: +3 for an entry name (`index`,
  * `main`, `server`, `app`, `cli`, any extension), +1 per exported function
- * nobody calls (at most 3), -1 per directory below a leading `src/`.
+ * nobody calls (at most 3), -1 per directory below a leading `src/`, the
+ * path taken from `root` (a package's directory; `""` for the repository).
  */
 const entryScore = (
   module: ModuleNode,
   graph: CodeGraph,
-  called: ReadonlySet<string>
+  called: ReadonlySet<string>,
+  root: string
 ): number => {
-  const segments = module.id.split("/");
+  const path =
+    root !== "" && module.id.startsWith(`${root}/`)
+      ? module.id.slice(root.length + 1)
+      : module.id;
+  const segments = path.split("/");
   const basename = segments.at(-1) ?? "";
   const directories = segments.slice(0, -1);
   const depth =
@@ -54,14 +60,16 @@ const byPath = (a: ModuleNode, b: ModuleNode): number => {
  * The modules the entrance leads to, best first, among `modules` (all of
  * the graph's by default; a zone's for its hub), counting only imports and
  * calls between those. Every module nobody imports is one (nothing else
- * leads there), ranked by `entryScore`, ties by path. Modules only cycles
- * reach then add the best of what is still out of reach, one at a time,
- * until imports from the entries reach every module. Never empty for a
- * non-empty `modules`.
+ * leads there), ranked by `entryScore` with paths taken from `root` (the
+ * zone's package directory), ties by path. Modules only cycles reach then
+ * add the best of what is still out of reach, one at a time, until imports
+ * from the entries reach every module. Never empty for a non-empty
+ * `modules`.
  */
 const entryModules = (
   graph: CodeGraph,
-  modules: readonly ModuleNode[] = graph.modules
+  modules: readonly ModuleNode[] = graph.modules,
+  root = ""
 ): readonly ModuleNode[] => {
   const inside = new Set(modules.map((module) => module.id));
   const links = new Map(
@@ -81,7 +89,10 @@ const entryModules = (
     )
   );
   const scores = new Map(
-    modules.map((module) => [module.id, entryScore(module, graph, called)])
+    modules.map((module) => [
+      module.id,
+      entryScore(module, graph, called, root),
+    ])
   );
   const ranked = (group: readonly ModuleNode[]): readonly ModuleNode[] =>
     group.toSorted(

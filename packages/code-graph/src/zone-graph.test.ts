@@ -3,7 +3,7 @@ import { generateWorld } from "@repo/world-generator";
 import { validateGraph } from "@repo/world-generator/graph";
 import { describe, expect, it } from "vitest";
 
-import { fixtureGraph, packageNode, withPackages } from "./fixture";
+import { fixtureGraph, importOf, packageNode, withPackages } from "./fixture";
 import { ENTRANCE_ID, modulePortalId } from "./ids";
 import { zoneEntranceGraph, zoneGraph } from "./zone-graph";
 import { zonesOf } from "./zones";
@@ -129,6 +129,35 @@ describe("zoneGraph", () => {
       { from: "//zone:big", to: "//zone:big#2" },
     ]);
     placesEverything(world);
+  });
+
+  it("scores entry modules by their path inside the package", () => {
+    const graph = withPackages(
+      fixtureGraph(
+        {
+          path: "packages/lib/helper.ts",
+          functions: [],
+          imports: [importOf("packages/lib/src/api.ts")],
+        },
+        {
+          path: "packages/lib/src/api.ts",
+          functions: [{ name: "fetchAll", exported: true }],
+          imports: [importOf("packages/lib/helper.ts")],
+        },
+        { path: "apps/web/main.ts", functions: [] }
+      ),
+      packageNode("@repo/lib", "packages/lib"),
+      packageNode("web", "apps/web")
+    );
+    const lib = zonesOf(graph).find((zone) => zone.name === "@repo/lib");
+    if (lib === undefined) {
+      throw new Error("Expected a zone for @repo/lib");
+    }
+    // In the cycle, src/api.ts (API, no depth inside the package) beats
+    // helper.ts; scored from the repository root they would tie on depth.
+    expect((zoneGraph(graph, lib).portals ?? []).map((p) => p.to)).toEqual([
+      "packages/lib/src/api.ts",
+    ]);
   });
 
   it("keeps whole paths for the modules no package owns", () => {
