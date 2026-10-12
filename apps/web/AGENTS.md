@@ -134,7 +134,7 @@ UserService`), one door of the module hub; methods reached by a call door
   file could not be laid out stays dark and reads `closed · <file> could
 not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   `?eager=1` generates every module up front, as before.
-- Milestone 19 (current): per-area rendering, which completes Phase 4
+- Milestone 19: per-area rendering, which completes Phase 4
   (multi-file repositories). The scene draws each area on its own, so an
   area that joins mounts alone and nothing already on screen is rebuilt;
   the player collides with, stands in and steps through only the area
@@ -150,6 +150,26 @@ not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   zooms about the cursor, a drag pans and a double-click goes back to the
   whole world, on `?view=map` too; wider than 600 m the map hides rooms and
   area labels and draws zone names larger, each within its band.
+- Milestone 20 (current): repository loading (Phase 7). A bare URL opens a
+  landing page: drop or pick a `.zip` (GitHub's "Download ZIP" works as
+  is), pick a folder, or follow Demo (`?code=self`, this repository's own
+  sources) or a bundled example. Files are read in the tab and never leave
+  it, and a reload returns to the landing page. `source-filter.ts` keeps
+  sources (`.ts .tsx .mts .cts .js .jsx .mjs .cjs`) and manifests
+  (`package.json`, `tsconfig*.json`) and drops dot-directories,
+  `node_modules dist build out coverage generated vendor __tests__ …`,
+  tests, specs, declarations and minified files. It strips a shared
+  top-level folder. Files over 256 KB are skipped and counted. More than 400
+  kept files, 8 MB kept or a 64 MB zip is refused with a message on the
+  landing page. A repository the user brought parses tolerantly: files that
+  do not parse are left out and named in the HUD, while bundled examples
+  stay strict. Parsing runs in a worker (`analyse.worker.ts`). A world from
+  local files never writes `?seed=`, since no URL can name those files. The
+  filter keeps a superset of the `?code=self` glob (config modules such as
+  `vite.config.ts`), so a zip of this repository has a few more modules
+  than Demo. Fetching a GitHub URL is not supported; it would need a
+  Cloudflare Worker proxy (`codeload` sends no CORS headers) feeding
+  `zip-files.ts`.
 
 ---
 
@@ -177,7 +197,20 @@ There are no per-workspace `lint` or `format` scripts: root `pnpm lint` (oxlint)
 ```text
 src/
   main.tsx            mounts <App/>
-  app.tsx             full-screen <Canvas>, seed and current-room state, pointer lock, HUD
+  app.tsx             landing page or the world: full-screen <Canvas>, seed and
+                      current-room state, pointer lock, HUD
+  landing.tsx         the bare URL's page: zip drop and pickers, Demo, examples
+  local-reads.ts      one read at a time, zip and folder labels, read errors, pure
+  source-request.ts   what to build: nothing, a URL example, or local files, pure
+  source-filter.ts    which zip or folder entries become sources, and the caps, pure
+  zip-files.ts        a zip -> sources (fflate's sync API, two passes)
+  folder-files.ts     a folder pick -> sources, reading only the kept files
+  use-source-files.ts a request's files: bundled at once, `self` as its own chunk
+  world-setup.ts      a request -> everything a page needs to generate its world
+  analyse.ts          files -> parsed code, area links and seed, cloneable, pure
+  analyse-client.ts   starts and cancels the analysis worker, pure of React
+  analyse.worker.ts   parses a repository the user brought off the main thread
+  world-loading.tsx   "loading demo…" / "analysing my-repo…"
   hud.tsx             "Click to start walking" overlay / crosshair, seed + place readout,
                       breadcrumb and the prompt for the door or portal ahead
   source-panel.tsx    the E overlay: the current room's code, its own lines marked
@@ -199,6 +232,8 @@ src/
 
 ### Query parameters
 
+- None of `seed rooms graph code eager view` (a bare URL) shows the landing
+  page; any of them, valid or not, opens a world directly as before.
 - `?seed=12345` picks the world; `N` while playing bumps it (and rewrites the URL).
   Without it a random or preset world uses seed 1 and a code world the hash
   of its source (`hashSource` from `@repo/parser`), so a shared `?code=` link
@@ -314,3 +349,12 @@ regenerates while the player moves. A code world's areas are merged into one
    canvas, so nothing is fetched.
 4. **Pointer lock needs a user gesture** - the browser refuses `requestPointerLock`
    outside a click, and briefly after an Esc release. Clicking again works.
+5. **No fflate async API** - `unzip` and friends spawn blob-URL workers, which
+   `script-src 'self'` blocks once deployed. Use `unzipSync` only: it takes
+   about 25 ms for an archive at the 8 MB cap.
+6. **Parsing is slow, so it runs in a worker** - measured in Node 24
+   (Chrome's V8): this repository (159 files, 0.7 MB) parses in 0.5 s, 300
+   dense files (3.7 MB) in 3.6 s and 390 (4.9 MB) in 6.2 s. Local requests
+   therefore go through `analyse.worker.ts`, a same-origin module chunk that
+   the CSP allows through `script-src 'self'` (there is no `worker-src`).
+   Bundled examples, `self` included, still parse on the main thread.
