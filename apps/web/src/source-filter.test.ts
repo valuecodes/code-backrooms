@@ -128,6 +128,8 @@ describe("selectSources", () => {
         "r/a.test.ts",
         "r/a.spec.tsx",
         "r/a.d.ts",
+        "r/a.d.mts",
+        "r/a.d.cts",
         "r/vendor.min.js"
       )
     ).toEqual(["a.ts"]);

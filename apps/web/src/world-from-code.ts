@@ -56,16 +56,22 @@ const emptyGraphError = (
 };
 
 /**
- * Parses the files; a file that does not parse is left out and listed in
- * `skipped`. Anything else that fails, or a graph with no module left
- * (generation needs one), becomes an error value, never a throw.
+ * Parses the files; any failure, or a graph with no module (generation needs
+ * one), becomes an error value, never a throw. With `tolerant` (a repository
+ * the user brought), a file that does not parse is left out and listed in
+ * `skipped` instead; bundled examples stay strict, so a syntax error in one
+ * is shown in the HUD rather than hidden.
  */
-const codeGraphOf = (files: readonly SourceFile[]): CodeResult => {
+const codeGraphOf = (
+  files: readonly SourceFile[],
+  { tolerant = false }: { readonly tolerant?: boolean } = {}
+): CodeResult => {
   const skipped: string[] = [];
   try {
-    const codeGraph = buildCodeGraph(files, {
-      onParseError: (path) => skipped.push(path),
-    });
+    const codeGraph = buildCodeGraph(
+      files,
+      tolerant ? { onParseError: (path) => skipped.push(path) } : {}
+    );
     if (codeGraph.modules.length === 0) {
       return { codeGraph: null, error: emptyGraphError(files, skipped) };
     }

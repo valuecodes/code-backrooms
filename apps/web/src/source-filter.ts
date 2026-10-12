@@ -33,7 +33,7 @@ const MAX_KEPT_FILES = 400;
 const MAX_KEPT_BYTES = 8 * 1024 * 1024;
 
 const SOURCE_EXTENSION = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
-const IGNORED_FILE = /\.(?:test|spec)\.|\.d\.ts$|\.min\.js$/;
+const IGNORED_FILE = /\.(?:test|spec)\.|\.d\.[mc]?ts$|\.min\.js$/;
 const METADATA_FILES: ReadonlySet<string> = new Set([".DS_Store", "Thumbs.db"]);
 const IGNORED_DIRS: ReadonlySet<string> = new Set([
   "node_modules",
