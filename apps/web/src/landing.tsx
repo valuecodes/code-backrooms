@@ -39,17 +39,10 @@ const LandingBackdrop = lazy(() =>
 
 /** Whether this browser should run the backdrop at all. */
 const supportsBackdrop = (): boolean => {
-  const { matches: reducedMotion } = globalThis.matchMedia(
-    "(prefers-reduced-motion: reduce)"
-  );
-  if (reducedMotion) {
-    // Skip the WebGL probe: the answer is no either way.
-    return false;
-  }
   const probe = document.createElement("canvas").getContext("webgl2");
   // Hand the probe's context back now rather than when it is collected.
   probe?.getExtension("WEBGL_lose_context")?.loseContext();
-  return backdropAllowed({ webgl2: probe !== null, reducedMotion });
+  return backdropAllowed({ webgl2: probe !== null });
 };
 
 /** Renders nothing once its child throws: a failed backdrop is no error. */

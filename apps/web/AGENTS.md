@@ -176,7 +176,7 @@ not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   bundled `demo` example's entrance is drawn with a camera that drifts
   toward its first doorway and back while its gaze sways
   (`landing-backdrop.tsx`, `driftPose` in `backdrop.ts`). It is skipped
-  without WebGL2 or under `prefers-reduced-motion`, swallowed by an error
+  without WebGL2 (it runs under `prefers-reduced-motion` too), swallowed by an error
   boundary if the canvas fails, and dropped as soon as a read starts. The
   world view (`world-app.tsx`) and the backdrop are lazy chunks, so the
   landing page paints before three.js loads.

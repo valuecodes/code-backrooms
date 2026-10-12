@@ -6,12 +6,10 @@ import type { Placement } from "@repo/types";
 /** What the browser offers the backdrop. */
 type BackdropSupport = {
   readonly webgl2: boolean;
-  readonly reducedMotion: boolean;
 };
 
-/** Only with WebGL2, and never for a visitor who asked for less motion. */
-const backdropAllowed = ({ webgl2, reducedMotion }: BackdropSupport): boolean =>
-  webgl2 && !reducedMotion;
+/** Only with WebGL2. */
+const backdropAllowed = ({ webgl2 }: BackdropSupport): boolean => webgl2;
 
 /** Seconds for one walk out toward the doorway and back. */
 const DRIFT_PERIOD = 36;
