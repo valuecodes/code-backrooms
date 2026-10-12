@@ -63,6 +63,8 @@ type Discovered = {
   readonly classes: ClassTable[];
   /** The same classes as graph nodes. */
   readonly classNodes: ClassNode[];
+  /** What the module writes to (see writes.ts). */
+  readonly writes: Writes;
 };
 
 type Context = {
@@ -386,6 +388,7 @@ const discover = (
     moduleScope,
     classes: [],
     classNodes: [],
+    writes: writesOf(program),
   };
   const context: Context = {
     moduleId,
@@ -393,7 +396,7 @@ const discover = (
     nextClassName: uniqueNames(),
     enclosed: false,
     exportedNames,
-    writes: writesOf(program),
+    writes: out.writes,
     out,
   };
   for (const statement of program.body) {

@@ -106,6 +106,27 @@ describe("typed receivers in one module", () => {
     ]);
   });
 
+  it("keeps an inherited this call ambiguous when a subclass overrides it", () => {
+    const source = [
+      "class Base { run() {} }",
+      "class Child extends Base { go() { this.run(); } }",
+      "class GrandChild extends Child { run() {} }",
+    ].join("\n");
+    expect(call(source, "this.run")).toEqual([
+      "ambiguous",
+      ["t.ts::Base.run", "t.ts::GrandChild.run"],
+    ]);
+  });
+
+  it("leaves a method the module writes over to the untyped rules", () => {
+    const source = [
+      svc,
+      "function main(s: Svc) { s.run = () => {}; s.run(); s.stop(); }",
+    ].join("\n");
+    expect(call(source, "s.run")).toEqual(["unresolved", null]);
+    expect(call(source, "s.stop")).toEqual(["resolved", "t.ts::Svc.stop"]);
+  });
+
   it("keeps an exact instance from its subclasses' overrides", () => {
     const source = [
       "class Base { run() {} }",
