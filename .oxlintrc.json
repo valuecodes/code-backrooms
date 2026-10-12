@@ -26,10 +26,10 @@
   "options": { "typeAware": true },
   "env": { "builtin": true },
 
-  // `.gitignore` is read natively. Config files and the `@turbo/gen` generator
-  // sit outside every tsconfig `include`, so type-aware rules cannot resolve
-  // them; both also need a default export.
-  "ignorePatterns": ["**/*.config.*", "turbo/generators/**"],
+  // `.gitignore` is read natively. Config files sit outside every tsconfig
+  // `include`, so type-aware rules cannot resolve them; they also need a
+  // default export.
+  "ignorePatterns": ["**/*.config.*"],
 
   "rules": {
     // eslint core -- eslint:recommended, minus the rules typescript-eslint

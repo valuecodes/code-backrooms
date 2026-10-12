@@ -1,9 +1,9 @@
 # Code Backrooms (web)
 
-A first-person, Backrooms-style 3D space that will eventually be generated from
-source code. This milestone renders two hand-written rooms joined by a doorway,
-with WASD + mouse-look movement and wall collisions. See `AGENTS.md` for the
-room model and the layout of `src/game/`.
+The web app: a first-person, Backrooms-style 3D world generated from a
+JavaScript or TypeScript codebase. Parsing, generation and rendering live in
+`packages/`; this app loads the code, runs the HUD and wires them together.
+See `AGENTS.md` for the source layout and how each feature works.
 
 ## Stack
 
@@ -15,7 +15,28 @@ room model and the layout of `src/game/`.
 ## Controls
 
 Click the scene to lock the mouse. WASD or arrow keys move, the mouse looks,
-Shift sprints, Esc releases the mouse.
+Shift sprints, Esc releases the mouse. E shows the current room's source, Tab
+the whole world's map and M the rooms walked so far. Backspace returns to
+where the current function was entered, and R to the entrance.
+
+## Loading a repository
+
+A bare URL opens the landing page. Drop or pick a `.zip` (GitHub's
+"Download ZIP" works as is) or pick a folder. Files are read in the browser
+tab and never uploaded. Only JavaScript and TypeScript sources and manifests
+are kept, and dependency, build and test directories are skipped.
+
+| Limit               | Value  |
+| ------------------- | ------ |
+| Zip size            | 64 MB  |
+| Kept source files   | 400    |
+| Kept bytes in total | 8 MB   |
+| One file            | 256 KB |
+
+A file over the per-file limit is skipped, and a file that does not parse is
+left out. The HUD names both. Parsing runs in a worker. Demo opens
+`?code=self`, and `?code=demo`, `loops`, `switches` or `repo` open bundled
+examples.
 
 Add `&view=map` to a world's URL (for example `/?code=repo&view=map`) for the
 whole world as a 2D map instead: it loads no WebGL, generates every area one
@@ -63,7 +84,7 @@ Linting and formatting are repo-wide: run `pnpm lint` / `pnpm format` from the r
 
 `src/globals.css` imports Tailwind and sets `@source` scanning. There is no shared
 theme package, so use plain Tailwind utilities. Scene textures are drawn on a canvas
-at startup (`src/game/textures.ts`), so there are no image assets.
+at startup (`packages/renderer/src/textures.ts`), so there are no image assets.
 
 ## Deploy (Cloudflare)
 

@@ -1,73 +1,88 @@
-# Agentic Monorepo Starter
+# Code Backrooms
 
-A Turborepo template for agentic development: strict repo guardrails, consistent tooling,
-and clear package boundaries — so agents move fast without turning the codebase into spaghetti.
+**Walk through a codebase as a Backrooms level.** Files are areas, functions
+are rooms, an `if` forks into two lanes, a loop is a ring you can walk around,
+and every call is a door.
 
-## What's inside
+**[▶ Try it in the browser](https://code-backrooms.valuecodes.fi/)** ·
+[Walk this repository](https://code-backrooms.valuecodes.fi/?code=self)
 
-- Code Backrooms web app in `apps/web` (Vite 8, React 19, React Three Fiber, Tailwind CSS 4)
-- Shared tooling: oxlint, Knip, Prettier, TypeScript 7, Turbo
-- `@repo/parser`, `@repo/code-graph`, `@repo/types`, `@repo/world-generator`,
-  `@repo/renderer` — the Code Backrooms pipeline (code → graph → layout → rendering)
-- `@repo/logger` — structured JSON logging for Cloud Run / Cloud Logging
-- pnpm catalog for versions, with supply-chain guards: a 14-day release-age wait,
-  a trust-downgrade check, and no git/tarball subdependencies
-- Claude Code settings in `.claude/`
+<!-- Hero video: drag an .mp4 into this file in GitHub's web editor and keep
+     the https://github.com/user-attachments/assets/… URL it inserts here, on
+     its own line. -->
 
-```text
-apps/web               Code Backrooms: Vite 8 + React 19 + React Three Fiber
-packages/parser        TypeScript/JavaScript source -> CodeGraph (@babel/parser)
-packages/code-graph    CodeGraph types and the CodeGraph -> WorldGraph grammar
-packages/types         world data shapes: graph, layout, built geometry
-packages/world-generator  graph -> layout -> walls, doors, corridors, colliders (seeded)
-packages/renderer      React Three Fiber components, player, light pool
-packages/logger        pino logger, Cloud Logging shaped JSON
-tooling/prettier       shared Prettier config
-tooling/typescript     shared tsconfig presets (base, node, react)
-tooling/github         composite action: pnpm + Node + install; secrets-scan script
-.oxlintrc.json         single root lint config for the whole repo
-```
+Drop a zip of any JavaScript or TypeScript repository on the page, or pick a
+folder. Nothing is uploaded: the code is parsed in your browser tab.
 
-## Getting started
+## What you are walking through
 
-Requires Node.js 24.21.0 (`.nvmrc`) and pnpm 12.4.2 (`packageManager` in `package.json`).
+| Code                 | Space                                                   |
+| -------------------- | ------------------------------------------------------- |
+| Repository           | The world, starting in an entrance hall                 |
+| Workspace package    | A zone                                                  |
+| File                 | An area: a hub room with doors to its functions         |
+| Function             | A column of rooms, one per run of statements            |
+| `if` / `else`        | A fork room, a green lane and a red lane, a merge room  |
+| `switch`             | One lane per case, in source order                      |
+| Loop                 | A ring: body, a "repeat" door back to the head, an exit |
+| Call                 | A door to the callee, or a portal if it already has one |
+| `return`             | A portal back to where you came from                    |
+| `break` / `continue` | A jump portal to the loop's end or head                 |
+
+The layout is built from the code, so the same code always gives the same
+world. The world shows what _can_ run, not a trace of what did run.
+
+<!-- Screenshots: docs/media/fork.png (a fork room with both lanes) and
+     docs/media/map.png (the Tab world map), side by side. -->
+
+## Controls
+
+| Key           | Action                                  |
+| ------------- | --------------------------------------- |
+| WASD / arrows | Move, Shift to sprint                   |
+| Mouse         | Look (click the scene to lock it)       |
+| E             | Show the current room's source code     |
+| Tab           | Map of the whole world                  |
+| M             | Map of the rooms you have walked        |
+| Backspace     | Back to where this function was entered |
+| R             | Back to the entrance                    |
+| Esc           | Release the mouse                       |
+
+## Run it locally
+
+Needs Node.js 24 and pnpm 12.
 
 ```bash
 pnpm install
-pnpm dev          # web app at http://localhost:3000
+pnpm dev
 ```
 
-## Commands
+Then open http://localhost:3000.
 
-```bash
-pnpm lint           # type-aware linting, whole repo in one oxlint process
-pnpm knip           # unused files, exports and dependencies
-pnpm typecheck      # TypeScript 7 (tsc) across the repo
-pnpm test           # test suite
-pnpm build          # production builds
-pnpm format         # Prettier write
-pnpm format:check   # Prettier check (CI gate)
-pnpm secrets:scan   # gitleaks secret scan over git history
-pnpm gen:package    # scaffold a new package in packages/ (@turbo/gen)
+## How it works
+
+```text
+source → parser → CodeGraph → spatial grammar → WorldGraph → layout → walls and doors → three.js
 ```
 
-oxlint prints nothing when there are no findings, so silent output means clean.
+| Package                    | Job                                                         |
+| -------------------------- | ----------------------------------------------------------- |
+| `packages/parser`          | Babel parses JS and TS into functions, calls and flow trees |
+| `packages/code-graph`      | Turns code into rooms, doors and portals                    |
+| `packages/world-generator` | Places rooms from a seed and builds walls and colliders     |
+| `packages/renderer`        | Draws the world with React Three Fiber                      |
+| `apps/web`                 | Loading, HUD, source panel and maps                         |
 
-CI runs typecheck, lint, knip, format-check, test, build and a gitleaks secret scan on
-push to `main` and on PRs, plus CodeQL code scanning. `secrets:scan` needs either
-`gitleaks` v8.19+ on PATH or a running Docker daemon.
+Each file is generated as its own area when you first head for it, so large
+repositories open quickly. Contributor notes live in [AGENTS.md](AGENTS.md).
 
-## Use this template
+## Limits
 
-Use GitHub's **Use this template** button, then:
+- JavaScript and TypeScript only.
+- Up to 400 source files and 8 MB per repository.
+- Calls through objects (`obj.method()`) and callbacks show as closed doors.
+- Loading straight from a GitHub URL is not supported yet.
 
-- Optionally rename the `@repo/*` scope to your own (e.g. `@acme/*`)
-- Update `name` and `description` in `package.json`
-- Verify everything is green: `pnpm lint && pnpm knip && pnpm typecheck && pnpm test && pnpm build`
-- CodeQL (the `codeql` CI job) is free on public repos; private repos need GitHub Code
-  Security. If "default setup" is enabled under Settings → Code security, turn it off —
-  GitHub rejects the workflow's uploads while it is on.
-- Under Settings → Code security, turn on **Dependabot alerts** and leave **Dependabot
-  security updates** off: you get notified about vulnerable dependencies without
-  automatic PRs. There is deliberately no `.github/dependabot.yml`, so no version-update
-  PRs either.
+## License
+
+[MIT](LICENSE)

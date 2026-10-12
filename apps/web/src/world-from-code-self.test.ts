@@ -53,9 +53,11 @@ describe("the repository as a code world", { timeout: 30_000 }, () => {
 
   it("resolves package subpaths and the app's ~/ alias", () => {
     expect(
-      linked("apps/web/src/app.tsx", "packages/renderer/src/player.tsx")
+      linked("apps/web/src/world-app.tsx", "packages/renderer/src/player.tsx")
     ).toBe(true);
-    expect(linked("apps/web/src/app.tsx", "apps/web/src/hud.tsx")).toBe(true);
+    expect(linked("apps/web/src/world-app.tsx", "apps/web/src/hud.tsx")).toBe(
+      true
+    );
   });
 
   it("generates every area with variation, all passing the area checks", () => {
