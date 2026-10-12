@@ -1,13 +1,14 @@
 import { useCallback, useMemo, useRef } from "react";
 
-import { ExampleLoading } from "~/example-loading";
 import { mapHeader, svgFileName } from "~/map-page-text";
+import { requestFromParams } from "~/source-request";
 import type { WorldOptions } from "~/use-area-world";
 import { useAreaWorld } from "~/use-area-world";
 import { useGenerateAll } from "~/use-generate-all";
 import { useViewBox } from "~/use-view-box";
 import { fitViewBox } from "~/view-box";
 import type { ViewBox } from "~/view-box";
+import { WorldLoading } from "~/world-loading";
 import { WorldMap } from "~/world-map";
 import { playerMarker, startPlacement, worldMapModel } from "~/world-map-model";
 import { initial, useWorldSetup } from "~/world-setup";
@@ -20,6 +21,9 @@ import type { WorldSetup } from "~/world-setup";
 
 /** What the page shows the world of: the example, the preset, or random. */
 const worldName = initial.code ?? initial.preset ?? "random";
+
+/** The map page is URL-driven only: examples, presets and random worlds. */
+const request = requestFromParams(initial);
 
 /** The view before there is a world to fit. */
 const NO_VIEW: ViewBox = { x: 0, y: 0, width: 1, height: 1 };
@@ -137,9 +141,9 @@ const MapPageBody = ({ setup }: { readonly setup: WorldSetup }) => {
 
 /** The map page, once the URL's example has its files (`?code=self` waits). */
 const WorldMapPage = () => {
-  const setup = useWorldSetup();
+  const setup = useWorldSetup(request);
   return setup === null ? (
-    <ExampleLoading name={initial.code} />
+    <WorldLoading label={initial.code} phase="loading" />
   ) : (
     <MapPageBody setup={setup} />
   );

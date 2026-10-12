@@ -5,18 +5,24 @@ import { World } from "@repo/renderer/world";
 import type { Target } from "@repo/world-generator/interaction";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ExampleLoading } from "~/example-loading";
 import { Hud } from "~/hud";
+import { Landing } from "~/landing";
 import { mapKeyAction } from "~/map-keys";
 import { EMPTY_VISITS, visit, visitedIn } from "~/map-model";
 import { OverviewMap } from "~/overview-map";
 import { nextSeed, withSeed } from "~/params";
 import { createPoseFeed } from "~/pose-feed";
 import { SourcePanel } from "~/source-panel";
+import {
+  labelOfRequest,
+  requestFromParams,
+  showsLanding,
+} from "~/source-request";
 import { sourceView } from "~/source-view";
 import { useAreaWorld, zoneProgress } from "~/use-area-world";
 import { useNavigation } from "~/use-navigation";
 import { breadcrumbOf, describeRoom, promptOf } from "~/world-from-code";
+import { WorldLoading } from "~/world-loading";
 import { WorldMapOverlay } from "~/world-map-overlay";
 import { initial, useWorldSetup } from "~/world-setup";
 import type { WorldSetup } from "~/world-setup";
@@ -25,8 +31,17 @@ import type { WorldSetup } from "~/world-setup";
 const feed = createPoseFeed();
 
 const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
-  const { areaLinks, code, codeGraph, labelOfArea, startSeed, worldOptions } =
-    setup;
+  const {
+    areaLinks,
+    code,
+    codeGraph,
+    label,
+    labelOfArea,
+    local,
+    notices,
+    startSeed,
+    worldOptions,
+  } = setup;
   const [locked, setLocked] = useState(false);
   const [seed, setSeed] = useState(startSeed);
   const [roomId, setRoomId] = useState<string | null>(null);
@@ -109,16 +124,18 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
     return () => globalThis.removeEventListener("keydown", onKeyDown);
   }, [locked, worldMapOpen, back, home]);
 
-  // Keep the URL shareable: it always names the seed on screen.
+  // Keep the URL shareable: it always names the seed on screen. Not for a
+  // zip or folder: no URL can name those files, and a `?seed` would reload
+  // into a random world instead of the landing page.
   useEffect(() => {
-    if (seed !== startSeed) {
+    if (seed !== startSeed && !local) {
       globalThis.history.replaceState(
         null,
         "",
         withSeed(globalThis.location.search, seed)
       );
     }
-  }, [seed, startSeed]);
+  }, [seed, startSeed, local]);
 
   // The browser owns the lock state: one listener covers locks, Esc, and a
   // failed generation unmounting the Canvas mid-lock.
@@ -195,7 +212,7 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
         zone={zone}
         lastMs={generated.lastMs}
         preset={initial.preset}
-        code={initial.code}
+        label={label}
         place={place}
         breadcrumb={breadcrumbOf(
           codeGraph,
@@ -208,6 +225,7 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
             : `closed · ${failed} could not be laid out`
         }
         warnings={generated.warnings}
+        notices={notices}
         error={generated.error}
       />
       {worldMapOpen && generated.world !== null && (
@@ -224,11 +242,21 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
   );
 };
 
-/** The 3D world, once the URL's example has its files (`?code=self` waits). */
+/**
+ * The landing page for a bare URL; else the 3D world once its source has
+ * its files (`?code=self` waits) and, for a zip or folder, is parsed.
+ */
 const App = () => {
-  const setup = useWorldSetup();
+  const [request, setRequest] = useState(() => requestFromParams(initial));
+  const setup = useWorldSetup(request);
+  if (showsLanding(request, globalThis.location.search)) {
+    return <Landing onLoad={setRequest} />;
+  }
   return setup === null ? (
-    <ExampleLoading name={initial.code} />
+    <WorldLoading
+      label={labelOfRequest(request)}
+      phase={request.kind === "local" ? "analysing" : "loading"}
+    />
   ) : (
     <WorldApp setup={setup} />
   );

@@ -3,20 +3,21 @@ import { useEffect, useMemo, useState } from "react";
 
 import { bundledFiles, loadExample } from "~/example-files";
 import type { ExampleName } from "~/example-files";
+import type { SourceRequest } from "~/source-request";
 
-/** An example's files once known; `files` is null when none was asked for. */
-type LoadedExample =
+/** A request's files once known; `files` is null when none was asked for. */
+type LoadedSource =
   | { readonly state: "loaded"; readonly files: readonly SourceFile[] | null }
   | { readonly state: "failed"; readonly error: string };
 
-type ExampleFiles = LoadedExample | { readonly state: "loading" };
+type SourceFiles = LoadedSource | { readonly state: "loading" };
 
-const LOADING: ExampleFiles = { state: "loading" };
+const LOADING: SourceFiles = { state: "loading" };
 
 /** A load as a value: a failed chunk fetch becomes an error, never a throw. */
 const settleFiles = (
   pending: Promise<readonly SourceFile[]>
-): Promise<LoadedExample> =>
+): Promise<LoadedSource> =>
   pending.then(
     (files) => ({ state: "loaded", files }),
     (error: unknown) => ({
@@ -26,24 +27,28 @@ const settleFiles = (
   );
 
 /** What is known before anything loads: everything but `self`. */
-const knownFiles = (name: ExampleName | null): ExampleFiles => {
-  if (name === null) {
+const knownSource = (request: SourceRequest): SourceFiles => {
+  if (request.kind === "none") {
     return { state: "loaded", files: null };
   }
-  const files = bundledFiles(name);
+  if (request.kind === "local") {
+    return { state: "loaded", files: request.files };
+  }
+  const files = bundledFiles(request.name);
   return files === null ? LOADING : { state: "loaded", files };
 };
 
 /**
- * The files of the example `name`: a bundled one on the first render, `self`
- * once its chunk arrives. Stable between renders, so a world built from it
- * is built once.
+ * The files of `request`: local files and bundled examples on the first
+ * render, `self` once its chunk arrives. Stable between renders, so a world
+ * built from it is built once.
  */
-const useExampleFiles = (name: ExampleName | null): ExampleFiles => {
-  const known = useMemo(() => knownFiles(name), [name]);
+const useSourceFiles = (request: SourceRequest): SourceFiles => {
+  const known = useMemo(() => knownSource(request), [request]);
+  const name = request.kind === "example" ? request.name : null;
   const [loaded, setLoaded] = useState<{
     readonly name: ExampleName;
-    readonly files: LoadedExample;
+    readonly files: LoadedSource;
   } | null>(null);
 
   useEffect(() => {
@@ -61,8 +66,8 @@ const useExampleFiles = (name: ExampleName | null): ExampleFiles => {
     };
   }, [name, known]);
 
-  return loaded?.name === name ? loaded.files : known;
+  return name !== null && loaded?.name === name ? loaded.files : known;
 };
 
-export { settleFiles, useExampleFiles };
-export type { LoadedExample };
+export { knownSource, settleFiles, useSourceFiles };
+export type { LoadedSource };
