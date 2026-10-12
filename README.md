@@ -9,10 +9,6 @@ and every call is a door.
 
 ![Inside main(): the call room, with the if/else lanes ahead behind their tinted door frames](docs/media/hero.jpg)
 
-<!-- Video: drag an .mp4 into this file in GitHub's web editor and keep the
-     https://github.com/user-attachments/assets/… URL it inserts here, on its
-     own line, in place of the image above. -->
-
 Drop a zip of any JavaScript or TypeScript repository on the page, or pick a
 folder. Nothing is uploaded: the code is parsed in your browser tab.
 
@@ -71,8 +67,33 @@ Then open http://localhost:3000.
 
 ## How it works
 
-```text
-source → parser → CodeGraph → spatial grammar → WorldGraph → layout → walls and doors → three.js
+Everything runs in the browser tab. Code decides which rooms and doors exist.
+A seed taken from a hash of the source decides only sizes and placement, so
+the same code always gives the same world.
+
+```mermaid
+flowchart TD
+  subgraph load["Load: apps/web"]
+    A["Zip, folder, or bundled example"] --> B["Source filter<br/>JS/TS files and manifests,<br/>size and count caps"]
+  end
+
+  subgraph analyse["Analyse: Web Worker for a zip or folder"]
+    B --> C["@repo/parser<br/>Babel AST per file"]
+    C --> D["CodeGraph<br/>modules, functions, calls,<br/>control-flow trees, imports"]
+  end
+
+  subgraph build["Build: one area per file, generated on approach"]
+    D --> E["@repo/code-graph<br/>spatial grammar"]
+    E --> F["WorldGraph<br/>hubs, flow rooms, lanes,<br/>doors, portals"]
+    F --> G["@repo/world-generator<br/>seeded layout"]
+    G --> H["BuiltWorld<br/>walls, door frames,<br/>colliders, portal triggers"]
+  end
+
+  subgraph play["Walk: React Three Fiber"]
+    H --> I["@repo/renderer<br/>merged meshes per room,<br/>light pool, player"]
+    I --> J["HUD, source panel,<br/>maps, call stack"]
+    J -. "heading for a portal<br/>to an unbuilt area" .-> E
+  end
 ```
 
 | Package                    | Job                                                         |
@@ -85,6 +106,25 @@ source → parser → CodeGraph → spatial grammar → WorldGraph → layout �
 
 Each file is generated as its own area when you first head for it, so large
 repositories open quickly. Contributor notes live in [AGENTS.md](AGENTS.md).
+
+## Commands
+
+```bash
+pnpm lint           # type-aware linting, whole repo in one oxlint process
+pnpm knip           # unused files, exports and dependencies
+pnpm typecheck      # TypeScript 7 (tsc) across the repo
+pnpm test           # test suite
+pnpm build          # production builds
+pnpm format         # Prettier write
+pnpm format:check   # Prettier check (CI gate)
+pnpm secrets:scan   # gitleaks secret scan over git history
+```
+
+oxlint prints nothing when there are no findings, so silent output means clean.
+
+CI runs typecheck, lint, knip, format-check, test, build and a gitleaks secret scan on
+push to `main` and on PRs, plus CodeQL code scanning. `secrets:scan` needs either
+`gitleaks` v8.19+ on PATH or a running Docker daemon.
 
 ## Limits
 
