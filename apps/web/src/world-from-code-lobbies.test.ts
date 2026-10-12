@@ -33,38 +33,48 @@ const doorsOf = (world: GeneratedWorld, roomId: string) =>
     .map(({ to }) => to);
 
 describe("class lobbies", () => {
-  it("opens the service example's hub onto main and the UserService lobby", () => {
-    const { codeGraph, sources } = parsed("service");
+  it("needs no lobby once main reaches every UserService method", () => {
+    const { codeGraph } = parsed("service");
     const world = worldFromCode(codeGraph, 1);
-    const lobby = "service.ts//class:UserService";
-    expect(lobbiesOf(world)).toEqual([lobby]);
-    expect(doorsOf(world, "service.ts")).toEqual([lobby, "service.ts::main"]);
-    // create and the constructor are reached by doors from main; load by nobody.
-    expect(doorsOf(world, lobby)).toEqual(["service.ts::UserService.load"]);
-    expect(describeRoom(codeGraph, lobby)).toBe(
-      "service.ts · class UserService"
+    // `other` holds a `new UserService(…)`, so `other.load()` is a door from
+    // main like create and the constructor: no method is left for a lobby.
+    expect(lobbiesOf(world)).toEqual([]);
+    expect(doorsOf(world, "service.ts")).toEqual(["service.ts::main"]);
+    expect(codeGraph.edges).toContainEqual(
+      expect.objectContaining({
+        type: "call",
+        source: "service.ts::main",
+        target: "service.ts::UserService.load",
+      })
     );
+  });
+
+  it("names and shows a class lobby in the HUD", () => {
+    const { codeGraph, sources } = parsed("repo");
+    const path = "src/handlers/auth.ts";
+    const lobby = `${path}//class:Session`;
+    expect(describeRoom(codeGraph, lobby)).toBe(`${path} · class Session`);
     expect(
       promptOf(codeGraph, [], {
         kind: "door",
-        roomId: "service.ts",
+        roomId: path,
         targetRoomId: lobby,
       })
-    ).toBe("→ class UserService");
-    expect(breadcrumbOf(codeGraph, [], lobby)).toBe("class UserService");
+    ).toBe("→ class Session");
+    expect(breadcrumbOf(codeGraph, [], lobby)).toBe("class Session");
     const view = sourceView(codeGraph, sources, lobby);
-    const classLines = (sources.get("service.ts") ?? "")
-      .split("\n")
-      .findIndex((line) => line === "}");
+    const lines = (sources.get(path) ?? "").split("\n");
+    const start = lines.findIndex((line) => line.startsWith("export class"));
+    const end = lines.findIndex((line) => line === "}");
     expect(view).toMatchObject({
-      path: "service.ts",
-      fn: "class UserService",
+      path,
+      fn: "class Session",
       region: null,
-      lines: `1–${classLines + 1}`,
+      lines: `${start + 1}–${end + 1}`,
     });
     const first = view?.code[0];
     expect(`${first?.before}${first?.marked}${first?.after}`).toBe(
-      "class UserService {"
+      "export class Session {"
     );
     expect(view?.code.every((line) => line.marked === "")).toBe(true);
   });

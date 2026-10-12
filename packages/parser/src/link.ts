@@ -6,19 +6,30 @@
 // see module-resolver.ts for what is out of scope. An import of anything
 // else (npm packages, `node:` builtins) stays unresolved and keeps `via`,
 // which is how the HUD tells a library call from one the analysis could not
-// follow.
+// follow. Calls on typed receivers are widened by overrides in other files
+// (link-overrides.ts).
 
 import type {
   CallEdge,
   CallSite,
+  ExportRecord,
   GraphEdge,
   ImportRecord,
   ModuleNode,
   PackageNode,
 } from "@repo/code-graph";
 import { createResolver } from "@repo/code-graph/module-resolver";
-import type { Resolver } from "@repo/code-graph/module-resolver";
 
+import {
+  exportOf,
+  isInstanceMember,
+  listOf,
+  memberOf,
+  viaBindings,
+} from "./link-exports";
+import type { Binding, Linker } from "./link-exports";
+import { subclassIndex, withOverrides } from "./link-overrides";
+import type { Dispatch } from "./resolve";
 import type { DiscoveredFunction } from "./scope";
 import type { TopLevel } from "./top-level";
 
@@ -31,113 +42,14 @@ type Linkable = {
   readonly topLevel: TopLevel;
   readonly callSites: readonly CallSite[];
   readonly edges: readonly GraphEdge[];
-};
-
-/** A top-level binding of a module, or a whole module as a namespace object. */
-type Binding =
-  | {
-      readonly kind: "local";
-      readonly moduleId: string;
-      readonly localName: string;
-    }
-  | { readonly kind: "namespace"; readonly moduleId: string };
-
-/** One binding, several (`export *` from modules that clash), or nothing. */
-type Lookup = Binding | readonly Binding[] | null;
-
-const listOf = (lookup: Lookup): readonly Binding[] => {
-  if (lookup === null) {
-    return [];
-  }
-  return "kind" in lookup ? [lookup] : lookup;
-};
-
-const bindingKey = (binding: Binding): string =>
-  binding.kind === "local"
-    ? `${binding.moduleId}\0${binding.localName}`
-    : binding.moduleId;
-
-type Linker = {
-  readonly resolve: Resolver;
-  readonly modules: ReadonlyMap<string, ModuleNode>;
-  readonly functions: ReadonlyMap<string, readonly DiscoveredFunction[]>;
-  readonly topLevel: ReadonlyMap<string, TopLevel>;
-};
-
-const importBinding = (
-  linker: Linker,
-  record: ImportRecord,
-  seen: Set<string>
-): Lookup => {
-  if (record.moduleId === null || record.importedName === null) {
-    return null;
-  }
-  return record.importedName === "*"
-    ? { kind: "namespace", moduleId: record.moduleId }
-    : exportOf(linker, record.moduleId, record.importedName, seen);
-};
-
-/** Distinct hits of the module's `export *` declarations, in source order. */
-const starExports = (
-  linker: Linker,
-  module: ModuleNode,
-  name: string,
-  seen: Set<string>
-): Lookup => {
-  const hits = new Map<string, Binding>();
-  for (const record of module.exports) {
-    if (record.exportedName !== "*" || record.specifier === null) {
-      continue;
-    }
-    const target = linker.resolve(module.id, record.specifier);
-    const found = target === null ? null : exportOf(linker, target, name, seen);
-    for (const binding of listOf(found)) {
-      hits.set(bindingKey(binding), binding);
-    }
-  }
-  const all = [...hits.values()];
-  return all.length <= 1 ? (all[0] ?? null) : all;
-};
-
-/**
- * What `name` exported from `moduleId` is bound to. A named export wins over
- * `export *` (which never carries `default`); a local export that is itself
- * an import is followed; `seen` stops re-export cycles.
- */
-const exportOf = (
-  linker: Linker,
-  moduleId: string,
-  name: string,
-  seen: Set<string>
-): Lookup => {
-  const key = `${moduleId}\0${name}`;
-  const module = linker.modules.get(moduleId);
-  if (module === undefined || seen.has(key)) {
-    return null;
-  }
-  seen.add(key);
-  const record = module.exports.find((item) => item.exportedName === name);
-  if (record === undefined) {
-    return name === "default" ? null : starExports(linker, module, name, seen);
-  }
-  if (record.specifier === null) {
-    if (record.localName === null) {
-      return null;
-    }
-    const imported = module.imports.find(
-      (item) => item.localName === record.localName
-    );
-    return imported === undefined
-      ? { kind: "local", moduleId, localName: record.localName }
-      : importBinding(linker, imported, seen);
-  }
-  const target = linker.resolve(moduleId, record.specifier);
-  if (target === null || record.importedName === null) {
-    return null;
-  }
-  return record.importedName === "*"
-    ? { kind: "namespace", moduleId: target }
-    : exportOf(linker, target, record.importedName, seen);
+  /**
+   * Type-only imports and exports, never on the module: followed only to
+   * the class of a typed receiver (`via.instance`).
+   */
+  readonly typeImports: readonly ImportRecord[];
+  readonly typeExports: readonly ExportRecord[];
+  /** By call site id: calls on typed receivers that subclasses may override. */
+  readonly dispatch: ReadonlyMap<string, Dispatch>;
 };
 
 /** A binding and the member called on it, if any. */
@@ -161,36 +73,34 @@ const calleesOf = (
 /**
  * The function a binding calls: a top-level plain function, `new` on a
  * top-level class (its constructor) or on a plain function, or with a
- * member a static method of a top-level class. Null for anything else,
- * a namespace called directly included.
+ * member a static method of a top-level class, or with `instance` an
+ * instance member of one. Null for anything else, a namespace called
+ * directly included.
  */
 const functionOf = (
   linker: Linker,
   { binding, member }: Callee,
-  isNew: boolean
+  isNew: boolean,
+  instance: boolean
 ): DiscoveredFunction | null => {
   if (binding.kind === "namespace") {
     return null;
   }
   const name = binding.localName;
   const plain = linker.topLevel.get(binding.moduleId)?.functions.get(name);
-  const range = linker.topLevel.get(binding.moduleId)?.classes.get(name);
-  // A member of the module's own class `name`, not of a block's namesake.
   const ofClass = (test: (fn: DiscoveredFunction) => boolean) =>
-    range === undefined
-      ? undefined
-      : (linker.functions.get(binding.moduleId) ?? []).find(
-          (fn) =>
-            fn.className === name &&
-            fn.parentId === null &&
-            fn.span.start >= range.start &&
-            fn.span.end <= range.end &&
-            test(fn)
-        );
+    memberOf(linker, binding.moduleId, name, test);
   if (member !== null) {
-    return isNew
-      ? null
-      : (ofClass((fn) => fn.isStatic && fn.name === member) ?? null);
+    if (isNew) {
+      return null;
+    }
+    return (
+      ofClass(
+        instance
+          ? isInstanceMember(member)
+          : (fn) => fn.isStatic && fn.name === member
+      ) ?? null
+    );
   }
   if (!isNew) {
     return plain ?? null;
@@ -208,17 +118,15 @@ const linkSite = (
   if (via === undefined || site.resolution !== "unresolved") {
     return site;
   }
-  const record = module.imports.find(
-    (item) => item.localName === via.localName
-  );
-  const found =
-    record === undefined ? null : importBinding(linker, record, new Set());
-  const callees = listOf(found).flatMap((binding) =>
-    calleesOf(linker, binding, via.member)
-  );
+  const instance = via.instance === true;
+  const bindings = viaBindings(linker, module, via);
+  // A receiver's class is called on as it is, never as a namespace.
+  const callees = instance
+    ? bindings.map((binding) => ({ binding, member: via.member }))
+    : bindings.flatMap((binding) => calleesOf(linker, binding, via.member));
   const targets = new Map<string, DiscoveredFunction>();
   for (const callee of callees) {
-    const fn = functionOf(linker, callee, via.isNew);
+    const fn = functionOf(linker, callee, via.isNew, instance);
     if (fn !== null) {
       targets.set(fn.id, fn);
     }
@@ -239,7 +147,10 @@ const linkSite = (
   };
 };
 
-/** Adds a call edge per newly resolved site whose caller is a function. */
+/**
+ * Adds a call edge per newly resolved site whose caller is a function, and
+ * takes a site off the edge it no longer resolves along.
+ */
 const withEdges = (
   unit: Linkable,
   sites: readonly CallSite[]
@@ -253,11 +164,21 @@ const withEdges = (
   });
   sites.forEach((site, position) => {
     const before = unit.callSites[position];
-    if (
-      site.calleeId === null ||
-      before?.resolution === "resolved" ||
-      site.callerId === unit.module.id
-    ) {
+    const was = before?.resolution === "resolved" ? before.calleeId : null;
+    if (site.calleeId === was || site.callerId === unit.module.id) {
+      return;
+    }
+    // Overrides found across files turned a resolved call ambiguous.
+    const old =
+      was === null ? undefined : index.get(`${site.callerId}->${was}`);
+    const stale = old === undefined ? undefined : edges[old];
+    if (old !== undefined && stale?.type === "call") {
+      edges[old] = {
+        ...stale,
+        callSiteIds: stale.callSiteIds.filter((id) => id !== site.id),
+      };
+    }
+    if (site.calleeId === null) {
       return;
     }
     const key = `${site.callerId}->${site.calleeId}`;
@@ -279,7 +200,9 @@ const withEdges = (
     index.set(key, edges.length);
     edges.push(edge);
   });
-  return edges;
+  return edges.filter(
+    (edge) => edge.type !== "call" || edge.callSiteIds.length > 0
+  );
 };
 
 /**
@@ -295,16 +218,15 @@ const linkModules = <T extends Linkable>(
     new Set(units.map((unit) => unit.module.id)),
     packages
   );
+  const linked = (moduleId: string, records: readonly ImportRecord[]) =>
+    records.map((record) => ({
+      ...record,
+      moduleId: resolve(moduleId, record.specifier),
+    }));
   const modules = new Map(
     units.map((unit): [string, ModuleNode] => [
       unit.module.id,
-      {
-        ...unit.module,
-        imports: unit.module.imports.map((record) => ({
-          ...record,
-          moduleId: resolve(unit.module.id, record.specifier),
-        })),
-      },
+      { ...unit.module, imports: linked(unit.module.id, unit.module.imports) },
     ])
   );
   const linker: Linker = {
@@ -312,12 +234,26 @@ const linkModules = <T extends Linkable>(
     modules,
     functions: new Map(units.map((unit) => [unit.module.id, unit.functions])),
     topLevel: new Map(units.map((unit) => [unit.module.id, unit.topLevel])),
+    typeImports: new Map(
+      units.map((unit) => [
+        unit.module.id,
+        linked(unit.module.id, unit.typeImports),
+      ])
+    ),
+    typeExports: new Map(
+      units.map((unit) => [unit.module.id, unit.typeExports])
+    ),
   };
+  const subclasses = subclassIndex(linker);
   return units.map((unit) => {
     const module = modules.get(unit.module.id) ?? unit.module;
-    const callSites = unit.callSites.map((site) =>
-      linkSite(linker, module, site)
-    );
+    const callSites = unit.callSites.map((site) => {
+      const next = linkSite(linker, module, site);
+      const dispatch = unit.dispatch.get(site.id);
+      return dispatch === undefined
+        ? next
+        : withOverrides(linker, subclasses, module, next, dispatch);
+    });
     return { ...unit, module, callSites, edges: withEdges(unit, callSites) };
   });
 };

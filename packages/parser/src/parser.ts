@@ -2,8 +2,10 @@ import type {
   CallSite,
   ClassNode,
   CodeGraph,
+  ExportRecord,
   FunctionNode,
   GraphEdge,
+  ImportRecord,
   ModuleNode,
 } from "@repo/code-graph";
 import { moduleId } from "@repo/code-graph/ids";
@@ -18,6 +20,7 @@ import { exportedLocalNames, exportsOf, importsOf } from "./imports";
 import { linkModules } from "./link";
 import { packagesOf, splitFiles } from "./manifests";
 import type { OnParseError } from "./manifests";
+import type { Dispatch } from "./resolve";
 import type { DiscoveredFunction } from "./scope";
 import { lineCountOf } from "./span";
 import { topLevelOf } from "./top-level";
@@ -73,6 +76,9 @@ type Analysed = {
   readonly topLevel: TopLevel;
   readonly callSites: readonly CallSite[];
   readonly edges: readonly GraphEdge[];
+  readonly typeImports: readonly ImportRecord[];
+  readonly typeExports: readonly ExportRecord[];
+  readonly dispatch: ReadonlyMap<string, Dispatch>;
   readonly discovered: Discovered;
   readonly source: string;
 };
@@ -80,22 +86,27 @@ type Analysed = {
 const analyseModule = (file: SourceFile): Analysed => {
   const id = moduleId(file.path);
   const ast = parseSource(file.path, file.source);
-  const { imports, exports, discovered, calls } = withPath(file.path, () => {
-    const importRecords = importsOf(ast.program);
-    const exportRecords = exportsOf(ast.program);
-    const found = discover(
-      id,
-      ast.program,
-      importRecords,
-      exportedLocalNames(exportRecords)
-    );
-    return {
-      imports: importRecords,
-      exports: exportRecords,
-      discovered: found,
-      calls: collectCalls(id, ast.program, found),
-    };
-  });
+  const { imports, exports, typeImports, typeExports, discovered, calls } =
+    withPath(file.path, () => {
+      const importRecords = importsOf(ast.program);
+      const exportRecords = exportsOf(ast.program);
+      const typeImportRecords = importsOf(ast.program, "type");
+      const found = discover(
+        id,
+        ast.program,
+        importRecords,
+        exportedLocalNames(exportRecords),
+        typeImportRecords
+      );
+      return {
+        imports: importRecords,
+        exports: exportRecords,
+        typeImports: typeImportRecords,
+        typeExports: exportsOf(ast.program, "type"),
+        discovered: found,
+        calls: collectCalls(id, ast.program, found),
+      };
+    });
   return {
     module: {
       id,
@@ -110,6 +121,9 @@ const analyseModule = (file: SourceFile): Analysed => {
     topLevel: topLevelOf(ast.program, discovered.byNode),
     callSites: calls.callSites,
     edges: [...discovered.edges, ...calls.edges],
+    typeImports,
+    typeExports,
+    dispatch: calls.dispatch,
     discovered,
     source: file.source,
   };

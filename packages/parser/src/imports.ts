@@ -1,8 +1,10 @@
 // What a module imports and exports, as plain records the linker can follow
 // (PR B of Phase 4 resolves `ImportRecord.moduleId`). Type-only imports and
-// exports are skipped: they never reach a call. So are `import x =
-// require()` and `export =`, which are TypeScript's CommonJS forms. A
-// side-effect import is still a dependency: one record without names.
+// exports never reach a call, so the module's records skip them; asked for
+// by `kind`, they are read on their own, for the classes a receiver is
+// annotated with (`runner: AgentRunner`). `import x = require()` and
+// `export =`, TypeScript's CommonJS forms, are skipped. A side-effect
+// import is still a dependency: one record without names.
 
 import {
   isArrowFunctionExpression,
@@ -17,7 +19,7 @@ import {
   isIdentifier,
   isImportDeclaration,
   isImportDefaultSpecifier,
-  isImportNamespaceSpecifier,
+  isImportSpecifier,
   isTSDeclareFunction,
   isTSEnumDeclaration,
   isTSInterfaceDeclaration,
@@ -41,47 +43,53 @@ import { spanOf } from "./span";
 const nameOf = (node: Identifier | StringLiteral): string =>
   isIdentifier(node) ? node.name : node.value;
 
-const importsOf = (program: Program): readonly ImportRecord[] =>
+/** Value records, or only the type-only ones (`import type`, `{ type X }`). */
+type RecordKind = "value" | "type";
+
+const importsOf = (
+  program: Program,
+  kind: RecordKind = "value"
+): readonly ImportRecord[] =>
   program.body.flatMap((statement) => {
-    if (!isImportDeclaration(statement) || statement.importKind === "type") {
+    if (!isImportDeclaration(statement)) {
       return [];
     }
     const specifier = statement.source.value;
+    const typeOnly = statement.importKind === "type";
     if (statement.specifiers.length === 0) {
-      return [
-        {
-          localName: null,
-          importedName: null,
-          specifier,
-          moduleId: null,
-          span: spanOf(statement),
-        },
-      ];
-    }
-    return statement.specifiers.flatMap((item): ImportRecord[] => {
-      if (isImportDefaultSpecifier(item) || isImportNamespaceSpecifier(item)) {
-        const importedName = isImportDefaultSpecifier(item) ? "default" : "*";
-        return [
-          {
-            localName: item.local.name,
-            importedName,
-            specifier,
-            moduleId: null,
-            span: spanOf(item),
-          },
-        ];
-      }
-      return item.importKind === "type"
+      return typeOnly || kind === "type"
         ? []
         : [
             {
-              localName: item.local.name,
-              importedName: nameOf(item.imported),
+              localName: null,
+              importedName: null,
               specifier,
               moduleId: null,
-              span: spanOf(item),
+              span: spanOf(statement),
             },
           ];
+    }
+    return statement.specifiers.flatMap((item): ImportRecord[] => {
+      const itemTypeOnly =
+        typeOnly || (isImportSpecifier(item) && item.importKind === "type");
+      if (itemTypeOnly !== (kind === "type")) {
+        return [];
+      }
+      let importedName = "*";
+      if (isImportDefaultSpecifier(item)) {
+        importedName = "default";
+      } else if (isImportSpecifier(item)) {
+        importedName = nameOf(item.imported);
+      }
+      return [
+        {
+          localName: item.local.name,
+          importedName,
+          specifier,
+          moduleId: null,
+          span: spanOf(item),
+        },
+      ];
     });
   });
 
@@ -131,16 +139,22 @@ const declarationExports = (
 };
 
 const namedExports = (
-  statement: ExportNamedDeclaration
+  statement: ExportNamedDeclaration,
+  kind: RecordKind
 ): readonly ExportRecord[] => {
-  if (statement.exportKind === "type") {
-    return [];
-  }
+  const typeOnly = statement.exportKind === "type";
   if (statement.declaration !== null && statement.declaration !== undefined) {
-    return declarationExports(statement.declaration);
+    return typeOnly || kind === "type"
+      ? []
+      : declarationExports(statement.declaration);
   }
   const specifier = statement.source?.value ?? null;
   return statement.specifiers.flatMap((item): ExportRecord[] => {
+    const itemTypeOnly =
+      typeOnly || (isExportSpecifier(item) && item.exportKind === "type");
+    if (itemTypeOnly !== (kind === "type")) {
+      return [];
+    }
     if (isExportNamespaceSpecifier(item)) {
       return [
         {
@@ -151,7 +165,7 @@ const namedExports = (
         },
       ];
     }
-    if (!isExportSpecifier(item) || item.exportKind === "type") {
+    if (!isExportSpecifier(item)) {
       return [];
     }
     const exportedName = nameOf(item.exported);
@@ -184,19 +198,26 @@ const defaultExport = (statement: ExportDefaultDeclaration): ExportRecord => {
   return local("default", isIdentifier(declaration) ? declaration.name : null);
 };
 
-const exportsOf = (program: Program): readonly ExportRecord[] =>
+const exportsOf = (
+  program: Program,
+  kind: RecordKind = "value"
+): readonly ExportRecord[] =>
   program.body.flatMap((statement): readonly ExportRecord[] => {
     if (isExportNamedDeclaration(statement)) {
-      return namedExports(statement);
+      return namedExports(statement, kind);
     }
     if (isExportDefaultDeclaration(statement)) {
       // Overload signatures and `export default interface` are types only.
-      return isTSDeclareFunction(statement.declaration) ||
+      return kind === "type" ||
+        isTSDeclareFunction(statement.declaration) ||
         isTSInterfaceDeclaration(statement.declaration)
         ? []
         : [defaultExport(statement)];
     }
-    if (isExportAllDeclaration(statement) && statement.exportKind !== "type") {
+    if (
+      isExportAllDeclaration(statement) &&
+      (statement.exportKind === "type") === (kind === "type")
+    ) {
       return [
         {
           exportedName: "*",

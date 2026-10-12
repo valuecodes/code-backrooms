@@ -11,12 +11,25 @@ import {
   isFunctionDeclaration,
   isFunctionExpression,
   isIdentifier,
+  isNewExpression,
   isObjectMethod,
   isObjectPattern,
   isObjectProperty,
+  isParenthesizedExpression,
   isRestElement,
   isStringLiteral,
+  isTSAsExpression,
+  isTSInstantiationExpression,
+  isTSNonNullExpression,
+  isTSNullKeyword,
   isTSParameterProperty,
+  isTSParenthesizedType,
+  isTSSatisfiesExpression,
+  isTSTypeAnnotation,
+  isTSTypeAssertion,
+  isTSTypeReference,
+  isTSUndefinedKeyword,
+  isTSUnionType,
 } from "@babel/types";
 import type {
   ArrowFunctionExpression,
@@ -27,6 +40,7 @@ import type {
   FunctionExpression,
   Node,
   ObjectMethod,
+  TSType,
 } from "@babel/types";
 import type {
   FunctionKind,
@@ -40,11 +54,31 @@ import type {
  */
 type DiscoveredFunction = Omit<FunctionNode, "flow">;
 
+/**
+ * The class a binding holds, by the name its declaration gives it
+ * (`x: Svc`, `new Svc()`), resolved later from the scope that binds it.
+ * `exact` when it is known to hold that very class (`const x = new Svc()`,
+ * never written), so no subclass can stand in for it.
+ */
+type ReceiverType = { readonly name: string; readonly exact: boolean };
+
+/**
+ * Binding names to their class; null where one folded scope binds the name
+ * more than once with different or missing types, so it never resolves.
+ */
+type ReceiverTypes = Map<string, ReceiverType | null>;
+
 type ClassTable = {
   readonly name: string;
   readonly instance: Map<string, DiscoveredFunction>;
   readonly static: Map<string, DiscoveredFunction>;
   ctor: DiscoveredFunction | null;
+  /** Instance fields, typed or not: an untyped one still hides a base's. */
+  readonly fields: ReceiverTypes;
+  /** The `extends` identifier, resolved from `scope`. */
+  readonly superName: string | null;
+  /** The scope the class is declared in. */
+  readonly scope: Scope;
 };
 
 /** One lexical scope: a function body, an anonymous function, or the module. */
@@ -68,6 +102,10 @@ type Scope = {
   readonly params: Set<string>;
   /** Module scope only: the bindings that are imports, by local name. */
   readonly imports: Map<string, ImportRecord>;
+  /** Module scope only: type-only imports (`import type { Svc }`). */
+  readonly typeImports: Map<string, ImportRecord>;
+  /** The classes of this scope's bindings, where their declarations say. */
+  readonly types: ReceiverTypes;
   readonly parent: Scope | null;
 };
 
@@ -96,6 +134,8 @@ const newScope = (
   bindings: new Set(),
   params: new Set(),
   imports: new Map(),
+  typeImports: new Map(),
+  types: new Map(),
   parent,
 });
 
@@ -123,6 +163,102 @@ const bindingNames = (pattern: Node, into: Set<string>): void => {
   }
 };
 
+/** The expression under TypeScript-only wrappers: `cb!`, `f as F`, `f<T>`. */
+const unwrap = (node: Node): Node =>
+  isTSNonNullExpression(node) ||
+  isTSAsExpression(node) ||
+  isTSSatisfiesExpression(node) ||
+  isTSTypeAssertion(node) ||
+  isTSInstantiationExpression(node) ||
+  isParenthesizedExpression(node)
+    ? unwrap(node.expression)
+    : node;
+
+/** `Svc` from `Svc`, `Svc<T>` or `Svc | null | undefined`; else null. */
+const referenceName = (type: TSType): string | null => {
+  if (isTSParenthesizedType(type)) {
+    return referenceName(type.typeAnnotation);
+  }
+  if (isTSTypeReference(type)) {
+    return isIdentifier(type.typeName) ? type.typeName.name : null;
+  }
+  if (isTSUnionType(type)) {
+    const [only, ...rest] = type.types.filter(
+      (member) => !isTSNullKeyword(member) && !isTSUndefinedKeyword(member)
+    );
+    return only === undefined || rest.length > 0 ? null : referenceName(only);
+  }
+  return null;
+};
+
+/** The class name a `: Svc` annotation gives, if it gives one. */
+const typeNameOf = (annotation: Node | null | undefined): string | null =>
+  isTSTypeAnnotation(annotation)
+    ? referenceName(annotation.typeAnnotation)
+    : null;
+
+/** `Svc` from `new Svc(…)` (through `as`, `!` and parentheses). */
+const newClassNameOf = (init: Node | null | undefined): string | null => {
+  if (init === null || init === undefined) {
+    return null;
+  }
+  const node = unwrap(init);
+  return isNewExpression(node) && isIdentifier(node.callee)
+    ? node.callee.name
+    : null;
+};
+
+/**
+ * A binding's class: its annotation, a contract TypeScript checks, else the
+ * `new` it starts with, unless the module writes the name anywhere (so it
+ * may come to hold anything). `exact` only for a `new` nothing replaces:
+ * never written and not `replaceable` (a parameter's caller, a field's
+ * owner may put another instance there).
+ */
+const receiverOf = (
+  annotation: Node | null | undefined,
+  init: Node | null | undefined,
+  written: boolean,
+  replaceable: boolean
+): ReceiverType | null => {
+  const annotated = typeNameOf(annotation);
+  const created = newClassNameOf(init);
+  const exact = created !== null && !written && !replaceable;
+  if (annotated !== null) {
+    return { name: annotated, exact: exact && created === annotated };
+  }
+  return created === null || written ? null : { name: created, exact };
+};
+
+/**
+ * Records the class of a binding declared in `types`' scope. A name bound
+ * again in the same (folded) scope keeps a class only while every
+ * declaration agrees on it.
+ */
+const declareType = (
+  types: ReceiverTypes,
+  bound: boolean,
+  name: string,
+  type: ReceiverType | null
+): void => {
+  if (!bound) {
+    if (type !== null) {
+      types.set(name, type);
+    }
+    return;
+  }
+  const before = types.get(name);
+  types.set(
+    name,
+    before !== undefined &&
+      before !== null &&
+      type !== null &&
+      before.name === type.name
+      ? { name: type.name, exact: before.exact && type.exact }
+      : null
+  );
+};
+
 const isFunctionLike = (node: Node): node is FunctionLike =>
   isFunctionDeclaration(node) ||
   isFunctionExpression(node) ||
@@ -144,7 +280,8 @@ const functionScope = (
   node: FunctionLike,
   fn: DiscoveredFunction | null,
   table: ClassTable | null,
-  isStatic: boolean
+  isStatic: boolean,
+  written: ReadonlySet<string>
 ): Scope => {
   const arrow = isArrowFunctionExpression(node);
   const scope = newScope(
@@ -154,10 +291,19 @@ const functionScope = (
     table === null ? arrow && parent.isStatic : isStatic
   );
   for (const param of node.params) {
-    bindingNames(
-      isTSParameterProperty(param) ? param.parameter : param,
-      scope.params
-    );
+    const binding = isTSParameterProperty(param) ? param.parameter : param;
+    bindingNames(binding, scope.params);
+    const [id, init] = isAssignmentPattern(binding)
+      ? [binding.left, binding.right]
+      : [binding, null];
+    if (isIdentifier(id)) {
+      declareType(
+        scope.types,
+        false,
+        id.name,
+        receiverOf(id.typeAnnotation, init, written.has(id.name), true)
+      );
+    }
   }
   for (const name of scope.params) {
     scope.bindings.add(name);
@@ -238,11 +384,20 @@ const fieldFunction = (
 
 export {
   bindingNames,
+  declareType,
   fieldFunction,
   functionScope,
   isFunctionLike,
   memberName,
   methodKind,
   newScope,
+  receiverOf,
+  unwrap,
 };
-export type { ClassTable, DiscoveredFunction, FunctionLike, Scope };
+export type {
+  ClassTable,
+  DiscoveredFunction,
+  FunctionLike,
+  ReceiverType,
+  Scope,
+};

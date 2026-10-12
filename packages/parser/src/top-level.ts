@@ -15,13 +15,18 @@ import type { Node, Program } from "@babel/types";
 
 import type { DiscoveredFunction } from "./scope";
 
-type Range = { readonly start: number; readonly end: number };
+/** The offsets a class's members lie in, and the identifier it extends. */
+type ClassRange = {
+  readonly start: number;
+  readonly end: number;
+  readonly superName: string | null;
+};
 
 type TopLevel = {
   /** Plain functions by binding name: declarations, `const f = () => …`, an anonymous default. */
   readonly functions: ReadonlyMap<string, DiscoveredFunction>;
-  /** Class declarations by name, as the offsets their members lie in. */
-  readonly classes: ReadonlyMap<string, Range>;
+  /** Class declarations by name. */
+  readonly classes: ReadonlyMap<string, ClassRange>;
 };
 
 const topLevelOf = (
@@ -29,7 +34,7 @@ const topLevelOf = (
   byNode: ReadonlyMap<Node, DiscoveredFunction>
 ): TopLevel => {
   const functions = new Map<string, DiscoveredFunction>();
-  const classes = new Map<string, Range>();
+  const classes = new Map<string, ClassRange>();
   const add = (name: string, node: Node | null | undefined) => {
     const fn =
       node === null || node === undefined ? undefined : byNode.get(node);
@@ -50,6 +55,9 @@ const topLevelOf = (
         classes.set(name, {
           start: declaration.start ?? 0,
           end: declaration.end ?? 0,
+          superName: isIdentifier(declaration.superClass)
+            ? declaration.superClass.name
+            : null,
         });
       }
     } else if (isVariableDeclaration(declaration)) {

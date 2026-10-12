@@ -213,7 +213,10 @@ describe("linkModules", () => {
     expect(siteOf(graph, "Session").calleeId).toBe(ctor);
     expect(siteOf(graph, "Session.open").calleeId).toBe("s.ts::Session.open");
     expect(siteOf(graph, "ns.Session").calleeId).toBe(ctor);
-    expect(siteOf(graph, "session.refresh").resolution).not.toBe("resolved");
+    // `session` holds a `new Session()`: its instance member resolves.
+    expect(siteOf(graph, "session.refresh").calleeId).toBe(
+      "s.ts::Session.refresh"
+    );
   });
 
   it("links to the module's own binding, not a block's namesake", () => {

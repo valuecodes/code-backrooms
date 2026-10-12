@@ -13,24 +13,38 @@ import {
   isNewExpression,
   isOptionalCallExpression,
   isOptionalMemberExpression,
-  isParenthesizedExpression,
   isPrivateName,
   isSequenceExpression,
   isSuper,
   isTaggedTemplateExpression,
   isThisExpression,
-  isTSAsExpression,
-  isTSInstantiationExpression,
-  isTSNonNullExpression,
-  isTSSatisfiesExpression,
-  isTSTypeAssertion,
   isYieldExpression,
 } from "@babel/types";
 import type { Node } from "@babel/types";
 import type { CallKind, CallResolution, ImportVia } from "@repo/code-graph";
 
 import { KNOWN_GLOBALS } from "./globals";
+import { unwrap } from "./scope";
 import type { ClassTable, DiscoveredFunction, Scope } from "./scope";
+import {
+  fieldType,
+  instanceMember,
+  isImport,
+  isTypeImport,
+  overridesOf,
+  receiverType,
+  resolveClass,
+  shadowed,
+} from "./scope-lookup";
+import type { Receiver } from "./scope-lookup";
+
+/**
+ * A method called on a receiver typed as a top-level class of this module
+ * (`className`) or an imported one (`via.instance`, `className` null): a
+ * subclass in another file may override `member`, which only the linker
+ * sees.
+ */
+type Dispatch = { readonly className: string | null; readonly member: string };
 
 type Resolved = {
   readonly calleeName: string;
@@ -40,6 +54,7 @@ type Resolved = {
   readonly candidates?: readonly DiscoveredFunction[];
   /** Set when the callee is an import binding; the call stays unresolved. */
   readonly via?: ImportVia;
+  readonly dispatch?: Dispatch;
 };
 
 const unresolved = (calleeName: string): Resolved => ({
@@ -99,17 +114,6 @@ const amongst = (
     candidates: functions.toSorted((a, b) => a.span.start - b.span.start),
   };
 };
-
-/** The expression under TypeScript-only wrappers: `cb!`, `f as F`, `f<T>`. */
-const unwrap = (node: Node): Node =>
-  isTSNonNullExpression(node) ||
-  isTSAsExpression(node) ||
-  isTSSatisfiesExpression(node) ||
-  isTSTypeAssertion(node) ||
-  isTSInstantiationExpression(node) ||
-  isParenthesizedExpression(node)
-    ? unwrap(node.expression)
-    : node;
 
 /** Source-like text for a callee the analysis cannot follow. */
 const calleeText = (raw: Node): string => {
@@ -178,61 +182,53 @@ const resolveIdentifier = (name: string, scope: Scope): Resolved => {
   return KNOWN_GLOBALS.has(name) ? external(name) : unresolved(name);
 };
 
-/** The class a name refers to here, or null if it is not one (or shadowed). */
-const resolveClass = (name: string, scope: Scope): ClassTable | null => {
-  for (
-    let current: Scope | null = scope;
-    current !== null;
-    current = current.parent
-  ) {
-    const table = current.classes.get(name);
-    if (table !== undefined) {
-      return table;
-    }
-    if (current.locals.has(name) || current.bindings.has(name)) {
-      return null;
-    }
+/**
+ * `x.m()` on a receiver whose class is known by name. A class of this
+ * module resolves to its member (or an inherited one) and to every
+ * override in its subclasses here: one function resolves, several are
+ * ambiguous, none leaves the call unresolved rather than guessing by name.
+ * An imported class is left to the linker. Anything else (an interface, a
+ * type alias, a global like `Map`) is not a class this can follow: null.
+ * The annotation is taken as the contract, as an editor's go-to-definition
+ * does; an object of another class that merely fits it is not considered.
+ */
+const typedReceiver = (
+  name: string,
+  property: string,
+  { type, scope }: Receiver,
+  classes: readonly ClassTable[]
+): Resolved | null => {
+  const table = resolveClass(type.name, scope);
+  if (table !== null) {
+    const own = instanceMember(table, property);
+    const result = amongst(name, [
+      ...(own === undefined ? [] : [own]),
+      ...(type.exact ? [] : overridesOf(table, property, classes)),
+    ]);
+    // Only a top-level class can be extended from another file.
+    return table.scope.parent === null
+      ? {
+          ...result,
+          ...(type.exact
+            ? {}
+            : { dispatch: { className: table.name, member: property } }),
+        }
+      : result;
+  }
+  if (isImport(type.name, scope) || isTypeImport(type.name, scope)) {
+    return {
+      ...imported(name, {
+        localName: type.name,
+        member: property,
+        isNew: false,
+        instance: true,
+      }),
+      ...(type.exact
+        ? {}
+        : { dispatch: { className: null, member: property } }),
+    };
   }
   return null;
-};
-
-/** Whether the name refers to an import binding here (not shadowed). */
-const isImport = (name: string, scope: Scope): boolean => {
-  for (
-    let current: Scope | null = scope;
-    current !== null;
-    current = current.parent
-  ) {
-    if (current.imports.has(name)) {
-      return true;
-    }
-    if (
-      current.locals.has(name) ||
-      current.classes.has(name) ||
-      current.bindings.has(name)
-    ) {
-      return false;
-    }
-  }
-  return false;
-};
-
-/** Any binding of the name between here and the module, inclusive. */
-const shadowed = (name: string, scope: Scope): boolean => {
-  for (
-    let current: Scope | null = scope;
-    current !== null;
-    current = current.parent
-  ) {
-    if (
-      current.locals.has(name) ||
-      current.classes.has(name) ||
-      current.bindings.has(name)
-    ) {
-      return true;
-    }
-  }
-  return false;
 };
 
 /** The name a non-computed member access reaches for, `#x` for private. */
@@ -286,6 +282,22 @@ const otherCallee = (callee: Node): Resolved => {
     : unresolved(name);
 };
 
+/** The class of `this.field` (or `this.#field`) in an instance member. */
+const thisField = (object: Node, scope: Scope): Receiver | null => {
+  const own = scope.classTable;
+  if (
+    own === null ||
+    scope.isStatic ||
+    !(isMemberExpression(object) || isOptionalMemberExpression(object)) ||
+    object.computed ||
+    !isThisExpression(unwrap(object.object))
+  ) {
+    return null;
+  }
+  const field = propertyName(object.property);
+  return field === null ? null : fieldType(own, field);
+};
+
 const resolveMember = (
   callee: Node,
   scope: Scope,
@@ -315,9 +327,13 @@ const resolveMember = (
       return resolved(name, target);
     }
     // A static `this` is a class (or a subclass): instance members do not apply.
-    return scope.isStatic && own !== null
-      ? unresolved(name)
-      : byMemberName(name, property, own, classes);
+    if (scope.isStatic && own !== null) {
+      return unresolved(name);
+    }
+    const inherited = own === null ? undefined : instanceMember(own, property);
+    return inherited === undefined
+      ? byMemberName(name, property, own, classes)
+      : resolved(name, inherited);
   }
   if (isIdentifier(object)) {
     const table = resolveClass(object.name, scope);
@@ -332,6 +348,14 @@ const resolveMember = (
         isNew: false,
       });
     }
+  }
+  const receiver = isIdentifier(object)
+    ? receiverType(object.name, scope)
+    : thisField(object, scope);
+  const typed =
+    receiver === null ? null : typedReceiver(name, property, receiver, classes);
+  if (typed !== null) {
+    return typed;
   }
   const root = rootIdentifier(object);
   return root !== null && KNOWN_GLOBALS.has(root) && !shadowed(root, scope)
@@ -386,3 +410,4 @@ const resolveCallee = (
 };
 
 export { resolveCallee };
+export type { Dispatch };

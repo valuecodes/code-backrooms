@@ -255,12 +255,16 @@ type CallKind = "call" | "optional-call" | "new";
  * How a call reaches an import binding of its module: `helper()` and
  * `new Svc()` name it directly (`member` null), `ns.run()` and `Svc.make()`
  * through one member access, `new ns.Svc()` too. Deeper chains (`ns.a.b()`) carry none.
+ * `svc.run()` on a receiver typed as an imported class (`svc: Svc`, `import
+ * type` included) names that class, with `instance` set.
  */
 type ImportVia = {
   /** The import binding's local name. */
   readonly localName: string;
   readonly member: string | null;
   readonly isNew: boolean;
+  /** The binding is the receiver's class and `member` an instance member. */
+  readonly instance?: boolean;
 };
 
 type CallSite = {
