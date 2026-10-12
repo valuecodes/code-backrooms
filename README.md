@@ -7,9 +7,11 @@ and every call is a door.
 **[▶ Try it in the browser](https://code-backrooms.valuecodes.fi/)** ·
 [Walk this repository](https://code-backrooms.valuecodes.fi/?code=self)
 
-<!-- Hero video: drag an .mp4 into this file in GitHub's web editor and keep
-     the https://github.com/user-attachments/assets/… URL it inserts here, on
-     its own line. -->
+![Inside main(): the call room, with the if/else lanes ahead behind their tinted door frames](docs/media/hero.jpg)
+
+<!-- Video: drag an .mp4 into this file in GitHub's web editor and keep the
+     https://github.com/user-attachments/assets/… URL it inserts here, on its
+     own line, in place of the image above. -->
 
 Drop a zip of any JavaScript or TypeScript repository on the page, or pick a
 folder. Nothing is uploaded: the code is parsed in your browser tab.
@@ -32,8 +34,16 @@ folder. Nothing is uploaded: the code is parsed in your browser tab.
 The layout is built from the code, so the same code always gives the same
 world. The world shows what _can_ run, not a trace of what did run.
 
-<!-- Screenshots: docs/media/fork.png (a fork room with both lanes) and
-     docs/media/map.png (the Tab world map), side by side. -->
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/source-panel.jpg" alt="The E source panel over a room, its line highlighted"></td>
+    <td width="50%"><img src="docs/media/world-map.png" alt="The Tab world map of this repository: its areas joined by portals"></td>
+  </tr>
+  <tr>
+    <td>Press E: every room shows the code it came from.</td>
+    <td>Press Tab: this repository as a world of 152 areas.</td>
+  </tr>
+</table>
 
 ## Controls
 

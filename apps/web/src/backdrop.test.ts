@@ -22,23 +22,23 @@ describe("driftPose", () => {
     expect(pose.facing.z).toBeGreaterThan(0);
   });
 
-  it("walks at most six metres toward the doorway, then back", () => {
+  it("walks at most five metres toward the doorway, then back", () => {
     const furthest = driftPose(start, 18);
     expect(furthest.position.x).toBeCloseTo(0);
-    expect(furthest.position.z).toBeCloseTo(6);
+    expect(furthest.position.z).toBeCloseTo(5);
     expect(driftPose(start, 36).position.z).toBeCloseTo(0);
   });
 
-  it("stops short of a near doorway", () => {
-    const near = { position: { x: 2, z: 2 }, facing: { x: 7, z: 2 } };
-    expect(driftPose(near, 18).position.x).toBeCloseTo(5);
+  it("stops well short of a near doorway", () => {
+    const near = { position: { x: 2, z: 2 }, facing: { x: 6, z: 2 } };
+    expect(driftPose(near, 18).position.x).toBeCloseTo(3.8);
   });
 
   it("never moves away from the doorway or overshoots it", () => {
     for (let seconds = 0; seconds < 72; seconds += 0.7) {
       const { position } = driftPose(start, seconds);
       expect(position.z).toBeGreaterThanOrEqual(0);
-      expect(position.z).toBeLessThanOrEqual(6 + 1e-9);
+      expect(position.z).toBeLessThanOrEqual(5 + 1e-9);
     }
   });
 

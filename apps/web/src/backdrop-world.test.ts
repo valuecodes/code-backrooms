@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import { backdropWorld } from "./backdrop-world";
 
 describe("backdropWorld", () => {
-  it("builds the demo's entrance and nothing else yet", () => {
+  it("builds every area of the demo, starting at its entrance", () => {
     const world = backdropWorld();
     expect(world).not.toBeNull();
-    expect(world?.areas.map((area) => area.id)).toEqual([world?.entry]);
+    expect(world?.areas[0]?.id).toBe(world?.entry);
     expect(world?.areas[0]?.built.rooms.length).toBeGreaterThan(0);
+    expect(world?.pending).toEqual([]);
+    expect(world?.failed).toEqual([]);
   });
 
   it("is the same world every time", () => {

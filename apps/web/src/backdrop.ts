@@ -20,8 +20,8 @@ const SWAY_PERIOD = 13;
 /** Radians the gaze turns to either side. */
 const SWAY = 0.3;
 /** The share of the way to the doorway the camera walks, and its cap in metres. */
-const REACH_SHARE = 0.6;
-const REACH_MAX = 6;
+const REACH_SHARE = 0.45;
+const REACH_MAX = 5;
 /** Metres ahead of the camera it looks at. */
 const LOOK_AHEAD = 4;
 
