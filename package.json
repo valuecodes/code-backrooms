@@ -1,6 +1,6 @@
 {
-  "name": "agentic-monorepo-starter",
-  "description": "Monorepo template for agent-assisted development",
+  "name": "code-backrooms",
+  "description": "Walk through a codebase as a Backrooms level",
   "private": true,
   "engines": {
     "node": "^24.21.0 || >=26.0.0",
@@ -16,14 +16,12 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "knip": "knip",
-    "gen:package": "gen run package",
     "secrets:scan": "sh tooling/github/scripts/secrets-scan.sh",
     "clean": "turbo run clean"
   },
   "devDependencies": {
     "@ianvs/prettier-plugin-sort-imports": "catalog:",
     "@repo/prettier": "workspace:*",
-    "@turbo/gen": "2.10.13",
     "@types/node": "catalog:",
     "knip": "6.35.1",
     "oxlint": "1.83.0",

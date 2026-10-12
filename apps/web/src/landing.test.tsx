@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -6,7 +7,11 @@ import { LandingView } from "./landing";
 const ignore = () => undefined;
 
 const render = (
-  state: { reading?: string | null; error?: string | null } = {}
+  state: {
+    reading?: string | null;
+    error?: string | null;
+    backdrop?: ReactNode;
+  } = {}
 ): string =>
   renderToStaticMarkup(
     <LandingView
@@ -16,6 +21,7 @@ const render = (
       onZip={ignore}
       onFolder={ignore}
       onDragging={ignore}
+      backdrop={state.backdrop}
     />
   );
 
@@ -41,6 +47,19 @@ describe("LandingView", () => {
     expect(html).toContain("reading repo-main.zip…");
     expect(html.match(/<input[^>]*disabled=""/g)).toHaveLength(2);
     expect(html).not.toContain("href=");
+  });
+
+  it("draws a backdrop behind the page, hidden from screen readers", () => {
+    expect(render()).not.toContain("aria-hidden");
+    const html = render({ backdrop: <canvas id="drift" /> });
+    expect(html).toMatch(
+      /<div aria-hidden="true" class="absolute inset-0 -z-10"><canvas id="drift"><\/canvas>/
+    );
+    expect(html).toContain('href="?code=self"');
+  });
+
+  it("says that nothing is uploaded", () => {
+    expect(render()).toContain("nothing is uploaded");
   });
 
   it("shows a failed read's message as an alert", () => {

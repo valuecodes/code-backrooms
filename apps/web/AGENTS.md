@@ -6,8 +6,10 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
 
 ## What This Workspace Is
 
-- Code Backrooms: a first-person, Backrooms-style 3D space that will eventually
-  be generated from source code (functions as rooms, branches as doors, and so on).
+- Code Backrooms: a first-person, Backrooms-style 3D space generated from a
+  JavaScript or TypeScript codebase: modules become areas, functions columns
+  of rooms, branches forks, loops rings and calls doors or portals. The
+  milestones below record how it got there.
 - Vite 8 + React 19, three.js through React Three Fiber and drei, Tailwind CSS 4
   for the HUD.
 - Milestone 2: a seeded, procedurally generated world of 10-20 rooms joined by
@@ -150,7 +152,7 @@ not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   zooms about the cursor, a drag pans and a double-click goes back to the
   whole world, on `?view=map` too; wider than 600 m the map hides rooms and
   area labels and draws zone names larger, each within its band.
-- Milestone 20 (current): repository loading (Phase 7). A bare URL opens a
+- Milestone 20: repository loading (Phase 7). A bare URL opens a
   landing page: drop or pick a `.zip` (GitHub's "Download ZIP" works as
   is), pick a folder, or follow Demo (`?code=self`, this repository's own
   sources) or a bundled example. Files are read in the tab and never leave
@@ -170,6 +172,14 @@ not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   than Demo. Fetching a GitHub URL is not supported; it would need a
   Cloudflare Worker proxy (`codeload` sends no CORS headers) feeding
   `zip-files.ts`.
+- Milestone 21 (current): a moving landing page. Behind the panel the
+  bundled `demo` example's entrance is drawn with a camera that drifts
+  toward its first doorway and back while its gaze sways
+  (`landing-backdrop.tsx`, `driftPose` in `backdrop.ts`). It is skipped
+  without WebGL2 or under `prefers-reduced-motion`, swallowed by an error
+  boundary if the canvas fails, and dropped as soon as a read starts. The
+  world view (`world-app.tsx`) and the backdrop are lazy chunks, so the
+  landing page paints before three.js loads.
 
 ---
 
@@ -197,9 +207,13 @@ There are no per-workspace `lint` or `format` scripts: root `pnpm lint` (oxlint)
 ```text
 src/
   main.tsx            mounts <App/>
-  app.tsx             landing page or the world: full-screen <Canvas>, seed and
-                      current-room state, pointer lock, HUD
+  app.tsx             landing page, loading screen, or the world as a lazy chunk
+  world-app.tsx       the world: full-screen <Canvas>, seed and current-room
+                      state, pointer lock, HUD
   landing.tsx         the bare URL's page: zip drop and pickers, Demo, examples
+  landing-backdrop.tsx  the demo world drifting behind the landing page, lazy
+  backdrop.ts         when the backdrop runs and where its camera is, pure
+  backdrop-world.ts   the demo's entrance area for the backdrop
   local-reads.ts      one read at a time, zip and folder labels, read errors, pure
   source-request.ts   what to build: nothing, a URL example, or local files, pure
   source-filter.ts    which zip or folder entries become sources, and the caps, pure

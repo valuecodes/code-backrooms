@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ChangeEvent, DragEvent } from "react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import type { ChangeEvent, DragEvent, ReactNode } from "react";
 
+import { backdropAllowed } from "~/backdrop";
 import { filesFromFolder } from "~/folder-files";
 import {
   createReadGuard,
@@ -19,7 +28,55 @@ import type { LocalFiles } from "~/zip-files";
 /** Bundled examples linked under the Demo button. */
 const EXAMPLES: readonly string[] = ["demo", "loops", "switches", "repo"];
 
-const HINTS = "WASD move · mouse look · E source · Tab world map · Esc release";
+const HINTS =
+  "WASD move · Shift sprint · mouse look · E source · Tab world map · Backspace back · Esc release";
+
+// The demo world drifting behind the page: its own chunk, fetched after the
+// page has painted, so the pickers never wait for three.js.
+const LandingBackdrop = lazy(() =>
+  import("~/landing-backdrop").then((m) => ({ default: m.LandingBackdrop }))
+);
+
+/** Whether this browser should run the backdrop at all. */
+const supportsBackdrop = (): boolean => {
+  const { matches: reducedMotion } = globalThis.matchMedia(
+    "(prefers-reduced-motion: reduce)"
+  );
+  if (reducedMotion) {
+    // Skip the WebGL probe: the answer is no either way.
+    return false;
+  }
+  const probe = document.createElement("canvas").getContext("webgl2");
+  // Hand the probe's context back now rather than when it is collected.
+  probe?.getExtension("WEBGL_lose_context")?.loseContext();
+  return backdropAllowed({ webgl2: probe !== null, reducedMotion });
+};
+
+/** Renders nothing once its child throws: a failed backdrop is no error. */
+class BackdropBoundary extends Component<
+  { readonly children: ReactNode },
+  { readonly failed: boolean }
+> {
+  override state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  override render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
+/** The backdrop, once the page has painted and only where it may run. */
+const useBackdrop = (): boolean => {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setShown(supportsBackdrop()), 0);
+    return () => clearTimeout(timer);
+  }, []);
+  return shown;
+};
 
 const BUTTON =
   "cursor-pointer rounded border border-amber-100/30 px-3 py-1 hover:bg-amber-100/10 has-disabled:cursor-default has-disabled:opacity-40";
@@ -32,6 +89,8 @@ type LandingViewProps = {
   readonly onZip: (file: File) => void;
   readonly onFolder: (files: readonly File[]) => void;
   readonly onDragging: (dragging: boolean) => void;
+  /** Drawn behind the page; none in tests and where WebGL cannot run. */
+  readonly backdrop?: ReactNode;
 };
 
 /** The picked files, copied out before the input is reset. */
@@ -70,6 +129,7 @@ const LandingView = ({
   onZip,
   onFolder,
   onDragging,
+  backdrop,
 }: LandingViewProps) => {
   const busy = reading !== null;
   const onDragOver = (event: DragEvent) => {
@@ -86,10 +146,16 @@ const LandingView = ({
   };
   return (
     <main
-      className="flex min-h-dvh w-screen flex-col items-center justify-center gap-8 bg-black px-6 py-10 font-mono text-sm text-amber-100/80"
+      className="relative isolate flex min-h-dvh w-screen flex-col items-center justify-center gap-8 overflow-hidden bg-black px-6 py-10 font-mono text-sm text-amber-100/80"
       data-state="landing"
     >
-      <div className="flex max-w-prose flex-col gap-2 text-center">
+      {backdrop !== undefined && (
+        <div aria-hidden className="absolute inset-0 -z-10">
+          {backdrop}
+          <div className="absolute inset-0 bg-black/45" />
+        </div>
+      )}
+      <div className="flex max-w-prose flex-col gap-2 text-center drop-shadow">
         <h1 className="text-3xl font-semibold tracking-tight text-amber-50">
           Code Backrooms
         </h1>
@@ -100,8 +166,10 @@ const LandingView = ({
       </div>
       <section
         aria-label="Load a repository"
-        className={`flex w-full max-w-lg flex-col items-center gap-4 rounded border border-dashed px-6 py-8 text-center ${
-          dragging ? "border-amber-200 bg-amber-100/10" : "border-amber-100/30"
+        className={`flex w-full max-w-lg flex-col items-center gap-4 rounded border border-dashed px-6 py-8 text-center backdrop-blur-sm ${
+          dragging
+            ? "border-amber-200 bg-amber-100/10"
+            : "border-amber-100/30 bg-black/60"
         }`}
         onDragOver={onDragOver}
         onDragLeave={() => onDragging(false)}
@@ -147,7 +215,8 @@ const LandingView = ({
           </p>
         )}
         <p className="text-xs text-amber-100/50">
-          read in this tab only · up to 400 source files, 8 MB
+          nothing is uploaded: read in this tab only · up to 400 source files, 8
+          MB
         </p>
       </section>
       <div className="flex flex-col items-center gap-2">
@@ -187,6 +256,7 @@ const Landing = ({
   const [failure, setFailure] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const guard = useMemo(() => createReadGuard(), []);
+  const backdrop = useBackdrop();
 
   // A read that ends after the page is gone never loads a world.
   useEffect(() => () => guard.cancel(), [guard]);
@@ -246,6 +316,16 @@ const Landing = ({
       onZip={onZip}
       onFolder={onFolder}
       onDragging={setDragging}
+      // Dropped once a read starts, freeing the GPU before the world loads.
+      backdrop={
+        backdrop && reading === null ? (
+          <BackdropBoundary>
+            <Suspense fallback={null}>
+              <LandingBackdrop />
+            </Suspense>
+          </BackdropBoundary>
+        ) : undefined
+      }
     />
   );
 };
