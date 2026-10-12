@@ -69,12 +69,7 @@ const visitCalls = (
   const call = callOf(node);
   if (call !== null) {
     const { calleeName, target, resolution, candidates, via, dispatch } =
-      resolveCallee(
-        call.kind,
-        call.callee,
-        scope,
-        collector.discovered.classes
-      );
+      resolveCallee(call.kind, call.callee, scope, collector.discovered);
     const span = spanOf(node);
     const site: CallSite = {
       id: callSiteId(callerId, span.start),

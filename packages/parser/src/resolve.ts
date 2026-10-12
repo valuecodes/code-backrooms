@@ -37,6 +37,7 @@ import {
   shadowed,
 } from "./scope-lookup";
 import type { Receiver } from "./scope-lookup";
+import type { Writes } from "./writes";
 
 /**
  * A method called on a receiver typed as a top-level class of this module
@@ -187,40 +188,61 @@ const resolveIdentifier = (name: string, scope: Scope): Resolved => {
   return KNOWN_GLOBALS.has(name) ? external(name) : unresolved(name);
 };
 
+/** What the call pass knows of the whole module. */
+type ModuleFacts = {
+  /** Every class of the module, in source order, whatever its scope. */
+  readonly classes: readonly ClassTable[];
+  readonly writes: Writes;
+};
+
 /**
- * `x.m()` on a receiver whose class is known by name. A class of this
- * module resolves to its member (or an inherited one) and to every
- * override in its subclasses here: one function resolves, several are
- * ambiguous, none leaves the call unresolved rather than guessing by name.
- * An imported class is left to the linker. Anything else (an interface, a
- * type alias, a global like `Map`) is not a class this can follow: null.
- * The annotation is taken as the contract, as an editor's go-to-definition
- * does; an object of another class that merely fits it is not considered.
+ * `m()` on an instance of a class of this module: its member (or an
+ * inherited one) and, unless the instance is `exact`, every override in its
+ * subclasses here. One function resolves, several are ambiguous, none
+ * leaves the call unresolved rather than guessing by name.
+ */
+const classReceiver = (
+  name: string,
+  property: string,
+  table: ClassTable,
+  exact: boolean,
+  classes: readonly ClassTable[]
+): Resolved => {
+  const own = instanceMember(table, property);
+  const result = amongst(name, [
+    ...(own === undefined ? [] : [own]),
+    ...(exact ? [] : overridesOf(table, property, classes)),
+  ]);
+  // Only a top-level class takes part in hierarchies across files.
+  return table.scope.parent === null
+    ? {
+        ...result,
+        dispatch: { className: table.name, member: property, exact },
+      }
+    : result;
+};
+
+/**
+ * `x.m()` on a receiver whose class is known by name: a class of this
+ * module (`classReceiver`), or an imported one, left to the linker.
+ * Anything else (an interface, a type alias, a global like `Map`) is not a
+ * class this can follow: null. So is a method the module writes over
+ * (`x.m = other`), which the class no longer decides. The annotation is
+ * taken as the contract, as an editor's go-to-definition does; an object
+ * of another class that merely fits it is not considered.
  */
 const typedReceiver = (
   name: string,
   property: string,
   { type, scope }: Receiver,
-  classes: readonly ClassTable[]
+  { classes, writes }: ModuleFacts
 ): Resolved | null => {
+  if (writes.members.has(property)) {
+    return null;
+  }
   const table = resolveClass(type.name, scope);
   if (table !== null) {
-    const own = instanceMember(table, property);
-    const result = amongst(name, [
-      ...(own === undefined ? [] : [own]),
-      ...(type.exact ? [] : overridesOf(table, property, classes)),
-    ]);
-    // Only a top-level class takes part in hierarchies across files.
-    return table.scope.parent === null
-      ? {
-          ...result,
-          dispatch: {
-            className: table.name,
-            member: property,
-            exact: type.exact,
-          },
-        }
-      : result;
+    return classReceiver(name, property, table, type.exact, classes);
   }
   if (isImport(type.name, scope) || isTypeImport(type.name, scope)) {
     return {
@@ -306,8 +328,9 @@ const thisField = (object: Node, scope: Scope): Receiver | null => {
 const resolveMember = (
   callee: Node,
   scope: Scope,
-  classes: readonly ClassTable[]
+  facts: ModuleFacts
 ): Resolved => {
+  const { classes } = facts;
   if (!(isMemberExpression(callee) || isOptionalMemberExpression(callee))) {
     return otherCallee(callee);
   }
@@ -335,10 +358,14 @@ const resolveMember = (
     if (scope.isStatic && own !== null) {
       return unresolved(name);
     }
-    const inherited = own === null ? undefined : instanceMember(own, property);
-    return inherited === undefined
+    // Inherited: `this` may be any subclass, which may override it again.
+    const inherited =
+      own === null || facts.writes.members.has(property)
+        ? null
+        : classReceiver(name, property, own, false, classes);
+    return inherited === null || inherited.resolution === "unresolved"
       ? byMemberName(name, property, own, classes)
-      : resolved(name, inherited);
+      : inherited;
   }
   if (isIdentifier(object)) {
     const table = resolveClass(object.name, scope);
@@ -358,7 +385,7 @@ const resolveMember = (
     ? receiverType(object.name, scope)
     : thisField(object, scope);
   const typed =
-    receiver === null ? null : typedReceiver(name, property, receiver, classes);
+    receiver === null ? null : typedReceiver(name, property, receiver, facts);
   if (typed !== null) {
     return typed;
   }
@@ -402,7 +429,7 @@ const resolveCallee = (
   kind: CallKind,
   raw: Node,
   scope: Scope,
-  classes: readonly ClassTable[]
+  facts: ModuleFacts
 ): Resolved => {
   const callee = unwrap(raw);
   if (kind === "new") {
@@ -411,7 +438,7 @@ const resolveCallee = (
   if (isIdentifier(callee)) {
     return resolveIdentifier(callee.name, scope);
   }
-  return resolveMember(callee, scope, classes);
+  return resolveMember(callee, scope, facts);
 };
 
 export { resolveCallee };
