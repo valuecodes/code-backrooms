@@ -41,6 +41,12 @@ describe("codeGraphOf with files that do not parse", () => {
       codeGraphOf([...bad, { path: "package.json", source: "{}" }], tolerant)
         .error
     ).toBe("none of the 4 source files could be parsed: a.ts, b.ts, c.ts…");
+    expect(
+      codeGraphOf(
+        [...bad.slice(0, 3), { path: "package.json", source: '{ "name": ' }],
+        tolerant
+      ).error
+    ).toBe("none of the 3 source files could be parsed: a.ts, b.ts, c.ts");
   });
 
   it("is an error when there are no sources", () => {
