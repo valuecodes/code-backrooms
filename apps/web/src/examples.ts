@@ -55,7 +55,10 @@ function bar() {}
 `,
 };
 
-/** Methods as rooms: this.*, static and constructor calls resolve. */
+/**
+ * Methods as rooms: this.*, static and constructor calls resolve, and so
+ * does a call on `other`, which holds a `new UserService(…)`.
+ */
 const service: SourceFile = {
   path: "service.ts",
   source: `class UserService {

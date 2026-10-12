@@ -14,6 +14,7 @@ import { callSiteId } from "@repo/code-graph/ids";
 
 import type { Discovered } from "./functions";
 import { resolveCallee } from "./resolve";
+import type { Dispatch } from "./resolve";
 import type { Scope } from "./scope";
 import { spanOf } from "./span";
 import { childrenOf, guardDepth } from "./walk";
@@ -21,6 +22,7 @@ import { childrenOf, guardDepth } from "./walk";
 type CallCollector = {
   readonly discovered: Discovered;
   readonly sites: CallSite[];
+  readonly dispatch: Map<CallSite, Dispatch>;
 };
 
 const callOf = (node: Node): { kind: CallKind; callee: Node } | null => {
@@ -66,14 +68,15 @@ const visitCalls = (
   }
   const call = callOf(node);
   if (call !== null) {
-    const { calleeName, target, resolution, candidates, via } = resolveCallee(
-      call.kind,
-      call.callee,
-      scope,
-      collector.discovered.classes
-    );
+    const { calleeName, target, resolution, candidates, via, dispatch } =
+      resolveCallee(
+        call.kind,
+        call.callee,
+        scope,
+        collector.discovered.classes
+      );
     const span = spanOf(node);
-    collector.sites.push({
+    const site: CallSite = {
       id: callSiteId(callerId, span.start),
       callerId,
       calleeName,
@@ -86,7 +89,11 @@ const visitCalls = (
       awaited,
       span,
       ...(via === undefined ? {} : { via }),
-    });
+    };
+    collector.sites.push(site);
+    if (dispatch !== undefined) {
+      collector.dispatch.set(site, dispatch);
+    }
   }
   for (const child of childrenOf(node)) {
     visitCalls(collector, callerId, scope, root, child, false, depth + 1);
@@ -112,6 +119,8 @@ const uniqueIds = (sites: readonly CallSite[]): readonly CallSite[] => {
 type CallPass = {
   readonly callSites: readonly CallSite[];
   readonly edges: readonly CallEdge[];
+  /** By call site id: calls on typed receivers the linker checks for overrides. */
+  readonly dispatch: ReadonlyMap<string, Dispatch>;
 };
 
 const collectCalls = (
@@ -119,7 +128,11 @@ const collectCalls = (
   program: Node,
   discovered: Discovered
 ): CallPass => {
-  const collector: CallCollector = { discovered, sites: [] };
+  const collector: CallCollector = {
+    discovered,
+    sites: [],
+    dispatch: new Map(),
+  };
   visitCalls(
     collector,
     moduleId,
@@ -135,11 +148,18 @@ const collectCalls = (
       visitCalls(collector, fn.id, scope, node, node, false);
     }
   }
-  const callSites = uniqueIds(
-    collector.sites.toSorted(
-      (a, b) => a.span.start - b.span.start || a.span.end - b.span.end
-    )
+  const sorted = collector.sites.toSorted(
+    (a, b) => a.span.start - b.span.start || a.span.end - b.span.end
   );
+  const callSites = uniqueIds(sorted);
+  const dispatch = new Map<string, Dispatch>();
+  sorted.forEach((site, position) => {
+    const found = collector.dispatch.get(site);
+    const unique = callSites[position];
+    if (found !== undefined && unique !== undefined) {
+      dispatch.set(unique.id, found);
+    }
+  });
   const edges = new Map<string, CallEdge>();
   for (const site of callSites) {
     if (site.calleeId === null || site.callerId === moduleId) {
@@ -154,7 +174,7 @@ const collectCalls = (
       callSiteIds: [...(existing?.callSiteIds ?? []), site.id],
     });
   }
-  return { callSites, edges: [...edges.values()] };
+  return { callSites, edges: [...edges.values()], dispatch };
 };
 
 export { collectCalls };

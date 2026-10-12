@@ -27,6 +27,7 @@ import type {
 } from "@repo/code-graph";
 import { classId, functionId, uniqueNames } from "@repo/code-graph/ids";
 
+import { declareTypes, recordFields } from "./receiver-types";
 import {
   bindingNames,
   fieldFunction,
@@ -44,6 +45,8 @@ import type {
 } from "./scope";
 import { spanOf } from "./span";
 import { childrenOf, guardDepth } from "./walk";
+import { writesOf } from "./writes";
+import type { Writes } from "./writes";
 
 type Discovered = {
   readonly functions: DiscoveredFunction[];
@@ -74,6 +77,8 @@ type Context = {
    * enclosing scope: a class declared there is not top-level.
    */
   readonly enclosed: boolean;
+  /** What the module writes to, which unsettles a class inferred from `new`. */
+  readonly writes: Writes;
   readonly out: Discovered;
 };
 
@@ -124,7 +129,14 @@ const register = (
   if (table === null) {
     scope.locals.set(name, [...(scope.locals.get(name) ?? []), fn]);
   }
-  const inner = functionScope(scope, node, fn, table, isStatic);
+  const inner = functionScope(
+    scope,
+    node,
+    fn,
+    table,
+    isStatic,
+    context.writes.names
+  );
   context.out.scopeOf.set(fn, inner);
   for (const child of childrenOf(node)) {
     visit(context, inner, child, false, depth + 1);
@@ -145,6 +157,9 @@ const visitClassBody = (
     instance: new Map(),
     static: new Map(),
     ctor: null,
+    fields: new Map(),
+    superName: isIdentifier(node.superClass) ? node.superClass.name : null,
+    scope,
   };
   scope.classes.set(name, table);
   context.out.classes.push(table);
@@ -158,6 +173,9 @@ const visitClassBody = (
   });
   for (const member of node.body.body) {
     const field = fieldFunction(member);
+    if (field === null) {
+      recordFields(context.writes, table, member);
+    }
     if (isClassMethod(member) || isClassPrivateMethod(member)) {
       const method = memberName(member);
       if (method === null) {
@@ -280,6 +298,7 @@ const visit = (
         });
         continue;
       }
+      declareTypes(context.writes, scope, id, init);
       bindingNames(id, scope.bindings);
       if (init !== null && init !== undefined) {
         next(init, scope);
@@ -320,7 +339,14 @@ const visit = (
   // class expressions are not rooms: their calls belong to the enclosing
   // function, but their parameters are their own.
   if (isFunctionLike(node)) {
-    const inner = functionScope(scope, node, null, null, false);
+    const inner = functionScope(
+      scope,
+      node,
+      null,
+      null,
+      false,
+      context.writes.names
+    );
     context.out.scopeAt.set(node, inner);
     for (const child of childrenOf(node)) {
       next(child, inner);
@@ -336,12 +362,18 @@ const discover = (
   moduleId: string,
   program: Program,
   imports: readonly ImportRecord[],
-  exportedNames: ReadonlySet<string>
+  exportedNames: ReadonlySet<string>,
+  typeImports: readonly ImportRecord[] = []
 ): Discovered => {
   const moduleScope = newScope(null, null, null, false);
   for (const record of imports) {
     if (record.localName !== null) {
       moduleScope.imports.set(record.localName, record);
+    }
+  }
+  for (const record of typeImports) {
+    if (record.localName !== null) {
+      moduleScope.typeImports.set(record.localName, record);
     }
   }
   const out: Discovered = {
@@ -361,6 +393,7 @@ const discover = (
     nextClassName: uniqueNames(),
     enclosed: false,
     exportedNames,
+    writes: writesOf(program),
     out,
   };
   for (const statement of program.body) {
