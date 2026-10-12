@@ -16,6 +16,7 @@ import {
   isOptionalMemberExpression,
   isPrivateName,
   isRestElement,
+  isStringLiteral,
   isUpdateExpression,
   isVariableDeclaration,
 } from "@babel/types";
@@ -27,69 +28,82 @@ import { childrenOf } from "./walk";
 type Writes = {
   /** Identifiers assigned, updated or used as a `for…in`/`for…of` target. */
   readonly names: ReadonlySet<string>;
-  /** Properties written through any object (`a.svc = …`), `#x` for private. */
+  /**
+   * Properties written through any object (`a.svc = …`, `a["svc"] = …`),
+   * `#x` for private.
+   */
   readonly members: ReadonlySet<string>;
+  /** A write through a computed key (`a[key] = …`) may reach any property. */
+  readonly anyMember: boolean;
 };
 
-const addTargets = (
-  raw: Node,
-  names: Set<string>,
-  members: Set<string>
-): void => {
+type Collector = {
+  readonly names: Set<string>;
+  readonly members: Set<string>;
+  anyMember: boolean;
+};
+
+const addTargets = (raw: Node, out: Collector): void => {
   const target = unwrap(raw);
   if (isIdentifier(target)) {
-    names.add(target.name);
-  } else if (
-    (isMemberExpression(target) || isOptionalMemberExpression(target)) &&
-    !target.computed
-  ) {
+    out.names.add(target.name);
+  } else if (isMemberExpression(target) || isOptionalMemberExpression(target)) {
     const { property } = target;
-    if (isIdentifier(property)) {
-      members.add(property.name);
+    if (target.computed) {
+      if (isStringLiteral(property)) {
+        out.members.add(property.value);
+      } else {
+        out.anyMember = true;
+      }
+    } else if (isIdentifier(property)) {
+      out.members.add(property.name);
     } else if (isPrivateName(property)) {
-      members.add(`#${property.id.name}`);
+      out.members.add(`#${property.id.name}`);
     }
   } else if (isObjectPattern(target)) {
     for (const property of target.properties) {
-      addTargets(
-        isObjectProperty(property) ? property.value : property,
-        names,
-        members
-      );
+      addTargets(isObjectProperty(property) ? property.value : property, out);
     }
   } else if (isArrayPattern(target)) {
     for (const element of target.elements) {
       if (element !== null) {
-        addTargets(element, names, members);
+        addTargets(element, out);
       }
     }
   } else if (isRestElement(target)) {
-    addTargets(target.argument, names, members);
+    addTargets(target.argument, out);
   } else if (isAssignmentPattern(target)) {
-    addTargets(target.left, names, members);
+    addTargets(target.left, out);
   }
 };
 
 /** Every write in the program, walked without recursion. */
 const writesOf = (program: Node): Writes => {
-  const names = new Set<string>();
-  const members = new Set<string>();
+  const out: Collector = {
+    names: new Set(),
+    members: new Set(),
+    anyMember: false,
+  };
   const stack: Node[] = [program];
   for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
     if (isAssignmentExpression(node)) {
-      addTargets(node.left, names, members);
+      addTargets(node.left, out);
     } else if (isUpdateExpression(node)) {
-      addTargets(node.argument, names, members);
+      addTargets(node.argument, out);
     } else if (
       (isForInStatement(node) || isForOfStatement(node)) &&
       !isVariableDeclaration(node.left)
     ) {
-      addTargets(node.left, names, members);
+      addTargets(node.left, out);
     }
     stack.push(...childrenOf(node));
   }
-  return { names, members };
+  return out;
 };
 
-export { writesOf };
+/** Whether the module may write property `name` of some object. */
+const writesMember = (writes: Writes, name: string): boolean =>
+  writes.anyMember || writes.members.has(name);
+
+export { writesMember, writesOf };
 export type { Writes };

@@ -14,6 +14,7 @@ import type { ClassBody, Node } from "@babel/types";
 
 import { bindingNames, declareType, receiverOf } from "./scope";
 import type { ClassTable, ReceiverType, Scope } from "./scope";
+import { writesMember } from "./writes";
 import type { Writes } from "./writes";
 
 /**
@@ -88,7 +89,7 @@ const recordFields = (
         receiverOf(
           member.typeAnnotation,
           member.value,
-          writes.members.has(fieldName),
+          writesMember(writes, fieldName),
           true
         )
       );
@@ -110,7 +111,7 @@ const recordFields = (
       recordField(
         table,
         id.name,
-        receiverOf(id.typeAnnotation, init, writes.members.has(id.name), true)
+        receiverOf(id.typeAnnotation, init, writesMember(writes, id.name), true)
       );
     }
   }

@@ -20,15 +20,13 @@ import type {
 } from "@repo/code-graph";
 import { createResolver } from "@repo/code-graph/module-resolver";
 
-import {
-  exportOf,
-  isInstanceMember,
-  listOf,
-  memberOf,
-  viaBindings,
-} from "./link-exports";
+import { exportOf, listOf, memberOf, viaBindings } from "./link-exports";
 import type { Binding, Linker } from "./link-exports";
-import { subclassIndex, withOverrides } from "./link-overrides";
+import {
+  inheritedMember,
+  subclassIndex,
+  withOverrides,
+} from "./link-overrides";
 import type { Dispatch } from "./resolve";
 import type { DiscoveredFunction } from "./scope";
 import type { TopLevel } from "./top-level";
@@ -74,7 +72,7 @@ const calleesOf = (
  * The function a binding calls: a top-level plain function, `new` on a
  * top-level class (its constructor) or on a plain function, or with a
  * member a static method of a top-level class, or with `instance` an
- * instance member of one. Null for anything else, a namespace called
+ * instance member of one or of its superclasses. Null for anything else, a namespace called
  * directly included.
  */
 const functionOf = (
@@ -95,11 +93,9 @@ const functionOf = (
       return null;
     }
     return (
-      ofClass(
-        instance
-          ? isInstanceMember(member)
-          : (fn) => fn.isStatic && fn.name === member
-      ) ?? null
+      (instance
+        ? inheritedMember(linker, { moduleId: binding.moduleId, name }, member)
+        : ofClass((fn) => fn.isStatic && fn.name === member)) ?? null
     );
   }
   if (!isNew) {

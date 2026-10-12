@@ -40,11 +40,16 @@ import type { Receiver } from "./scope-lookup";
 
 /**
  * A method called on a receiver typed as a top-level class of this module
- * (`className`) or an imported one (`via.instance`, `className` null): a
- * subclass in another file may override `member`, which only the linker
- * sees.
+ * (`className`) or an imported one (`via.instance`, `className` null). The
+ * class may inherit `member` from a superclass in another file and, unless
+ * the receiver is `exact`, a subclass there may override it: only the
+ * linker sees either.
  */
-type Dispatch = { readonly className: string | null; readonly member: string };
+type Dispatch = {
+  readonly className: string | null;
+  readonly member: string;
+  readonly exact: boolean;
+};
 
 type Resolved = {
   readonly calleeName: string;
@@ -205,13 +210,15 @@ const typedReceiver = (
       ...(own === undefined ? [] : [own]),
       ...(type.exact ? [] : overridesOf(table, property, classes)),
     ]);
-    // Only a top-level class can be extended from another file.
+    // Only a top-level class takes part in hierarchies across files.
     return table.scope.parent === null
       ? {
           ...result,
-          ...(type.exact
-            ? {}
-            : { dispatch: { className: table.name, member: property } }),
+          dispatch: {
+            className: table.name,
+            member: property,
+            exact: type.exact,
+          },
         }
       : result;
   }
@@ -223,9 +230,7 @@ const typedReceiver = (
         isNew: false,
         instance: true,
       }),
-      ...(type.exact
-        ? {}
-        : { dispatch: { className: null, member: property } }),
+      dispatch: { className: null, member: property, exact: type.exact },
     };
   }
   return null;

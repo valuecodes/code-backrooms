@@ -175,6 +175,23 @@ describe("typed receivers in one module", () => {
     expect(call(source, "this.s.run")).toEqual(["unresolved", null]);
   });
 
+  it("drops a field's inferred class on a computed write", () => {
+    const fieldCall = (write: string) =>
+      call(
+        [
+          svc,
+          `class App { s = new Svc(); go() { this.s.run(); } swap() { ${write}; } }`,
+        ].join("\n"),
+        "this.s.run"
+      );
+    expect(fieldCall("this.t = null")).toEqual(["resolved", "t.ts::Svc.run"]);
+    expect(fieldCall('this["s"] = null!')).toEqual(["unresolved", null]);
+    expect(fieldCall("const k = 's'; this[k] = null!")).toEqual([
+      "unresolved",
+      null,
+    ]);
+  });
+
   it("lets inner and conflicting bindings hide a type", () => {
     const source = [
       svc,
@@ -310,6 +327,47 @@ describe("typed receivers across files", () => {
       ["base.ts::Base.run", "fast.ts::Fast.run"],
     ]);
     expect(graph.edges.some((edge) => edge.type === "call")).toBe(false);
+  });
+
+  it("follows members inherited from a superclass in another file", () => {
+    const files = {
+      "base.ts": "export class Base { run() {} }",
+      "child.ts":
+        'import { Base } from "./base";\nexport class Child extends Base { own() {} }',
+    };
+    expect(
+      linked(
+        {
+          ...files,
+          "a.ts":
+            'import type { Child } from "./child";\nfunction main(c: Child) { c.run(); }',
+        },
+        "c.run"
+      )
+    ).toEqual(["resolved", "base.ts::Base.run"]);
+    // A local class extending an imported one, typed or created.
+    const local = [
+      'import { Base } from "./base";',
+      "class Local extends Base {}",
+      "function typed(l: Local) { l.run(); }",
+      "function made() { const m = new Local(); m.run(); }",
+    ].join("\n");
+    const graph = graphOf({ ...files, "a.ts": local });
+    expect(target(only(graph.callSites, "l.run"))).toEqual([
+      "resolved",
+      "base.ts::Base.run",
+    ]);
+    expect(target(only(graph.callSites, "m.run"))).toEqual([
+      "resolved",
+      "base.ts::Base.run",
+    ]);
+    expect(graph.edges).toContainEqual(
+      expect.objectContaining({
+        type: "call",
+        source: "a.ts::made",
+        target: "base.ts::Base.run",
+      })
+    );
   });
 
   it("keeps a package class unresolved, naming it as the receiver's class", () => {
