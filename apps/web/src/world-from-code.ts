@@ -50,8 +50,10 @@ const emptyGraphError = (
   if (sourceCount === 0) {
     return "no JavaScript or TypeScript sources found";
   }
-  const named = skipped.slice(0, NAMED_PATHS).join(", ");
-  const more = skipped.length > NAMED_PATHS ? "…" : "";
+  // Malformed manifests are skipped too, but this names sources only.
+  const sources = skipped.filter((path) => !isManifest(path));
+  const named = sources.slice(0, NAMED_PATHS).join(", ");
+  const more = sources.length > NAMED_PATHS ? "…" : "";
   return `none of the ${sourceCount} source files could be parsed: ${named}${more}`;
 };
 
