@@ -11,8 +11,22 @@ type AnalysisWorker = {
   readonly postMessage: (files: readonly SourceFile[]) => void;
   readonly terminate: () => void;
   onmessage: ((event: MessageEvent<AnalyseResponse>) => void) | null;
+  /**
+   * Typed as the DOM types it, but a script that fails to load fires a plain
+   * `Event`, with no message: read it through `crashMessage`.
+   */
   onerror: ((event: ErrorEvent) => void) | null;
+  /** An answer that cannot be deserialised: no `message` follows. */
+  onmessageerror: ((event: MessageEvent) => void) | null;
 };
+
+/** A crash's own words when it has any. */
+const crashMessage = (event: Event): string =>
+  "message" in event &&
+  typeof event.message === "string" &&
+  event.message !== ""
+    ? event.message
+    : "the worker stopped";
 
 /** The real worker, a module chunk of its own on this origin. */
 const createAnalysisWorker = (): AnalysisWorker =>
@@ -53,7 +67,8 @@ const startAnalysis = (
     worker = createWorker();
     worker.onmessage = ({ data }) =>
       finish("analysis" in data ? data.analysis : analysisFailed(data.error));
-    worker.onerror = (event) => fail(event.message);
+    worker.onerror = (event) => fail(crashMessage(event));
+    worker.onmessageerror = () => fail("its answer could not be read");
     worker.postMessage(files);
   } catch (error) {
     // Delivered later, like a worker's answer, so callers see one shape.

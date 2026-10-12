@@ -28,6 +28,7 @@ const fakeWorker = (options: { readonly throwOnPost?: boolean } = {}) => {
     },
     onmessage: null,
     onerror: null,
+    onmessageerror: null,
   };
   return {
     worker,
@@ -35,6 +36,9 @@ const fakeWorker = (options: { readonly throwOnPost?: boolean } = {}) => {
     reply: (data: AnalyseResponse) =>
       worker.onmessage?.({ data } as MessageEvent<AnalyseResponse>),
     crash: (message: string) => worker.onerror?.({ message } as ErrorEvent),
+    /** A script that never loaded: a plain event without a message. */
+    failToLoad: () => worker.onerror?.(new Event("error") as ErrorEvent),
+    garble: () => worker.onmessageerror?.(new MessageEvent("messageerror")),
   };
 };
 
@@ -84,6 +88,31 @@ describe("startAnalysis", () => {
     expect(results).toEqual([
       analysisFailed("the repository could not be analysed: out of memory"),
     ]);
+  });
+
+  it("names a worker whose script never loaded", () => {
+    const fake = fakeWorker();
+    const { results, onResult } = collect();
+    startAnalysis(FILES, () => fake.worker, onResult);
+    fake.failToLoad();
+    expect(results).toEqual([
+      analysisFailed(
+        "the repository could not be analysed: the worker stopped"
+      ),
+    ]);
+  });
+
+  it("fails an answer that cannot be read instead of waiting forever", () => {
+    const fake = fakeWorker();
+    const { results, onResult } = collect();
+    startAnalysis(FILES, () => fake.worker, onResult);
+    fake.garble();
+    expect(results).toEqual([
+      analysisFailed(
+        "the repository could not be analysed: its answer could not be read"
+      ),
+    ]);
+    expect(fake.state.terminated).toBe(1);
   });
 
   it("turns a worker that cannot start into a failed analysis", async () => {
