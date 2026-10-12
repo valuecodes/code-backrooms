@@ -213,7 +213,7 @@ src/
   landing.tsx         the bare URL's page: zip drop and pickers, Demo, examples
   landing-backdrop.tsx  the demo world drifting behind the landing page, lazy
   backdrop.ts         when the backdrop runs and where its camera is, pure
-  backdrop-world.ts   the demo's entrance area for the backdrop
+  backdrop-world.ts   the demo world for the backdrop, every area built
   local-reads.ts      one read at a time, zip and folder labels, read errors, pure
   source-request.ts   what to build: nothing, a URL example, or local files, pure
   source-filter.ts    which zip or folder entries become sources, and the caps, pure
