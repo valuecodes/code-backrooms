@@ -5,12 +5,9 @@ import { backdropAllowed, driftPose } from "./backdrop";
 const start = { position: { x: 0, z: 0 }, facing: { x: 0, z: 20 } };
 
 describe("backdropAllowed", () => {
-  it("runs only with WebGL2 and without a reduced-motion request", () => {
-    expect(backdropAllowed({ webgl2: true, reducedMotion: false })).toBe(true);
-    expect(backdropAllowed({ webgl2: false, reducedMotion: false })).toBe(
-      false
-    );
-    expect(backdropAllowed({ webgl2: true, reducedMotion: true })).toBe(false);
+  it("runs only with WebGL2", () => {
+    expect(backdropAllowed({ webgl2: true })).toBe(true);
+    expect(backdropAllowed({ webgl2: false })).toBe(false);
   });
 });
 
