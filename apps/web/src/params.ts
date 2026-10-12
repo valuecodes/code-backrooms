@@ -83,3 +83,4 @@ const withSeed = (search: string, seed: number): string => {
 };
 
 export { initialSeed, MAX_SEED, nextSeed, parseWorldParams, withSeed };
+export type { WorldParams };

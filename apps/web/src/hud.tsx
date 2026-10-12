@@ -11,7 +11,8 @@ type HudProps = {
   /** Milliseconds the last module generated on the way took, or null. */
   readonly lastMs: number | null;
   readonly preset: string | null;
-  readonly code: string | null;
+  /** The code world's example, zip or folder name; null for other worlds. */
+  readonly label: string | null;
   /** Where the player is: `file · fn()` for code worlds, else the room id. */
   readonly place: string | null;
   /** The navigation stack, callers first: `main() → login()`. */
@@ -19,6 +20,8 @@ type HudProps = {
   /** What the door or portal in front of the player leads to. */
   readonly prompt: string | null;
   readonly warnings: readonly string[];
+  /** Files a local world left out: too large or not parsed. */
+  readonly notices: readonly string[];
   readonly error: string | null;
 };
 
@@ -62,14 +65,14 @@ const whereOf = ({
   zone,
   lastMs,
   preset,
-  code,
+  label,
 }: Pick<
   HudProps,
-  "seed" | "rooms" | "modules" | "zone" | "lastMs" | "preset" | "code"
+  "seed" | "rooms" | "modules" | "zone" | "lastMs" | "preset" | "label"
 >): string => {
-  if (code !== null) {
+  if (label !== null) {
     const count = modulesOf({ modules, lastMs });
-    const parts = [`seed ${seed}`, `code ${code}`];
+    const parts = [`seed ${seed}`, `code ${label}`];
     if (count !== null) {
       parts.push(count);
     }
@@ -88,11 +91,12 @@ const Hud = ({
   breadcrumb,
   prompt,
   warnings,
+  notices,
   error,
   ...rest
 }: HudProps) => {
   const where = whereOf(rest);
-  const keys = rest.code === null ? hints : [...hints, ...codeHints];
+  const keys = rest.label === null ? hints : [...hints, ...codeHints];
   if (locked) {
     return (
       <>
@@ -110,6 +114,9 @@ const Hud = ({
             <p className="text-amber-300/60">
               {warnings.length} connections or portals not laid out
             </p>
+          )}
+          {notices.length > 0 && (
+            <p className="text-amber-300/60">{notices.join(" · ")}</p>
           )}
           {breadcrumb !== null && (
             <p className="text-amber-100/70">{breadcrumb}</p>
@@ -138,6 +145,13 @@ const Hud = ({
         <ul className="max-w-prose font-mono text-xs text-amber-300/70">
           {warnings.map((warning) => (
             <li key={warning}>{warning}</li>
+          ))}
+        </ul>
+      )}
+      {notices.length > 0 && (
+        <ul className="max-w-prose font-mono text-xs text-amber-300/70">
+          {notices.map((notice) => (
+            <li key={notice}>{notice}</li>
           ))}
         </ul>
       )}
