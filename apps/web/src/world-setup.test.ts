@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
+import { analyse, analysisFailed } from "./analyse";
+import type { Analysis } from "./analyse";
 import { examples } from "./examples";
 import type { SourceRequest } from "./source-request";
 import type { LoadedSource } from "./use-source-files";
@@ -21,21 +23,33 @@ const local = (skipped = 0): SourceRequest => ({
   skipped,
 });
 
+/** What the worker gives a local request. */
+const tolerant = (files = mixed): Analysis =>
+  analyse(files, { tolerant: true });
+
 describe("world-setup", () => {
   // `world-setup` reads the URL as it loads: give it an empty one first.
-  let worldSetup: (request: SourceRequest, loaded: LoadedSource) => WorldSetup;
+  let worldSetup: (
+    request: SourceRequest,
+    analysis: Analysis | null
+  ) => WorldSetup;
+  let exampleAnalysis: (loaded: LoadedSource) => Analysis | null;
   let noticesOf: (
     tooLarge: number,
     unparsed: readonly string[]
   ) => readonly string[];
   beforeAll(async () => {
     vi.stubGlobal("location", { search: "" });
-    ({ noticesOf, worldSetup } = await import("./world-setup"));
+    ({ exampleAnalysis, noticesOf, worldSetup } =
+      await import("./world-setup"));
   });
 
   describe("worldSetup", () => {
     it("is a random world when no example was asked for", () => {
-      const setup = worldSetup(NONE, { state: "loaded", files: null });
+      const setup = worldSetup(
+        NONE,
+        exampleAnalysis({ state: "loaded", files: null })
+      );
       expect(setup.code).toBeNull();
       expect(setup.label).toBeNull();
       expect(setup.local).toBe(false);
@@ -47,7 +61,7 @@ describe("world-setup", () => {
     it("parses an example and seeds the world from its source", () => {
       const setup = worldSetup(
         { kind: "example", name: "repo" },
-        { state: "loaded", files: examples.repo }
+        exampleAnalysis({ state: "loaded", files: examples.repo })
       );
       expect(setup.codeGraph).not.toBeNull();
       expect(setup.label).toBe("repo");
@@ -60,26 +74,27 @@ describe("world-setup", () => {
     it("shows an example that failed to load as the world's error", () => {
       const setup = worldSetup(
         { kind: "example", name: "self" },
-        { state: "failed", error: "no chunk" }
+        exampleAnalysis({ state: "failed", error: "no chunk" })
       );
       expect(setup.codeGraph).toBeNull();
       expect(setup.worldOptions.codeError).toBe("no chunk");
     });
 
     it("leaves a broken file out of a local world and says so", () => {
-      const setup = worldSetup(local(), { state: "loaded", files: mixed });
+      const setup = worldSetup(local(), tolerant());
       expect(setup.codeGraph?.modules.map((module) => module.id)).toEqual([
         "src/good.ts",
       ]);
       expect(setup.label).toBe("my-repo");
       expect(setup.local).toBe(true);
+      expect(setup.startSeed).toBe(sourceSeedOf(mixed));
       expect(setup.notices).toEqual(["1 file did not parse: src/broken.ts"]);
     });
 
     it("keeps examples strict: the same broken file is the world's error", () => {
       const setup = worldSetup(
         { kind: "example", name: "demo" },
-        { state: "loaded", files: mixed }
+        exampleAnalysis({ state: "loaded", files: mixed })
       );
       expect(setup.codeGraph).toBeNull();
       expect(setup.worldOptions.codeError).not.toBeNull();
@@ -87,11 +102,15 @@ describe("world-setup", () => {
     });
 
     it("counts files skipped for their size", () => {
-      const setup = worldSetup(local(2), {
-        state: "loaded",
-        files: mixed.slice(0, 1),
-      });
+      const setup = worldSetup(local(2), tolerant(mixed.slice(0, 1)));
       expect(setup.notices).toEqual(["2 files over 256 KB skipped"]);
+    });
+
+    it("shows a worker that failed as the world's error", () => {
+      const setup = worldSetup(local(), analysisFailed("worker crashed"));
+      expect(setup.codeGraph).toBeNull();
+      expect(setup.worldOptions.codeError).toBe("worker crashed");
+      expect(setup.notices).toEqual([]);
     });
   });
 

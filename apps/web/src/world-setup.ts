@@ -1,15 +1,17 @@
 import type { CodeGraph } from "@repo/code-graph";
-import { areaLinksOf } from "@repo/code-graph/area-links";
 import type { AreaLink } from "@repo/code-graph/area-links";
 import { useEffect, useMemo, useState } from "react";
 
+import { analyse, analysisFailed } from "~/analyse";
+import type { Analysis } from "~/analyse";
+import { createAnalysisWorker, startAnalysis } from "~/analyse-client";
 import { initialSeed, parseWorldParams } from "~/params";
 import { labelOfRequest } from "~/source-request";
 import type { SourceRequest } from "~/source-request";
 import type { WorldOptions } from "~/use-area-world";
 import { useSourceFiles } from "~/use-source-files";
 import type { LoadedSource } from "~/use-source-files";
-import { areaLabelOf, codeGraphOf, sourceSeedOf } from "~/world-from-code";
+import { areaLabelOf } from "~/world-from-code";
 import type { CodeResult } from "~/world-from-code";
 
 // What the URL asks for, worked out once for the 3D app and the map page
@@ -59,30 +61,32 @@ const noticesOf = (
 };
 
 /**
- * The source parsed, its load failure, or null when none was asked for. A
- * repository the user brought leaves out files that do not parse; bundled
- * examples stay strict, so a syntax error in one shows in the HUD.
+ * A bundled example parsed on the spot, its load failure, or null when none
+ * was asked for. Examples stay strict, so a syntax error in one shows in
+ * the HUD; a repository the user brought is analysed tolerantly in a worker
+ * instead (`useAnalysis`).
  */
-const codeOf = (loaded: LoadedSource, tolerant: boolean): CodeResult | null => {
+const exampleAnalysis = (loaded: LoadedSource): Analysis | null => {
   if (loaded.state === "failed") {
-    return { codeGraph: null, error: loaded.error };
+    return analysisFailed(loaded.error);
   }
-  return loaded.files === null ? null : codeGraphOf(loaded.files, { tolerant });
+  return loaded.files === null
+    ? null
+    : analyse(loaded.files, { tolerant: false });
 };
 
 /**
- * The world of `request` once its files are known. Parsed once: a syntax
- * error, or an example that failed to load, does not depend on the seed,
- * and it is shown like any generation error rather than thrown through the
- * renderer.
+ * The world of `request` once its files are analysed (null: no code). Parsed
+ * once: a syntax error, or an example that failed to load, does not depend
+ * on the seed, and it is shown like any generation error rather than thrown
+ * through the renderer.
  */
 const worldSetup = (
   request: SourceRequest,
-  loaded: LoadedSource
+  analysis: Analysis | null
 ): WorldSetup => {
-  const sourceFiles = loaded.state === "loaded" ? loaded.files : null;
   const local = request.kind === "local";
-  const code = codeOf(loaded, local);
+  const code = analysis?.code ?? null;
   const codeGraph = code?.codeGraph ?? null;
   return {
     code,
@@ -102,53 +106,48 @@ const worldSetup = (
     },
     // A code world without `?seed` takes its source's own seed, so the same
     // program reloads into the same world; `?seed` and N override it.
-    startSeed: initialSeed(
-      initial,
-      sourceFiles === null ? null : sourceSeedOf(sourceFiles)
-    ),
+    startSeed: initialSeed(initial, analysis?.sourceSeed ?? null),
     // The world map's links and labels, made once like the code graph, so
     // the map is rebuilt only when the world grows.
-    areaLinks: codeGraph === null ? [] : areaLinksOf(codeGraph),
+    areaLinks: analysis?.areaLinks ?? [],
     labelOfArea: (areaId) => areaLabelOf(codeGraph, areaId),
   };
 };
 
 /**
- * True once `request` has been on screen for a frame. Parsing a repository
- * blocks the tab, so the loading screen paints first; a request with nothing
- * that slow is ready at once.
+ * A local request's analysis from the worker, null until it arrives (and
+ * for any other request). A new request or an unmount terminates the
+ * worker, so a late answer never lands on the wrong world.
  */
-const usePainted = (request: SourceRequest): boolean => {
-  const [painted, setPainted] = useState<SourceRequest | null>(null);
+const useAnalysis = (request: SourceRequest): Analysis | null => {
+  const [result, setResult] = useState<{
+    readonly request: SourceRequest;
+    readonly analysis: Analysis;
+  } | null>(null);
   useEffect(() => {
-    let frame = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    if (request.kind === "local") {
-      // The frame callback runs before that frame paints; the timer after it.
-      frame = requestAnimationFrame(() => {
-        timer = setTimeout(() => setPainted(request), 0);
-      });
+    if (request.kind !== "local") {
+      return () => undefined;
     }
-    return () => {
-      cancelAnimationFrame(frame);
-      clearTimeout(timer);
-    };
+    return startAnalysis(request.files, createAnalysisWorker, (analysis) =>
+      setResult({ request, analysis })
+    );
   }, [request]);
-  return request.kind !== "local" || painted === request;
+  return result?.request === request ? result.analysis : null;
 };
 
-/** The world setup of `request`, null while its files load or wait to parse. */
+/** The world setup of `request`, null while its files load or are analysed. */
 const useWorldSetup = (request: SourceRequest): WorldSetup | null => {
   const loaded = useSourceFiles(request);
-  const painted = usePainted(request);
-  return useMemo(
-    () =>
-      loaded.state === "loading" || !painted
-        ? null
-        : worldSetup(request, loaded),
-    [request, loaded, painted]
-  );
+  const localAnalysis = useAnalysis(request);
+  return useMemo(() => {
+    if (request.kind === "local") {
+      return localAnalysis === null ? null : worldSetup(request, localAnalysis);
+    }
+    return loaded.state === "loading"
+      ? null
+      : worldSetup(request, exampleAnalysis(loaded));
+  }, [request, loaded, localAnalysis]);
 };
 
-export { initial, noticesOf, useWorldSetup, worldSetup };
+export { exampleAnalysis, initial, noticesOf, useWorldSetup, worldSetup };
 export type { WorldSetup };
