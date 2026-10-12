@@ -1,7 +1,8 @@
-// Overrides across files: a call on a receiver typed as a class may run any
-// override of its member in a subclass, which the per-file pass sees only
-// within the module. The linker indexes every top-level class's subclasses
-// over the whole graph and widens such calls by what they find.
+// Class hierarchies across files: a call on a receiver typed as a class may
+// run a member inherited from an imported superclass, or any override of it
+// in a subclass, both of which the per-file pass sees only within the
+// module. The linker follows `extends` over the whole graph and indexes
+// every top-level class's subclasses.
 
 import type { CallSite, ModuleNode } from "@repo/code-graph";
 
@@ -14,6 +15,7 @@ import {
 } from "./link-exports";
 import type { Binding, Linker } from "./link-exports";
 import type { Dispatch } from "./resolve";
+import type { DiscoveredFunction } from "./scope";
 import { MAX_LINEAGE } from "./scope-lookup";
 
 /** A top-level class of a module. */
@@ -56,6 +58,38 @@ const parentOf = (
     : classOf(linker, listOf(importBinding(linker, record, new Set())));
 };
 
+/**
+ * An instance member of a top-level class or, unless private, of its
+ * superclasses across the graph, nearest first.
+ */
+const inheritedMember = (
+  linker: Linker,
+  key: ClassKey,
+  member: string
+): DiscoveredFunction | undefined => {
+  const seen = new Set<string>();
+  for (
+    let current: ClassKey | null = key;
+    current !== null && seen.size < MAX_LINEAGE;
+    current = member.startsWith("#") ? null : parentOf(linker, current)
+  ) {
+    if (seen.has(classKey(current))) {
+      return undefined;
+    }
+    seen.add(classKey(current));
+    const fn = memberOf(
+      linker,
+      current.moduleId,
+      current.name,
+      isInstanceMember(member)
+    );
+    if (fn !== undefined) {
+      return fn;
+    }
+  }
+  return undefined;
+};
+
 type SubclassIndex = ReadonlyMap<string, readonly ClassKey[]>;
 
 /**
@@ -86,10 +120,12 @@ const subclassIndex = (linker: Linker): SubclassIndex => {
 };
 
 /**
- * Widens a call on a typed receiver by every override of its member in a
- * subclass of the receiver's class anywhere in the graph: a subclass
- * instance may stand where the class is named. One function stays
- * resolved, more make the call ambiguous.
+ * Completes a call on a typed receiver across files: a member the class
+ * inherits from an imported superclass, which the per-file pass cannot
+ * see, then, unless the receiver is exact, every override of the member in
+ * a subclass anywhere in the graph (a subclass instance may stand where
+ * the class is named). One function stays resolved, more make the call
+ * ambiguous.
  */
 const withOverrides = (
   linker: Linker,
@@ -98,9 +134,6 @@ const withOverrides = (
   site: CallSite,
   dispatch: Dispatch
 ): CallSite => {
-  if (dispatch.member.startsWith("#")) {
-    return site;
-  }
   let base: ClassKey | null = null;
   if (dispatch.className !== null) {
     base = { moduleId: module.id, name: dispatch.className };
@@ -110,24 +143,36 @@ const withOverrides = (
   if (base === null) {
     return site;
   }
-  const overrides = (subclasses.get(classKey(base)) ?? []).flatMap((sub) => {
-    const fn = memberOf(
-      linker,
-      sub.moduleId,
-      sub.name,
-      isInstanceMember(dispatch.member)
-    );
-    return fn === undefined ? [] : [fn.id];
-  });
-  let current: readonly string[] = [];
+  const { member } = dispatch;
+  const overrides =
+    dispatch.exact || member.startsWith("#")
+      ? []
+      : (subclasses.get(classKey(base)) ?? []).flatMap((sub) => {
+          const fn = memberOf(
+            linker,
+            sub.moduleId,
+            sub.name,
+            isInstanceMember(member)
+          );
+          return fn === undefined ? [] : [fn.id];
+        });
+  let before: readonly string[] = [];
   if (site.resolution === "resolved" && site.calleeId !== null) {
-    current = [site.calleeId];
+    before = [site.calleeId];
   } else if (site.resolution === "ambiguous") {
-    current = site.candidateIds ?? [];
+    before = site.candidateIds ?? [];
   }
-  const ids = [...new Set([...current, ...overrides])];
+  // The class's own member if it has one, which `before` already holds.
+  const inherited = inheritedMember(linker, base, member);
+  const ids = [
+    ...new Set([
+      ...before,
+      ...(inherited === undefined ? [] : [inherited.id]),
+      ...overrides,
+    ]),
+  ];
   const [only, ...rest] = ids;
-  if (ids.length === current.length || only === undefined) {
+  if (ids.length === before.length || only === undefined) {
     return site;
   }
   return rest.length === 0
@@ -135,4 +180,4 @@ const withOverrides = (
     : { ...site, resolution: "ambiguous", calleeId: null, candidateIds: ids };
 };
 
-export { subclassIndex, withOverrides };
+export { inheritedMember, subclassIndex, withOverrides };
