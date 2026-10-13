@@ -18,7 +18,7 @@ type LocalFiles = {
   readonly skipped: number;
 };
 
-/** Larger zips are refused before they are read; `worker.ts` caps GitHub's too. */
+/** Larger zips are refused before they are read; `api/github-zip.ts` caps GitHub's too. */
 const MAX_ZIP_BYTES = 64 * 1024 * 1024;
 
 const messageOf = (error: unknown): string =>

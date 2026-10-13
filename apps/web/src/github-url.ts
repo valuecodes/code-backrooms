@@ -1,5 +1,5 @@
 // A GitHub repository named by the user, as pasted on the landing page or
-// given as `?repo=`. Shared by the page and the Worker (`worker.ts`), which
+// given as `?repo=`. Shared by the page and the Worker (`api/github-zip.ts`), which
 // checks the same names again before it builds the one codeload URL it
 // fetches: nothing the client sends is ever used as a URL.
 

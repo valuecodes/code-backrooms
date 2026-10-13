@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { handle } from "./worker";
-import type { Env, Fetch } from "./worker";
+import { handleZip as handle } from "./github-zip";
+import type { Fetch, ZipEnv } from "./github-zip";
 
 const SITEVERIFY = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
-const env = (overrides: Partial<Env> = {}): Env => ({
-  ASSETS: { fetch: vi.fn(() => Promise.resolve(new Response("asset"))) },
+const env = (overrides: Partial<ZipEnv> = {}): ZipEnv => ({
   GITHUB_LIMITER: { limit: vi.fn(() => Promise.resolve({ success: true })) },
   TURNSTILE_SECRET: "secret",
   ...overrides,
@@ -203,21 +202,6 @@ describe("the GitHub zip route", () => {
       fetcher
     );
     expect(response.status).toBe(405);
-    expect(fetcher).not.toHaveBeenCalled();
-  });
-});
-
-describe("other paths", () => {
-  it("go to the static assets", async () => {
-    const assets = env();
-    const fetcher = upstream(() => new Response("zip"));
-    const response = await handle(
-      new Request("https://backrooms.test/index.html"),
-      assets,
-      fetcher
-    );
-    expect(await response.text()).toBe("asset");
-    expect(assets.ASSETS.fetch).toHaveBeenCalledTimes(1);
     expect(fetcher).not.toHaveBeenCalled();
   });
 });

@@ -31,7 +31,7 @@ import type { LocalFiles } from "~/zip-files";
 // The bare URL's page: bring a repository as a zip or a folder, paste a
 // public GitHub URL, or open this one (`?code=self`). A zip or folder is read
 // in the tab and never leaves it; a GitHub repository comes through this
-// site's Worker (`worker.ts`) as one zip download.
+// site's Worker (`api/`) as one zip download.
 
 /** Bundled examples linked under the Demo button. */
 const EXAMPLES: readonly string[] = ["demo", "loops", "switches", "repo"];
