@@ -112,9 +112,16 @@ There is no CI deploy job. To connect the repo in the Cloudflare dashboard
 | Build command  | `pnpm run build`      |
 | Deploy command | `npx wrangler deploy` |
 
-The build image reads Node from `.nvmrc` and pnpm from the root `packageManager`
-field. If a build log shows other versions, set the `NODE_VERSION` and
-`PNPM_VERSION` build variables to match.
+Also set these build variables (Settings → Build → Variables). With `apps/web`
+as the root, the repository's `.nvmrc` and `packageManager` sit outside it, so the
+build image is not guaranteed to pick them up, and its defaults are older:
+
+| Variable       | Value     |
+| -------------- | --------- |
+| `NODE_VERSION` | `24.21.0` |
+| `PNPM_VERSION` | `12.4.2`  |
+
+Keep them in step with `.nvmrc` and the root `packageManager` field.
 
 ### Turnstile
 
