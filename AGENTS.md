@@ -21,7 +21,7 @@ Guidelines for AI agents and contributors working in this Turborepo monorepo.
 | logger          | `@repo/logger`          | pino logger emitting Cloud Logging shaped JSON                                       |
 | types           | `@repo/types`           | Shared world types: graph, layout and built geometry, no three.js                    |
 | world-generator | `@repo/world-generator` | Graph → layout → walls, doors, corridors and colliders, seeded and three-free        |
-| renderer        | `@repo/renderer`        | React Three Fiber components, player and lights for a built world                    |
+| renderer        | `@repo/renderer`        | React Three Fiber components, player, lights and post-processing for a built world   |
 | code-graph      | `@repo/code-graph`      | Language-independent CodeGraph types and the CodeGraph to WorldGraph spatial grammar |
 | parser          | `@repo/parser`          | TypeScript and JavaScript source to CodeGraph via @babel/parser, browser-safe        |
 

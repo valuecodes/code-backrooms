@@ -1,7 +1,8 @@
 import { createContext, useContext } from "react";
-import { MeshStandardMaterial } from "three";
+import { MeshStandardMaterial, Vector2 } from "three";
 
 import { createSurfaceTextures, TILE } from "./textures";
+import type { SurfaceMaps } from "./textures";
 
 /**
  * One material per surface type, shared by every mesh. Meshes that use them
@@ -42,23 +43,35 @@ const voidMaterial = (emissive: string): MeshStandardMaterial =>
     polygonOffsetFactor: -1,
   });
 
+/**
+ * A surface's maps on a material. The ORM texture is read for roughness
+ * (G) and occlusion (R) through the tiled `uv`, the only channel the room
+ * geometry has; `roughness` stays 1 so the map alone sets it.
+ */
+const mapped = (
+  { map, normalMap, orm }: SurfaceMaps,
+  relief: number,
+  occlusion: number
+) => ({
+  map,
+  normalMap,
+  normalScale: new Vector2(relief, relief),
+  roughnessMap: orm,
+  roughness: 1,
+  aoMap: orm,
+  aoMapIntensity: occlusion,
+});
+
 const createSurfaces = (anisotropy: number): Surfaces => {
   const textures = createSurfaceTextures(anisotropy);
   // Walls carry vertex colours: white as built, a lane's wash inside a fork
   // of a function.
   const wall = new MeshStandardMaterial({
-    map: textures.wallpaper,
-    roughness: 0.85,
+    ...mapped(textures.wallpaper, 0.7, 0.7),
     vertexColors: true,
   });
-  const floor = new MeshStandardMaterial({
-    map: textures.carpet,
-    roughness: 1,
-  });
-  const ceiling = new MeshStandardMaterial({
-    map: textures.ceiling,
-    roughness: 0.95,
-  });
+  const floor = new MeshStandardMaterial(mapped(textures.carpet, 1, 0.9));
+  const ceiling = new MeshStandardMaterial(mapped(textures.ceiling, 0.8, 0.8));
   const fixture = new MeshStandardMaterial({
     color: "#fff8e1",
     emissive: "#fff1c4",
@@ -117,8 +130,10 @@ const createSurfaces = (anisotropy: number): Surfaces => {
       for (const material of materials) {
         material.dispose();
       }
-      for (const texture of Object.values(textures)) {
-        texture.dispose();
+      for (const maps of Object.values(textures)) {
+        for (const texture of Object.values(maps)) {
+          texture.dispose();
+        }
       }
     },
   };

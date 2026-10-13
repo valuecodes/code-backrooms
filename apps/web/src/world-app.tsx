@@ -1,5 +1,6 @@
 import { Canvas } from "@react-three/fiber";
 import { PointerLook } from "@repo/renderer/controls";
+import { Effects } from "@repo/renderer/effects";
 import { Player } from "@repo/renderer/player";
 import { World } from "@repo/renderer/world";
 import type { Target } from "@repo/world-generator/interaction";
@@ -11,6 +12,7 @@ import { EMPTY_VISITS, visit, visitedIn } from "~/map-model";
 import { OverviewMap } from "~/overview-map";
 import { nextSeed, withSeed } from "~/params";
 import { createPoseFeed } from "~/pose-feed";
+import { getQuality, setQuality, toggleQuality, useQuality } from "~/quality";
 import { SourcePanel } from "~/source-panel";
 import { sourceView } from "~/source-view";
 import { useAreaWorld, zoneProgress } from "~/use-area-world";
@@ -43,6 +45,7 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
   const [mapOpen, setMapOpen] = useState(false);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
   const [visits, setVisits] = useState(EMPTY_VISITS);
+  const quality = useQuality();
   // Generated once per seed, then grown an area at a time: it never
   // regenerates while the player moves.
   const generated = useAreaWorld(seed, worldOptions);
@@ -78,10 +81,11 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
     }
   }, [target, ensurePortal, generated.world]);
 
-  // N: next seed (the only thing that regenerates the world). Backspace and
-  // R navigate, E shows the source and M the local map, only while walking,
-  // so a free pointer leaves them alone. Tab shows the world map while
-  // walking and, like Esc once the pointer is free, closes it (`map-keys`).
+  // N: next seed (the only thing that regenerates the world) and Q: the
+  // rendering quality, in any pointer state. Backspace and R navigate, E
+  // shows the source and M the local map, only while walking, so a free
+  // pointer leaves them alone. Tab shows the world map while walking and,
+  // like Esc once the pointer is free, closes it (`map-keys`).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // Ctrl/Cmd+R and friends belong to the browser.
@@ -104,6 +108,8 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
       }
       if (event.code === "KeyN") {
         setSeed(nextSeed);
+      } else if (event.code === "KeyQ") {
+        setQuality(toggleQuality(getQuality()));
       } else if (locked && event.code === "Backspace") {
         event.preventDefault();
         back();
@@ -184,6 +190,7 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
             onMove={feed.publish}
           />
           <PointerLook />
+          <Effects quality={quality} />
         </Canvas>
       )}
       {locked && mapOpen && generated.world !== null && (
@@ -206,6 +213,7 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
         lastMs={generated.lastMs}
         preset={initial.preset}
         label={label}
+        quality={quality}
         place={place}
         breadcrumb={breadcrumbOf(
           codeGraph,
