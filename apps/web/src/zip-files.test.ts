@@ -1,8 +1,8 @@
 import { strFromU8, strToU8, zipSync } from "fflate";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { LocalLoadError, MAX_FILE_BYTES } from "./source-filter";
-import { filesFromZip, readZipFile } from "./zip-files";
+import { filesFromZip } from "./zip-files";
 
 /** A zip of these texts, deflated, as GitHub's "Download ZIP" would hold them. */
 const zipOf = (files: Readonly<Record<string, string>>): Uint8Array =>
@@ -111,26 +111,5 @@ describe("filesFromZip", () => {
     expect(loadError(() => filesFromZip(bytes)).message).toMatch(
       /^the zip is damaged: /
     );
-  });
-});
-
-describe("readZipFile", () => {
-  it("reads the file's bytes", async () => {
-    const bytes = zipOf({ "r/a.ts": "a;" });
-    const file = new File([new Uint8Array(bytes)], "repo.zip");
-    await expect(readZipFile(file)).resolves.toEqual({
-      files: [{ path: "a.ts", source: "a;" }],
-      skipped: 0,
-    });
-  });
-
-  it("refuses a zip over 64 MB without reading it", async () => {
-    const arrayBuffer = vi.fn(() => Promise.resolve(new ArrayBuffer(0)));
-    await expect(
-      readZipFile({ size: 64 * 1024 * 1024 + 1, arrayBuffer })
-    ).rejects.toThrow(
-      new LocalLoadError("64.0 MB zip, more than the 64 MB allowed")
-    );
-    expect(arrayBuffer).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 import { LocalLoadError } from "~/source-filter";
 
-// The landing page's reads of a zip or folder, as pure helpers.
+// The landing page's reads of a GitHub repository or folder, as pure helpers.
 
 /**
  * One read at a time: each read takes an id, and only the latest one may
@@ -27,14 +27,6 @@ const createReadGuard = (): ReadGuard => {
   };
 };
 
-const ZIP = /\.zip$/i;
-
-/** Drag and drop takes zips only; the folder picker covers folders. */
-const isZipName = (name: string): boolean => ZIP.test(name);
-
-/** `repo-main.zip` → `repo-main`, for the HUD. */
-const zipLabel = (name: string): string => name.replace(ZIP, "") || name;
-
 /** A folder pick's name: the first segment of any file's relative path. */
 const folderLabel = (
   files: readonly { readonly webkitRelativePath?: string }[]
@@ -53,5 +45,5 @@ const readErrorMessage = (error: unknown): string => {
   return `could not read the files: ${message}`;
 };
 
-export { createReadGuard, folderLabel, isZipName, readErrorMessage, zipLabel };
+export { createReadGuard, folderLabel, readErrorMessage };
 export type { ReadGuard };

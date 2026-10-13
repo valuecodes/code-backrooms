@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 // Cloudflare Turnstile, the check a visitor passes before this site fetches a
 // repository from GitHub for them (`api/github-zip.ts` verifies the token). The
-// script loads only once the GitHub field is used, so zip and folder visits
+// script loads only once the GitHub field is used, so folder and example visits
 // never contact Cloudflare's challenge servers.
 
 type TurnstileApi = {

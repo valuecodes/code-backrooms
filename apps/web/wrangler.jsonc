@@ -1,6 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "code-backrooms-web",
+  // The live Worker's name: Workers Builds deploys to it, and local `wrangler
+  // secret` and `wrangler tail` target it.
+  "name": "code-backrooms",
   // The pinned wrangler's workerd version (1.YYYYMMDD.x) caps this date; newer dates
   // fail in `wrangler dev`. Bump it together with wrangler.
   "compatibility_date": "2026-09-11",
@@ -23,6 +25,7 @@
       "simple": { "limit": 5, "period": 60 },
     },
   ],
-  // TURNSTILE_SECRET is a secret set in the Cloudflare dashboard (or with
-  // `wrangler secret put`), and in an uncommitted .dev.vars for `wrangler dev`.
+  // TURNSTILE_SECRET is a runtime secret (Settings → Variables and Secrets, or
+  // `wrangler secret put`), never a build variable, and in an uncommitted
+  // .dev.vars for `wrangler dev`.
 }
