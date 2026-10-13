@@ -42,7 +42,7 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
   const [roomId, setRoomId] = useState<string | null>(null);
   const [target, setTarget] = useState<Target | null>(null);
   const [sourceOpen, setSourceOpen] = useState(false);
-  const [mapOpen, setMapOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(true);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
   const [visits, setVisits] = useState(EMPTY_VISITS);
   const quality = useQuality();
