@@ -236,9 +236,9 @@ Or run repo-wide via root `pnpm typecheck` / `pnpm test` / `pnpm build`.
 - **Build settings:** root directory `apps/web`, build command `pnpm run build`,
   deploy command `npx wrangler deploy`.
 - **Build variables:** `VITE_TURNSTILE_SITE_KEY`, the widget's site key. Vite
-  inlines it at build time, so it is a _build_ variable. The build image reads
-  Node from `.nvmrc` and pnpm from `packageManager`; set `NODE_VERSION` and
-  `PNPM_VERSION` only if a build log shows other versions.
+  inlines it at build time, so it is a _build_ variable. Also set
+  `NODE_VERSION=24.21.0` and `PNPM_VERSION=12.4.2`: the version files sit
+  outside the `apps/web` root, and the build image's defaults are older.
 - **Runtime secret:** `TURNSTILE_SECRET` under the Worker's Settings → Variables
   and Secrets, type Secret, or `pnpm --filter web exec wrangler secret put
 TURNSTILE_SECRET`. Never a build variable: those exist only during the build,
