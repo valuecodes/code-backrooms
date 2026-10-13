@@ -192,6 +192,24 @@ describe("sourceView calls", () => {
     ).toEqual(["a.ts · main()", "b.ts · main()"]);
   });
 
+  it("keeps five candidates of an ambiguous call and counts the rest", () => {
+    const shapes = ["A", "B", "C", "D", "E", "F", "G"];
+    const many = parsedFiles([
+      {
+        path: "many.ts",
+        source: [
+          ...shapes.map((shape) => `class ${shape} {\n  render() {}\n}`),
+          `function main(shape: ${shapes.join(" | ")}) {\n  shape.render();\n}`,
+        ].join("\n"),
+      },
+    ]);
+    expect(
+      sourceView(many.codeGraph, many.sources, "many.ts::main")?.callees
+    ).toEqual([
+      "maybe A.render() | B.render() | C.render() | D.render() | E.render() | +2",
+    ]);
+  });
+
   it("keeps five names and counts the rest", () => {
     const names = ["a", "b", "c", "d", "e", "f", "g"];
     const fan = parsedFiles([
