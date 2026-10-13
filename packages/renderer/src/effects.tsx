@@ -9,8 +9,8 @@ import {
 } from "@react-three/postprocessing";
 import { N8AOPostPass } from "n8ao";
 import { ToneMappingMode } from "postprocessing";
-import { useEffect, useMemo } from "react";
-import { AgXToneMapping, Vector2 } from "three";
+import { useEffect, useLayoutEffect, useMemo } from "react";
+import { AgXToneMapping, NoToneMapping, Vector2 } from "three";
 
 /** How much the scene is drawn for: nothing at `low`, the full chain at `high`. */
 type Quality = "low" | "high";
@@ -27,21 +27,21 @@ const EXPOSURE = 1.15;
  *
  * At `high` the frame goes through a composer: ambient occlusion, bloom off
  * the fixtures, grain, a vignette and a touch of lens fringing, tone-mapped
- * last. The composer turns the renderer's own tone mapping off while it is
- * mounted (its effect runs before this component's, being a child) and
- * gives the previous mapping back when it unmounts; so AgX is set on the
- * renderer only at `low`, where nothing else maps, and never over the
- * composer's `NoToneMapping`.
+ * last. The renderer maps only at `low`; at `high` it is set to no mapping
+ * here, which is what the composer holds it to while mounted (and hands
+ * back on unmount, by which time the next quality's setting is in place).
+ *
+ * A layout effect, so the mapping is set before any passive effect of the
+ * same commit: the World's shader precompile runs there, and tone mapping
+ * picks the shader variant it would otherwise warm wrongly.
  */
 const Effects = ({ quality }: { readonly quality: Quality }) => {
   const get = useThree((state) => state.get);
   const high = quality === "high";
-  useEffect(() => {
+  useLayoutEffect(() => {
     const { gl } = get();
     gl.toneMappingExposure = EXPOSURE;
-    if (!high) {
-      gl.toneMapping = AgXToneMapping;
-    }
+    gl.toneMapping = high ? NoToneMapping : AgXToneMapping;
   }, [get, high]);
   // One pass per Canvas, kept across quality changes: `Pass.dispose` does
   // not reach the pass's own fullscreen objects, so rebuilding it on every
@@ -69,7 +69,9 @@ const Effects = ({ quality }: { readonly quality: Quality }) => {
     return null;
   }
   return (
-    <EffectComposer multisampling={0} enableNormalPass={false}>
+    // The composer draws off screen, where the Canvas's own antialiasing
+    // does not reach: it multisamples instead.
+    <EffectComposer multisampling={4} enableNormalPass={false}>
       <primitive object={occlusion} />
       <Bloom mipmapBlur luminanceThreshold={1} intensity={0.35} />
       <Noise opacity={0.01} />
