@@ -186,7 +186,32 @@ const areaLabelOf = (codeGraph: CodeGraph | null, areaId: string): string => {
     : relativeToPackage(zone.pkg, module.path);
 };
 
-/** `main() → login() → validateUser()`: every caller on the stack, then here. */
+/** Above this many entries the breadcrumb keeps the first and the last four. */
+const BREADCRUMB_MAX_GROUPS = 6;
+const BREADCRUMB_TAIL = 4;
+
+/** Consecutive equal ids folded into one entry with how often it repeats. */
+const runsOf = (
+  ids: readonly string[]
+): readonly { readonly id: string; readonly count: number }[] => {
+  const runs: { id: string; count: number }[] = [];
+  for (const id of ids) {
+    const last = runs.at(-1);
+    if (last?.id === id) {
+      last.count += 1;
+    } else {
+      runs.push({ id, count: 1 });
+    }
+  }
+  return runs;
+};
+
+/**
+ * `main() → login() → validateUser()`: every caller on the stack, then here.
+ * Direct recursion folds into one entry, `countdown() ×3 ↻`, while mutual
+ * recursion stays spelled out. More than six entries keep the first, `…`
+ * and the last four.
+ */
 const breadcrumbOf = (
   codeGraph: CodeGraph | null,
   frames: readonly Frame[],
@@ -195,9 +220,18 @@ const breadcrumbOf = (
   if (codeGraph === null || roomId === null) {
     return null;
   }
-  return [...frames.map((frame) => frame.callerRoomId), roomId]
-    .map((id) => labelOf(codeGraph, id))
-    .join(" → ");
+  const labels = runsOf([
+    ...frames.map((frame) => frame.callerRoomId),
+    roomId,
+  ]).map(({ id, count }) => {
+    const label = labelOf(codeGraph, id);
+    return count > 1 ? `${label} ×${count} ↻` : label;
+  });
+  const shown =
+    labels.length > BREADCRUMB_MAX_GROUPS
+      ? [labels[0], "…", ...labels.slice(-BREADCRUMB_TAIL)]
+      : labels;
+  return shown.join(" → ");
 };
 
 /**

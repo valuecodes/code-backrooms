@@ -56,7 +56,7 @@ world. The world shows what _can_ run, not a trace of what did run.
 | Mouse         | Look (click the scene to lock it)       |
 | E             | Show the current room's source code     |
 | Tab           | Map of the whole world                  |
-| M             | Map of the rooms you have walked        |
+| M             | Hide the map of the rooms you walked    |
 | Backspace     | Back to where this function was entered |
 | R             | Back to the entrance                    |
 | Esc           | Release the mouse                       |
