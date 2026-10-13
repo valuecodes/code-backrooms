@@ -255,6 +255,7 @@ src/
   landing.tsx         the bare URL's page: zip drop and pickers, GitHub URL, Demo, examples
   github-url.ts       a GitHub URL -> owner, repo, ref, folder; checks shared with the Worker, pure
   github-files.ts     a GitHub repository -> sources: one call to the Worker, then zip-files
+  github-form.tsx     the landing page's GitHub URL field, check and open button, markup only
   turnstile.tsx       the Turnstile check before a GitHub load, script loaded on demand
   worker.ts           the Cloudflare Worker: /api/github/zip, else the static assets
   landing-backdrop.tsx  the demo world drifting behind the landing page, lazy

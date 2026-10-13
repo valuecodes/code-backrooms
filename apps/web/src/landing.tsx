@@ -8,11 +8,13 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ChangeEvent, DragEvent, ReactNode, SubmitEvent } from "react";
+import type { ChangeEvent, DragEvent, ReactNode } from "react";
 
 import { backdropAllowed } from "~/backdrop";
 import { filesFromFolder } from "~/folder-files";
 import { readGitHubRepo } from "~/github-files";
+import { GitHubForm } from "~/github-form";
+import type { GitHubField } from "~/github-form";
 import { gitHubPath, parseGitHubUrl } from "~/github-url";
 import {
   createReadGuard,
@@ -80,17 +82,6 @@ const useBackdrop = (): boolean => {
 const BUTTON =
   "cursor-pointer rounded border border-amber-100/30 px-3 py-1 hover:bg-amber-100/10 has-disabled:cursor-default has-disabled:opacity-40";
 
-/** The GitHub URL field's state; absent when this build has no Turnstile key. */
-type GitHubField = {
-  readonly url: string;
-  readonly onUrl: (url: string) => void;
-  readonly onOpen: () => void;
-  /** The URL parses and the visitor passed the check. */
-  readonly ready: boolean;
-  /** The Turnstile widget, shown once a URL is typed. */
-  readonly check: ReactNode;
-};
-
 type LandingViewProps = {
   /** The zip, folder or repository being read, or null. */
   readonly reading: string | null;
@@ -131,52 +122,6 @@ const PageLink = ({
       {children}
     </a>
   );
-
-/** A public repository's URL, its verification check and an Open button. */
-const GitHubForm = ({
-  field,
-  busy,
-}: {
-  readonly field: GitHubField;
-  readonly busy: boolean;
-}) => {
-  const onSubmit = (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!busy && field.ready) {
-      field.onOpen();
-    }
-  };
-  return (
-    <form
-      aria-label="Load from GitHub"
-      className="flex w-full flex-col items-center gap-3"
-      onSubmit={onSubmit}
-    >
-      <div className="flex w-full gap-2">
-        <input
-          type="text"
-          inputMode="url"
-          aria-label="GitHub repository URL"
-          placeholder="github.com/owner/repo"
-          autoComplete="off"
-          spellCheck={false}
-          className="min-w-0 flex-1 rounded border border-amber-100/30 bg-black/60 px-3 py-1 text-amber-50 placeholder:text-amber-100/40"
-          value={field.url}
-          disabled={busy}
-          onChange={(event) => field.onUrl(event.currentTarget.value)}
-        />
-        <button
-          type="submit"
-          className="cursor-pointer rounded border border-amber-100/30 px-3 py-1 hover:bg-amber-100/10 disabled:cursor-default disabled:opacity-40"
-          disabled={busy || !field.ready}
-        >
-          open
-        </button>
-      </div>
-      {field.url.trim() !== "" && !busy && field.check}
-    </form>
-  );
-};
 
 /** The landing page as markup, its state passed in. */
 const LandingView = ({
@@ -388,11 +333,8 @@ const Landing = ({
   const target = useMemo(() => parseGitHubUrl(repoUrl), [repoUrl]);
 
   const onRepo = useCallback(() => {
-    if (target === null) {
-      setFailure("not a GitHub repository URL: github.com/owner/repo");
-      return;
-    }
-    if (token === null) {
+    // The button is disabled until both hold; Enter is checked the same way.
+    if (target === null || token === null) {
       return;
     }
     const path = gitHubPath(target);
@@ -421,6 +363,7 @@ const Landing = ({
             setFailure(null);
           },
           onOpen: onRepo,
+          valid: target !== null,
           ready: target !== null && token !== null,
           check: (
             <TurnstileCheck
