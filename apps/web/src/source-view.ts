@@ -43,15 +43,17 @@ const NO_CALLS: readonly string[] = [];
 /** A call or, for an ambiguous one, every function it may reach. */
 type CallEntry = CallLink | readonly FunctionNode[];
 
+/** An ambiguous call's candidates are cut at `CALL_LIST_MAX` too. */
 const functionsIn = (entry: CallEntry): readonly FunctionNode[] =>
-  "fn" in entry ? [entry.fn] : entry;
+  "fn" in entry ? [entry.fn] : entry.slice(0, CALL_LIST_MAX);
 
 /**
- * The first `CALL_LIST_MAX` entries, then how many more there are. Only
- * those shown are labelled, so a function called from hundreds of places
- * costs no more than one called from five. `Class.method()`, with its file
- * (`src/a.ts · main()`) when another function shown shares the name; `↻`
- * for a function calling itself, `maybe a() | b()` for an ambiguous call.
+ * The first `CALL_LIST_MAX` entries, then how many more there are, and as
+ * many candidates of an ambiguous call. Only those shown are labelled, so
+ * a function called from hundreds of places costs no more than one called
+ * from five. `Class.method()`, with its file (`src/a.ts · main()`) when
+ * another function shown shares the name; `↻` for a function calling
+ * itself, `maybe a() | b() | +n` for an ambiguous call.
  */
 const callList = (
   codeGraph: CodeGraph,
@@ -70,7 +72,9 @@ const callList = (
   };
   const labels = shown.map((entry) => {
     if (!("fn" in entry)) {
-      return `maybe ${entry.map(name).join(" | ")}`;
+      const candidates = functionsIn(entry).map(name);
+      const more = entry.length - candidates.length;
+      return `maybe ${[...candidates, ...(more > 0 ? [`+${more}`] : [])].join(" | ")}`;
     }
     return entry.recursive ? `${name(entry.fn)} ↻` : name(entry.fn);
   });
