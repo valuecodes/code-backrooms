@@ -169,10 +169,8 @@ not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   local files never writes `?seed=`, since no URL can name those files. The
   filter keeps a superset of the `?code=self` glob (config modules such as
   `vite.config.ts`), so a zip of this repository has a few more modules
-  than Demo. Fetching a GitHub URL is not supported; it would need a
-  Cloudflare Worker proxy (`codeload` sends no CORS headers) feeding
-  `zip-files.ts`.
-- Milestone 21 (current): a moving landing page. Behind the panel the
+  than Demo. A public GitHub repository loads by URL (Milestone 22).
+- Milestone 21: a moving landing page. Behind the panel the
   bundled `demo` example's entrance is drawn with a camera that drifts
   toward its first doorway and back while its gaze sways
   (`landing-backdrop.tsx`, `driftPose` in `backdrop.ts`). It is skipped
@@ -180,22 +178,66 @@ not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   boundary if the canvas fails, and dropped as soon as a read starts. The
   world view (`world-app.tsx`) and the backdrop are lazy chunks, so the
   landing page paints before three.js loads.
+- Milestone 22 (current): a public GitHub repository by URL. The landing
+  page takes `github.com/owner/repo`, `owner/repo` or a
+  `/tree/<ref>/<folder>` URL (`github-url.ts`; refs with `/` are not
+  supported). One load is one request to GitHub: the page calls this site's
+  Worker (`worker.ts`, `GET /api/github/zip`), which fetches the repository's
+  zip from codeload.github.com, since codeload sends no CORS headers, and
+  streams it back. The page then reads it with `filesFromZip`, keeping only
+  the folder's files when one is named. The Worker builds the codeload URL
+  from checked names and is not an open proxy. Before it fetches, the
+  visitor must pass a Cloudflare Turnstile check (`turnstile.tsx`, loaded
+  only once a URL is typed). Each IP is rate-limited to 5 loads a minute.
+  Answers are edge-cached for 10 minutes, and zips over 64 MB are refused or
+  cut off. A loaded repository writes `?repo=` so a reload or a shared link
+  fills the field in again. The visitor still presses open, because each
+  Turnstile token is single-use. Without a site key at build time the field
+  is hidden, so production never falls back to the test key.
 
 ---
 
 ## Workspace Commands
 
-| Task      | Command                       |
-| --------- | ----------------------------- |
-| Dev       | `pnpm --filter web dev`       |
-| Build     | `pnpm --filter web build`     |
-| Preview   | `pnpm --filter web preview`   |
-| Typecheck | `pnpm --filter web typecheck` |
-| Test      | `pnpm --filter web test`      |
-| Clean     | `pnpm --filter web clean`     |
-| Deploy    | `pnpm --filter web deploy`    |
+| Task       | Command                        |
+| ---------- | ------------------------------ |
+| Task       | Command                        |
+| ---------- | ------------------------------ |
+| Dev        | `pnpm --filter web dev`        |
+| Dev Worker | `pnpm --filter web dev:worker` |
+| Build      | `pnpm --filter web build`      |
+| Preview    | `pnpm --filter web preview`    |
+| Typecheck  | `pnpm --filter web typecheck`  |
+| Test       | `pnpm --filter web test`       |
+| Clean      | `pnpm --filter web clean`      |
+| Deploy     | `pnpm --filter web deploy`     |
 
 Or run repo-wide via root `pnpm typecheck` / `pnpm test` / `pnpm build`.
+
+### GitHub loading in development
+
+- `dev` alone serves everything except `/api/*`. To load from GitHub, also run
+  `dev:worker` (`wrangler dev` on port 8787), which Vite proxies `/api` to.
+- Dev builds use Turnstile's public always-pass test site key. `wrangler dev`
+  needs the matching test secret in `apps/web/.dev.vars`, which is gitignored:
+  `TURNSTILE_SECRET=1x0000000000000000000000000000000AA`.
+
+### Deploying (Cloudflare Workers Builds, repository connected in the dashboard)
+
+- **Build settings:** set the root directory to the repository root. The build
+  command is `pnpm --filter web build`, and the deploy command is
+  `pnpm --filter web exec wrangler deploy`.
+- **Build variables:** `PNPM_VERSION=12.4.2` and `NODE_VERSION=24.21.0`, since the
+  build image's pnpm default is older. Also set `VITE_TURNSTILE_SITE_KEY` to the
+  widget's site key. Vite inlines it at build time, so it is a _build_ variable.
+- **Runtime secret:** `TURNSTILE_SECRET` under the Worker's Variables and Secrets.
+  `wrangler.jsonc` declares no value for it, so deploys keep it.
+- **Turnstile widget:** create it in the Cloudflare dashboard. Its hostnames must
+  include the production domain, plus the `workers.dev` domain if preview builds
+  are on. A preview without its hostname refuses GitHub loads and everything else
+  still works.
+- **Committed values:** the site key, the rate-limit `namespace_id` and the Worker
+  code are public by design. The secret never goes in the repository.
 
 There are no per-workspace `lint` or `format` scripts: root `pnpm lint` (oxlint) and
 `pnpm format` (Prettier) each cover the whole repo.
@@ -210,7 +252,11 @@ src/
   app.tsx             landing page, loading screen, or the world as a lazy chunk
   world-app.tsx       the world: full-screen <Canvas>, seed and current-room
                       state, pointer lock, HUD
-  landing.tsx         the bare URL's page: zip drop and pickers, Demo, examples
+  landing.tsx         the bare URL's page: zip drop and pickers, GitHub URL, Demo, examples
+  github-url.ts       a GitHub URL -> owner, repo, ref, folder; checks shared with the Worker, pure
+  github-files.ts     a GitHub repository -> sources: one call to the Worker, then zip-files
+  turnstile.tsx       the Turnstile check before a GitHub load, script loaded on demand
+  worker.ts           the Cloudflare Worker: /api/github/zip, else the static assets
   landing-backdrop.tsx  the demo world drifting behind the landing page, lazy
   backdrop.ts         when the backdrop runs and where its camera is, pure
   backdrop-world.ts   the demo world for the backdrop, every area built

@@ -5,12 +5,15 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import type { ChangeEvent, DragEvent, ReactNode } from "react";
+import type { ChangeEvent, DragEvent, ReactNode, SubmitEvent } from "react";
 
 import { backdropAllowed } from "~/backdrop";
 import { filesFromFolder } from "~/folder-files";
+import { readGitHubRepo } from "~/github-files";
+import { gitHubPath, parseGitHubUrl } from "~/github-url";
 import {
   createReadGuard,
   folderLabel,
@@ -19,11 +22,14 @@ import {
   zipLabel,
 } from "~/local-reads";
 import type { SourceRequest } from "~/source-request";
+import { TurnstileCheck, turnstileSiteKey } from "~/turnstile";
 import { readZipFile } from "~/zip-files";
 import type { LocalFiles } from "~/zip-files";
 
-// The bare URL's page: bring a repository as a zip or a folder, or open this
-// one (`?code=self`). Files are read in the tab and never leave it.
+// The bare URL's page: bring a repository as a zip or a folder, paste a
+// public GitHub URL, or open this one (`?code=self`). A zip or folder is read
+// in the tab and never leaves it; a GitHub repository comes through this
+// site's Worker (`worker.ts`) as one zip download.
 
 /** Bundled examples linked under the Demo button. */
 const EXAMPLES: readonly string[] = ["demo", "loops", "switches", "repo"];
@@ -74,14 +80,26 @@ const useBackdrop = (): boolean => {
 const BUTTON =
   "cursor-pointer rounded border border-amber-100/30 px-3 py-1 hover:bg-amber-100/10 has-disabled:cursor-default has-disabled:opacity-40";
 
+/** The GitHub URL field's state; absent when this build has no Turnstile key. */
+type GitHubField = {
+  readonly url: string;
+  readonly onUrl: (url: string) => void;
+  readonly onOpen: () => void;
+  /** The URL parses and the visitor passed the check. */
+  readonly ready: boolean;
+  /** The Turnstile widget, shown once a URL is typed. */
+  readonly check: ReactNode;
+};
+
 type LandingViewProps = {
-  /** The zip or folder being read, or null. */
+  /** The zip, folder or repository being read, or null. */
   readonly reading: string | null;
   readonly error: string | null;
   readonly dragging: boolean;
   readonly onZip: (file: File) => void;
   readonly onFolder: (files: readonly File[]) => void;
   readonly onDragging: (dragging: boolean) => void;
+  readonly github?: GitHubField;
   /** Drawn behind the page; none in tests and where WebGL cannot run. */
   readonly backdrop?: ReactNode;
 };
@@ -114,6 +132,52 @@ const PageLink = ({
     </a>
   );
 
+/** A public repository's URL, its verification check and an Open button. */
+const GitHubForm = ({
+  field,
+  busy,
+}: {
+  readonly field: GitHubField;
+  readonly busy: boolean;
+}) => {
+  const onSubmit = (event: SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!busy && field.ready) {
+      field.onOpen();
+    }
+  };
+  return (
+    <form
+      aria-label="Load from GitHub"
+      className="flex w-full flex-col items-center gap-3"
+      onSubmit={onSubmit}
+    >
+      <div className="flex w-full gap-2">
+        <input
+          type="text"
+          inputMode="url"
+          aria-label="GitHub repository URL"
+          placeholder="github.com/owner/repo"
+          autoComplete="off"
+          spellCheck={false}
+          className="min-w-0 flex-1 rounded border border-amber-100/30 bg-black/60 px-3 py-1 text-amber-50 placeholder:text-amber-100/40"
+          value={field.url}
+          disabled={busy}
+          onChange={(event) => field.onUrl(event.currentTarget.value)}
+        />
+        <button
+          type="submit"
+          className="cursor-pointer rounded border border-amber-100/30 px-3 py-1 hover:bg-amber-100/10 disabled:cursor-default disabled:opacity-40"
+          disabled={busy || !field.ready}
+        >
+          open
+        </button>
+      </div>
+      {field.url.trim() !== "" && !busy && field.check}
+    </form>
+  );
+};
+
 /** The landing page as markup, its state passed in. */
 const LandingView = ({
   reading,
@@ -122,6 +186,7 @@ const LandingView = ({
   onZip,
   onFolder,
   onDragging,
+  github,
   backdrop,
 }: LandingViewProps) => {
   const busy = reading !== null;
@@ -202,6 +267,7 @@ const LandingView = ({
             />
           </label>
         </div>
+        {github !== undefined && <GitHubForm field={github} busy={busy} />}
         {error !== null && (
           <p role="alert" className="text-red-300">
             {error}
@@ -239,20 +305,38 @@ const LandingView = ({
   );
 };
 
-/** The landing page: reads a zip or folder, then hands its files to `onLoad`. */
+/**
+ * The landing page: reads a zip, folder or GitHub repository, then hands its
+ * files to `onLoad`. `initialRepo` fills the GitHub field (`?repo=`); the
+ * visitor still presses open, since the fetch needs their Turnstile token.
+ */
 const Landing = ({
   onLoad,
+  initialRepo,
 }: {
   readonly onLoad: (request: SourceRequest) => void;
+  readonly initialRepo: string;
 }) => {
   const [reading, setReading] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [repoUrl, setRepoUrl] = useState(initialRepo);
+  const [token, setToken] = useState<string | null>(null);
+  // Bumped to remount the check after each use: a token is accepted once.
+  const [checkRound, setCheckRound] = useState(0);
+  const download = useRef<AbortController | null>(null);
   const guard = useMemo(() => createReadGuard(), []);
+  const siteKey = useMemo(() => turnstileSiteKey(), []);
   const backdrop = useBackdrop();
 
   // A read that ends after the page is gone never loads a world.
-  useEffect(() => () => guard.cancel(), [guard]);
+  useEffect(
+    () => () => {
+      guard.cancel();
+      download.current?.abort();
+    },
+    [guard]
+  );
 
   const read = useCallback(
     (name: string, label: string, load: () => Promise<LocalFiles>) => {
@@ -301,6 +385,52 @@ const Landing = ({
     [read]
   );
 
+  const target = useMemo(() => parseGitHubUrl(repoUrl), [repoUrl]);
+
+  const onRepo = useCallback(() => {
+    if (target === null) {
+      setFailure("not a GitHub repository URL: github.com/owner/repo");
+      return;
+    }
+    if (token === null) {
+      return;
+    }
+    const path = gitHubPath(target);
+    const controller = new AbortController();
+    download.current = controller;
+    setToken(null);
+    setCheckRound((round) => round + 1);
+    read(path, path, async () => {
+      const files = await readGitHubRepo(target, token, {
+        fetch: (url, init) => globalThis.fetch(url, init),
+        signal: controller.signal,
+      });
+      // A reload comes back to this repository's field, ready to open.
+      globalThis.history.replaceState(null, "", `?repo=${path}`);
+      return files;
+    });
+  }, [target, token, read]);
+
+  const github: GitHubField | undefined =
+    siteKey === null
+      ? undefined
+      : {
+          url: repoUrl,
+          onUrl: (url) => {
+            setRepoUrl(url);
+            setFailure(null);
+          },
+          onOpen: onRepo,
+          ready: target !== null && token !== null,
+          check: (
+            <TurnstileCheck
+              key={checkRound}
+              siteKey={siteKey}
+              onToken={setToken}
+            />
+          ),
+        };
+
   return (
     <LandingView
       reading={reading}
@@ -309,6 +439,7 @@ const Landing = ({
       onZip={onZip}
       onFolder={onFolder}
       onDragging={setDragging}
+      github={github}
       // Dropped once a read starts, freeing the GPU before the world loads.
       backdrop={
         backdrop && reading === null ? (

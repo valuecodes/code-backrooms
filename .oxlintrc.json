@@ -457,10 +457,16 @@
   // React Three Fiber renders three.js objects as JSX, so its props
   // (position, args, intensity, attach, ...) are not DOM attributes. Scoped to
   // the renderer package and the app's Canvas only.
+  // A module Worker is its default export ({ fetch }); Cloudflare finds no
+  // handler otherwise. Scoped to the one entry file wrangler.jsonc names.
   "overrides": [
     {
       "files": ["packages/renderer/src/**/*.tsx", "apps/web/src/app.tsx"],
       "rules": { "react/no-unknown-property": "off" }
+    },
+    {
+      "files": ["apps/web/src/worker.ts"],
+      "rules": { "import/no-default-export": "off" }
     }
   ]
 }

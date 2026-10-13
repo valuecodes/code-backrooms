@@ -3,6 +3,7 @@ import { lazy, Suspense, useState } from "react";
 import { Landing } from "~/landing";
 import {
   labelOfRequest,
+  repoOfSearch,
   requestFromParams,
   showsLanding,
 } from "~/source-request";
@@ -23,7 +24,12 @@ const App = () => {
   const [request, setRequest] = useState(() => requestFromParams(initial));
   const setup = useWorldSetup(request);
   if (showsLanding(request, globalThis.location.search)) {
-    return <Landing onLoad={setRequest} />;
+    return (
+      <Landing
+        onLoad={setRequest}
+        initialRepo={repoOfSearch(globalThis.location.search)}
+      />
+    );
   }
   const loading = (
     <WorldLoading

@@ -89,6 +89,20 @@ describe("filesFromZip", () => {
     );
   });
 
+  it("reads only a subpath's files, relative to it, when one is given", () => {
+    const bytes = zipOf({
+      "repo-main/src/a.ts": "a;",
+      "repo-main/packages/web/src/b.ts": "b;",
+      "repo-main/packages/web-extra/c.ts": "c;",
+    });
+    expect(filesFromZip(bytes, "packages/web").files).toEqual([
+      { path: "b.ts", source: "b;" },
+    ]);
+    expect(loadError(() => filesFromZip(bytes, "lib")).message).toBe(
+      "no folder lib in the repository"
+    );
+  });
+
   it("reports an entry that fails to inflate as a damaged zip", () => {
     const bytes = zipOf({ "r/a.ts": "export const a = 1;\n".repeat(50) });
     // The entry's data starts after the 30-byte local header and its name;

@@ -4,9 +4,10 @@ import type { ExampleName } from "~/example-files";
 import type { WorldParams } from "~/params";
 
 // What the 3D app builds its world from: nothing yet (the landing page, or a
-// random or preset world), a bundled example named by the URL, or a zip or
-// folder the user brought. Local files live in memory only, so a reload
-// returns to the landing page.
+// random or preset world), a bundled example named by the URL, or a zip,
+// folder or GitHub repository the user brought. Their files live in memory
+// only, so a reload returns to the landing page (with `?repo=` filled in for
+// a GitHub repository).
 
 type SourceRequest =
   | { readonly kind: "none" }
@@ -48,6 +49,13 @@ const showsLanding = (request: SourceRequest, search: string): boolean => {
   return !WORLD_KEYS.some((key) => params.has(key));
 };
 
+/**
+ * `?repo=`, a GitHub repository to fill in on the landing page, or "". It
+ * never opens a world by itself: the fetch waits for the visitor's check.
+ */
+const repoOfSearch = (search: string): string =>
+  new URLSearchParams(search).get("repo") ?? "";
+
 /** The name the HUD and loading screen show, null for a random world. */
 const labelOfRequest = (request: SourceRequest): string | null => {
   if (request.kind === "none") {
@@ -56,5 +64,5 @@ const labelOfRequest = (request: SourceRequest): string | null => {
   return request.kind === "example" ? request.name : request.label;
 };
 
-export { labelOfRequest, requestFromParams, showsLanding };
+export { labelOfRequest, repoOfSearch, requestFromParams, showsLanding };
 export type { SourceRequest };

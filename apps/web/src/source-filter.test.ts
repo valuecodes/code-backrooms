@@ -179,7 +179,7 @@ describe("selectSources", () => {
     const selection = selectSources(entries(...many));
     expect(selection.kept).toEqual([]);
     expect(selection.fatal).toBe(
-      "401 files to load, more than the 400 allowed: zip or pick a subfolder"
+      "401 files to load, more than the 400 allowed: load a subfolder"
     );
     expect(selectSources(entries(...many.slice(1))).fatal).toBeNull();
   });
@@ -191,7 +191,7 @@ describe("selectSources", () => {
       size: MAX_FILE_BYTES,
     }));
     expect(selectSources(heavy).fatal).toBe(
-      "8.3 MB of sources, more than the 8.0 MB allowed: zip or pick a subfolder"
+      "8.3 MB of sources, more than the 8.0 MB allowed: load a subfolder"
     );
   });
 

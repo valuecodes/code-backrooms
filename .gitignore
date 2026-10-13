@@ -27,6 +27,7 @@ logs
 .env.*
 !.env.example
 *.local
+.dev.vars*
 
 # Editors
 .idea

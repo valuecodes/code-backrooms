@@ -10,9 +10,9 @@ Guidelines for AI agents and contributors working in this Turborepo monorepo.
 
 ### Apps (`apps/`)
 
-| Name | Filter | Description                                                                                      |
-| ---- | ------ | ------------------------------------------------------------------------------------------------ |
-| web  | `web`  | Code Backrooms: Vite 8 + React 19 + React Three Fiber first-person app, deployable to Cloudflare |
+| Name | Filter | Description                                                                                                                |
+| ---- | ------ | -------------------------------------------------------------------------------------------------------------------------- |
+| web  | `web`  | Code Backrooms: Vite 8 + React 19 + React Three Fiber first-person app, and its Cloudflare Worker that fetches GitHub zips |
 
 ### Packages (`packages/`)
 
