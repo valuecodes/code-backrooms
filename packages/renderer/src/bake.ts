@@ -48,7 +48,7 @@ const BOUNCE_GAIN = 1;
  * The fill an open texel gets on top of the bounce: light from beyond the
  * area's fixtures and from bounces past the first, as a warm constant.
  */
-const AMBIENT_FILL: Rgb = [0.16, 0.13, 0.075];
+const AMBIENT_FILL: Rgb = [0.08, 0.065, 0.038];
 /** The light pool's flicker averages this over time. */
 const FLICKER_MEAN = 0.93;
 /** How far a texel or ray start sits off its face. */
@@ -104,9 +104,20 @@ const firstHit = (
   far = Infinity
 ): Intersection | null => bvh.raycastFirst(ray, DoubleSide, 0, far);
 
-/** One BVH over every face, two triangles each: `faceIndex >> 1` is the face. */
+/** Each face is six vertices of the occluder geometry, in face order. */
+const VERTICES_PER_FACE = 6;
+
+/**
+ * The face a ray hit. Not from `faceIndex`: building the BVH reorders the
+ * triangles behind an index it adds, and `faceIndex` counts in that new
+ * order. The hit triangle's vertex indices still name the original vertices.
+ */
+const faceOf = (hit: Intersection): number | null =>
+  hit.face ? Math.floor(hit.face.a / VERTICES_PER_FACE) : null;
+
+/** One BVH over every face, two triangles each, non-indexed. */
 const occluders = (faces: readonly LightmapFace[]): MeshBVH => {
-  const positions = new Float32Array(faces.length * 18);
+  const positions = new Float32Array(faces.length * VERTICES_PER_FACE * 3);
   faces.forEach((face, f) => {
     const [a, b] = tangents(face.axis);
     const corner = (s: number, t: number) => {
@@ -120,7 +131,10 @@ const occluders = (faces: readonly LightmapFace[]): MeshBVH => {
     const p10 = corner(face.max[0], face.min[1]);
     const p11 = corner(face.max[0], face.max[1]);
     const p01 = corner(face.min[0], face.max[1]);
-    positions.set([...p00, ...p10, ...p11, ...p00, ...p11, ...p01], f * 18);
+    positions.set(
+      [...p00, ...p10, ...p11, ...p00, ...p11, ...p01],
+      f * VERTICES_PER_FACE * 3
+    );
   });
   const geometry = new BufferGeometry();
   geometry.setAttribute("position", new BufferAttribute(positions, 3));
@@ -247,9 +261,9 @@ const bakeLightmap = ({ layout, lights }: BakeJob): BakedLightmap => {
       if (hit === null || hit.distance > AO_RADIUS) {
         open += 1;
       }
-      const faceIndex = hit?.faceIndex ?? null;
-      if (hit !== null && faceIndex !== null) {
-        reflected(faceIndex >> 1, hit.point, gathered);
+      const struck = hit === null ? null : faceOf(hit);
+      if (hit !== null && struck !== null) {
+        reflected(struck, hit.point, gathered);
       }
     }
     const fill = open / SAMPLES;
@@ -260,6 +274,7 @@ const bakeLightmap = ({ layout, lights }: BakeJob): BakedLightmap => {
     }
   }
 
+  smooth(out, valid, faces, width);
   dilate(out, valid, faces, width);
   const data = new Uint16Array(texels * 4);
   for (let texel = 0; texel < texels; texel += 1) {
@@ -270,6 +285,63 @@ const bakeLightmap = ({ layout, lights }: BakeJob): BakedLightmap => {
   }
   bvh.geometry.dispose();
   return { width, height, data };
+};
+
+/** A 3 × 3 tent: the texel itself 4, its sides 2, its corners 1. */
+const TENT = [1, 2, 1, 2, 4, 2, 1, 2, 1];
+
+/**
+ * One tent-filter pass over each chart's valid texels: a few rays a texel
+ * leave the bounce noisy, and bounce light is soft enough that a texel's
+ * neighbours are as good an estimate as its own rays. Reads from a copy,
+ * stays inside the chart and skips texels buried in a wall.
+ */
+const smooth = (
+  out: Float32Array,
+  valid: Uint8Array,
+  faces: readonly LightmapFace[],
+  width: number
+): void => {
+  const source = Float32Array.from(out);
+  for (const { chart } of faces) {
+    if (chart === null) {
+      continue;
+    }
+    for (let y: number = chart.y; y < chart.y + chart.h; y += 1) {
+      for (let x: number = chart.x; x < chart.x + chart.w; x += 1) {
+        const texel = y * width + x;
+        if (valid[texel] !== 1) {
+          continue;
+        }
+        const sum = [0, 0, 0];
+        let weight = 0;
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            const nx = x + dx;
+            const ny = y + dy;
+            const near = ny * width + nx;
+            const w = TENT[(dy + 1) * 3 + dx + 1] ?? 0;
+            if (
+              nx < chart.x ||
+              nx >= chart.x + chart.w ||
+              ny < chart.y ||
+              ny >= chart.y + chart.h ||
+              valid[near] !== 1
+            ) {
+              continue;
+            }
+            sum[0] = (sum[0] ?? 0) + w * (source[near * 3] ?? 0);
+            sum[1] = (sum[1] ?? 0) + w * (source[near * 3 + 1] ?? 0);
+            sum[2] = (sum[2] ?? 0) + w * (source[near * 3 + 2] ?? 0);
+            weight += w;
+          }
+        }
+        out[texel * 3] = (sum[0] ?? 0) / weight;
+        out[texel * 3 + 1] = (sum[1] ?? 0) / weight;
+        out[texel * 3 + 2] = (sum[2] ?? 0) / weight;
+      }
+    }
+  }
 };
 
 /**
@@ -361,5 +433,5 @@ const dilate = (
   }
 };
 
-export { bakeLightmap };
+export { bakeLightmap, faceOf, firstHit, occluders };
 export type { BakedLightmap, BakeJob };

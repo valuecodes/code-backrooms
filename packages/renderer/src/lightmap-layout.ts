@@ -78,6 +78,8 @@ const TEXEL = 0.5;
 const MAX_TEXELS = 128 * 1024;
 /** Longest atlas side. */
 const MAX_ATLAS = 1024;
+/** The coarsest texel: no face is wider than a few of these. */
+const MAX_TEXEL = 8;
 /** A face this close to the floor or ceiling is against it, unseen. */
 const FLUSH = 0.01;
 
@@ -255,10 +257,13 @@ const layoutArea = (area: AreaRooms): AreaLayout => {
   const { drafts, roomStart, solids } = draftFaces(area);
   let texel = TEXEL;
   let packed = pack(drafts, texel);
+  // Every face keeps at least one texel and its gutter, so past some size
+  // doubling gains nothing: stop at MAX_TEXEL and take the atlas as it is.
   while (
-    packed.width * packed.height > MAX_TEXELS ||
-    packed.width > MAX_ATLAS ||
-    packed.height > MAX_ATLAS
+    texel < MAX_TEXEL &&
+    (packed.width * packed.height > MAX_TEXELS ||
+      packed.width > MAX_ATLAS ||
+      packed.height > MAX_ATLAS)
   ) {
     texel *= 2;
     packed = pack(drafts, texel);

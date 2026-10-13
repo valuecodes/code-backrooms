@@ -1,4 +1,4 @@
-import type { RoomData } from "@repo/types";
+import type { Rect, RoomData } from "@repo/types";
 import { WALL_HEIGHT } from "@repo/world-generator/config";
 
 import type { AreaRooms } from "./lightmap-layout";
@@ -18,6 +18,8 @@ type FixturePoint = {
   readonly z: number;
   /** Ceiling height at this fixture. */
   readonly ceiling: number;
+  /** The floor of its room: who stands on it sees the fixture unblocked. */
+  readonly room: Rect;
 };
 
 /** Fixture centres on a grid roughly LIGHT_SPACING apart, centred in the room. */
@@ -27,6 +29,12 @@ const fixturePositions = (room: RoomData): readonly FixturePoint[] => {
   const stepX = room.width / columns;
   const stepZ = room.depth / rows;
   const [cx, y, cz] = room.position;
+  const floor: Rect = {
+    minX: cx - room.width / 2,
+    maxX: cx + room.width / 2,
+    minZ: cz - room.depth / 2,
+    maxZ: cz + room.depth / 2,
+  };
   const positions: FixturePoint[] = [];
   for (let row = 0; row < rows; row += 1) {
     for (let column = 0; column < columns; column += 1) {
@@ -34,6 +42,7 @@ const fixturePositions = (room: RoomData): readonly FixturePoint[] => {
         x: cx - room.width / 2 + stepX * (column + 0.5),
         z: cz - room.depth / 2 + stepZ * (row + 0.5),
         ceiling: y + WALL_HEIGHT,
+        room: floor,
       });
     }
   }

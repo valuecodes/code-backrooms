@@ -1,8 +1,8 @@
 import { WALL_HEIGHT } from "@repo/world-generator/config";
-import { DataUtils } from "three";
+import { DataUtils, Ray, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
 
-import { bakeLightmap } from "./bake";
+import { bakeLightmap, faceOf, firstHit, occluders } from "./bake";
 import type { BakedLightmap, BakeJob } from "./bake";
 import { LIGHT_DROP } from "./fixtures";
 import { layoutArea } from "./lightmap-layout";
@@ -64,6 +64,25 @@ const faceAt = (
           1e-6
       )
   );
+
+describe("faceOf", () => {
+  it("names the face a ray hit, whatever order the BVH keeps", () => {
+    // Enough faces that building the tree reorders them.
+    const rooms = Array.from({ length: 36 }, (_, i) =>
+      testRoom(`r${i}`, (i % 6) * 5, Math.floor(i / 6) * 5, 4, 4)
+    );
+    const layout = layoutArea(areaOf(...rooms));
+    const bvh = occluders(layout.faces);
+    const ray = new Ray();
+    rooms.forEach((built, index) => {
+      const [x, , z] = built.room.position;
+      ray.set(new Vector3(x + 0.3, 1, z - 0.2), new Vector3(0, -1, 0));
+      const hit = firstHit(bvh, ray);
+      const floor = layout.rooms[index]?.[0];
+      expect(hit === null ? null : layout.faces[faceOf(hit) ?? -1]).toBe(floor);
+    });
+  });
+});
 
 describe("bakeLightmap", () => {
   it("is deterministic", () => {

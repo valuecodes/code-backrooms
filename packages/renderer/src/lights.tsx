@@ -122,9 +122,10 @@ const LightPool = ({ fixtures }: LightPoolProps) => {
       nearest.current,
       distances.current
     );
+    const { x, z } = camera.position;
+    let rectsUsed = 0;
     for (let slot = 0; slot < POOL_SIZE; slot += 1) {
       const light = lights.current[slot];
-      const rect = slot < RECT_COUNT ? rects.current[slot] : undefined;
       const index = nearest.current[slot];
       const fixture = index === undefined ? undefined : fixtures[index];
       if (light === null || light === undefined) {
@@ -132,9 +133,6 @@ const LightPool = ({ fixtures }: LightPoolProps) => {
       }
       if (slot >= count || fixture === undefined || index === undefined) {
         light.intensity = 0;
-        if (rect) {
-          rect.intensity = 0;
-        }
         continue;
       }
       light.position.set(fixture.x, fixture.ceiling - LIGHT_DROP, fixture.z);
@@ -142,7 +140,20 @@ const LightPool = ({ fixtures }: LightPoolProps) => {
       // pool hands it to another slot.
       const strength =
         LIGHT_INTENSITY * flicker(clock.elapsedTime + (phases[index] ?? 0));
+      // Area lights cast no shadow: only a fixture over the player's own
+      // room gets one, so none shines through a wall. The rest stay whole
+      // point lights.
+      const { room } = fixture;
+      const rect =
+        rectsUsed < RECT_COUNT &&
+        x >= room.minX &&
+        x <= room.maxX &&
+        z >= room.minZ &&
+        z <= room.maxZ
+          ? rects.current[rectsUsed]
+          : null;
       if (rect) {
+        rectsUsed += 1;
         // An area light's intensity is luminance: a fixture's on-axis
         // intensity spread over the diffuser.
         rect.position.set(
@@ -158,6 +169,12 @@ const LightPool = ({ fixtures }: LightPoolProps) => {
       if (slot === SHADOW_SLOT && index !== shadowFixture.current) {
         shadowFixture.current = index;
         gl.shadowMap.needsUpdate = true;
+      }
+    }
+    for (let slot = rectsUsed; slot < RECT_COUNT; slot += 1) {
+      const rect = rects.current[slot];
+      if (rect) {
+        rect.intensity = 0;
       }
     }
   });

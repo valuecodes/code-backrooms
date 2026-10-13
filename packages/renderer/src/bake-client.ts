@@ -76,10 +76,12 @@ const createBakeQueue = (createWorker: () => BakeWorker): BakeQueue => {
     created.onmessage = ({ data }) =>
       finish(data.id, "lightmap" in data ? data.lightmap : null);
     // A broken worker goes even when idle, so the next job gets a new one.
+    // One already replaced says nothing about the job on its successor.
     const fail = () => {
-      if (worker === created) {
-        stopWorker();
+      if (worker !== created) {
+        return;
       }
+      stopWorker();
       if (running !== null) {
         finish(running.id, null);
       }
