@@ -66,9 +66,11 @@ type Entry = {
   readonly texels: number;
   /**
    * `new`: not queued yet. `queued`: waiting or baking, cancelled by
-   * `cancel`. `baked`: its map is on the materials. `skipped`: over budget.
+   * `cancel`. `baked`: its map is on the materials. `over`: the budget had
+   * no room, tried again once some is freed. `failed`: its bake failed;
+   * not tried again.
    */
-  state: "new" | "queued" | "baked" | "skipped";
+  state: "new" | "queued" | "baked" | "over" | "failed";
   cancel: () => void;
   texture: DataTexture | null;
 };
@@ -153,7 +155,7 @@ const createAreaLighting = (
           "lightmap budget spent: later areas keep the flat fill light"
         );
       }
-      entry.state = "skipped";
+      entry.state = "over";
       return;
     }
     used += entry.texels;
@@ -175,15 +177,26 @@ const createAreaLighting = (
       (lightmap) => {
         // The queue never answers a cancelled job, so this entry is live.
         if (lightmap === null) {
-          // Failed: give its texels back and keep the placeholder.
+          // Failed: keep the placeholder and give its texels to an area
+          // that was waiting for them.
           used -= entry.texels;
-          entry.state = "skipped";
+          entry.state = "failed";
+          bakeWaiting();
           return;
         }
         entry.state = "baked";
         land(entry, lightmap);
       }
     );
+  };
+
+  /** Bakes, in order, the areas still to bake and those the budget held back. */
+  const bakeWaiting = () => {
+    for (const [area, entry] of entries) {
+      if (entry.state === "new" || entry.state === "over") {
+        bake(area, entry);
+      }
+    }
   };
 
   return {
@@ -196,11 +209,9 @@ const createAreaLighting = (
         }
       }
       for (const area of areas) {
-        const entry = ensure(area);
-        if (entry.state === "new") {
-          bake(area, entry);
-        }
+        ensure(area);
       }
+      bakeWaiting();
     },
     dispose: () => {
       for (const entry of entries.values()) {

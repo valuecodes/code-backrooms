@@ -115,18 +115,30 @@ const VERTICES_PER_FACE = 6;
 const faceOf = (hit: Intersection): number | null =>
   hit.face ? Math.floor(hit.face.a / VERTICES_PER_FACE) : null;
 
+/**
+ * The world point at `at` on a face's axis and (s, t) on its tangent axes,
+ * spelled out per axis rather than written through a computed index.
+ */
+const pointOn = (
+  axis: LightmapFace["axis"],
+  at: number,
+  s: number,
+  t: number
+): [number, number, number] => {
+  if (axis === 0) {
+    return [at, s, t];
+  }
+  if (axis === 1) {
+    return [s, at, t];
+  }
+  return [s, t, at];
+};
+
 /** One BVH over every face, two triangles each, non-indexed. */
 const occluders = (faces: readonly LightmapFace[]): MeshBVH => {
   const positions = new Float32Array(faces.length * VERTICES_PER_FACE * 3);
   faces.forEach((face, f) => {
-    const [a, b] = tangents(face.axis);
-    const corner = (s: number, t: number) => {
-      const point = [0, 0, 0];
-      point[face.axis] = face.at;
-      point[a] = s;
-      point[b] = t;
-      return point;
-    };
+    const corner = (s: number, t: number) => pointOn(face.axis, face.at, s, t);
     const p00 = corner(face.min[0], face.min[1]);
     const p10 = corner(face.max[0], face.min[1]);
     const p11 = corner(face.max[0], face.max[1]);
@@ -175,17 +187,16 @@ const bakeLightmap = ({ layout, lights }: BakeJob): BakedLightmap => {
     if (chart === null) {
       return;
     }
-    const [a, b] = tangents(face.axis);
     for (let j = 0; j < chart.h; j += 1) {
       for (let i = 0; i < chart.w; i += 1) {
         const texel = (chart.y + j) * width + chart.x + i;
         owner[texel] = f;
-        const point = [0, 0, 0];
-        point[face.axis] = face.at + face.sign * LIFT;
-        point[a] =
-          face.min[0] + ((i + 0.5) / chart.w) * (face.max[0] - face.min[0]);
-        point[b] =
-          face.min[1] + ((j + 0.5) / chart.h) * (face.max[1] - face.min[1]);
+        const point = pointOn(
+          face.axis,
+          face.at + face.sign * LIFT,
+          face.min[0] + ((i + 0.5) / chart.w) * (face.max[0] - face.min[0]),
+          face.min[1] + ((j + 0.5) / chart.h) * (face.max[1] - face.min[1])
+        );
         if (inside(point, solids[face.room] ?? [])) {
           continue;
         }
@@ -194,9 +205,9 @@ const bakeLightmap = ({ layout, lights }: BakeJob): BakedLightmap => {
         let e = 0;
         for (const light of lights) {
           toLight.set(
-            light[0] - (point[0] ?? 0),
-            light[1] - (point[1] ?? 0),
-            light[2] - (point[2] ?? 0)
+            light[0] - point[0],
+            light[1] - point[1],
+            light[2] - point[2]
           );
           const distance = toLight.length();
           const cos = (toLight.getComponent(face.axis) * face.sign) / distance;
