@@ -63,6 +63,14 @@ const SourcePanel = ({ view }: SourcePanelProps) => {
           ? `lines ${view.lines}`
           : `${view.region} · lines ${view.lines}`}
       </p>
+      {view.callers.length > 0 && (
+        <p className="text-amber-100/50">
+          called by {view.callers.join(" · ")}
+        </p>
+      )}
+      {view.callees.length > 0 && (
+        <p className="text-amber-100/50">calls {view.callees.join(" · ")}</p>
+      )}
       <pre ref={codeRef} className="min-h-0 flex-1 overflow-hidden">
         {view.code.map((line) => (
           <div key={line.number} className="flex gap-3">

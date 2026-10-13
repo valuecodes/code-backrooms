@@ -1,5 +1,5 @@
 import type { Rect } from "@repo/types";
-import { memo, useId } from "react";
+import { memo, useId, useMemo } from "react";
 import type { Ref } from "react";
 
 import { PORTAL_COLOURS } from "~/map-model";
@@ -13,6 +13,8 @@ type WorldMapProps = {
   readonly model: WorldMapModel;
   /** Drawn on its own, so following the player redraws only the marker. */
   readonly player: MapPlayer | null;
+  /** The function (or hub) the player is in: its rooms are drawn brighter. */
+  readonly activeUnit?: string | null;
   /** Every area generated or given up on: `data-state="done"`. */
   readonly done: boolean;
   /** What part of the world shows; the whole of it by default. */
@@ -146,6 +148,41 @@ const Layers = ({ model, clip }: LayersProps) => {
  */
 const MapLayers = memo(Layers);
 
+type ActiveRoomsProps = {
+  readonly model: WorldMapModel;
+  readonly unit: string;
+};
+
+/**
+ * The rooms of the unit the player is in, over the layers. Not map detail,
+ * so it still shows zoomed out, and apart from the memoised layers, so
+ * walking into another function redraws only these few rects.
+ */
+const ActiveRooms = ({ model, unit }: ActiveRoomsProps) => {
+  const rooms = useMemo(
+    () =>
+      model.areas.flatMap((area) =>
+        area.rooms.filter((room) => room.unit === unit)
+      ),
+    [model, unit]
+  );
+  return (
+    <g data-active-unit={unit}>
+      {rooms.map((room) => (
+        <rect
+          key={room.id}
+          {...rectProps(room.rect)}
+          fill={BRIGHT}
+          fillOpacity={0.35}
+          stroke={BRIGHT}
+          strokeOpacity={0.9}
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+    </g>
+  );
+};
+
 type ZoneNamesProps = {
   readonly model: WorldMapModel;
   /** Width of the view in metres: names grow as the map zooms out. */
@@ -196,6 +233,7 @@ const ZoneNames = ({ model, viewWidth }: ZoneNamesProps) => {
 const WorldMap = ({
   model,
   player,
+  activeUnit = null,
   done,
   viewBox,
   svgRef,
@@ -230,6 +268,7 @@ const WorldMap = ({
         fill={BACKGROUND}
       />
       <MapLayers model={model} clip={clip} />
+      {activeUnit !== null && <ActiveRooms model={model} unit={activeUnit} />}
       <ZoneNames model={model} viewWidth={view.width} />
       {player !== null && (
         <polygon

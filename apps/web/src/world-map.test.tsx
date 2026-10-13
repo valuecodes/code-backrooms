@@ -157,6 +157,29 @@ describe("WorldMap", () => {
     expect(near).not.toMatch(/<text class="map-detail" data-zone-name/);
   });
 
+  it("draws the rooms of the function the player is in brighter, at any zoom", () => {
+    const store = codeAreaStore(workspace(), 1);
+    store.ensureAll();
+    const model = worldMapModel(store.snapshot().world);
+    const unit = "apps/web/src/main.ts::main";
+    const rooms = model.areas.flatMap((area) =>
+      area.rooms.filter((room) => room.unit === unit)
+    );
+    expect(rooms.length).toBeGreaterThan(0);
+    const markup = renderToStaticMarkup(
+      <WorldMap model={model} player={null} activeUnit={unit} done />
+    );
+    const group = new RegExp(`<g data-active-unit="${unit}">(.*?)</g>`).exec(
+      markup
+    )?.[1];
+    expect(countOf(group ?? "", "<rect")).toBe(rooms.length);
+    // Not detail: zoomed out, the rooms hide but these stay.
+    expect(group).not.toContain("map-detail");
+    expect(
+      renderToStaticMarkup(<WorldMap model={model} player={null} done />)
+    ).not.toContain("data-active-unit");
+  });
+
   it("draws zone names larger as the view widens", () => {
     const store = codeAreaStore(workspace(), 1);
     store.ensureAll();

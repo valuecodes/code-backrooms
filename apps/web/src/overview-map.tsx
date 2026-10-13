@@ -13,6 +13,8 @@ type OverviewMapProps = {
   readonly visited: ReadonlySet<string>;
   /** The room the player stands in, or null between rooms. */
   readonly current: string | null;
+  /** The function (or hub) the player is in: its rooms are outlined brighter. */
+  readonly activeUnit: string | null;
   /** Where the player is; only the map re-renders when it moves. */
   readonly feed: PoseFeed;
 };
@@ -38,6 +40,21 @@ const roomFill = (room: MapRoom): string => {
   return room.lane === null ? PLAIN : laneColour(room.lane);
 };
 
+/** The room stood in strongest, then the other rooms of its function. */
+const strokeOpacity = (room: MapRoom): number => {
+  if (room.current) {
+    return 0.9;
+  }
+  return room.active ? 0.7 : 0.35;
+};
+
+const strokeWidth = (room: MapRoom): number => {
+  if (room.current) {
+    return 1.5;
+  }
+  return room.active ? 1.25 : 1;
+};
+
 /** A short bar on the wall, a little inside the room, along the frame. */
 const portalBar = ({ point, normal }: MapPortal) => {
   const x = point.x + normal.x * 0.2;
@@ -55,7 +72,13 @@ const portalBar = ({ point, normal }: MapPortal) => {
  * above round the player, north up. Screen y is world z, so north (-Z) is
  * already at the top.
  */
-const OverviewMap = ({ world, visited, current, feed }: OverviewMapProps) => {
+const OverviewMap = ({
+  world,
+  visited,
+  current,
+  activeUnit,
+  feed,
+}: OverviewMapProps) => {
   const entry =
     world.areas.find((area) => area.id === world.entry) ?? world.areas[0];
   const start =
@@ -67,8 +90,10 @@ const OverviewMap = ({ world, visited, current, feed }: OverviewMapProps) => {
   const area = areaAt(world.areas, pose.position, null) ?? entry;
   const model = useMemo(
     () =>
-      area === undefined ? EMPTY_MODEL : mapModel(area.built, visited, current),
-    [area, visited, current]
+      area === undefined
+        ? EMPTY_MODEL
+        : mapModel(area.built, visited, current, activeUnit),
+    [area, visited, current, activeUnit]
   );
   const { x, z } = pose.position;
   const heading =
@@ -92,8 +117,8 @@ const OverviewMap = ({ world, visited, current, feed }: OverviewMapProps) => {
           fill={roomFill(room)}
           fillOpacity={room.kind === "corridor" ? 0.2 : 0.35}
           stroke={PLAIN}
-          strokeOpacity={room.current ? 0.9 : 0.35}
-          strokeWidth={room.current ? 1.5 : 1}
+          strokeOpacity={strokeOpacity(room)}
+          strokeWidth={strokeWidth(room)}
           vectorEffect="non-scaling-stroke"
         />
       ))}

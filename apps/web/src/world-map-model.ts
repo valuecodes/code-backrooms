@@ -24,6 +24,8 @@ type MapAreaRoom = {
   readonly id: string;
   readonly kind: RoomKind;
   readonly rect: Rect;
+  /** The function (cluster) it belongs to, or the room itself. */
+  readonly unit: string;
 };
 
 type MapArea = {
@@ -142,6 +144,7 @@ const generatedArea = (
     id: room.id,
     kind: room.kind,
     rect: roomBounds(room),
+    unit: room.cluster ?? room.id,
   })),
   error: null,
   entry: area.id === world.entry,

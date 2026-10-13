@@ -30,6 +30,10 @@ type MapRoom = {
   readonly visited: boolean;
   /** The room the player stands in. */
   readonly current: boolean;
+  /** The function (cluster) it belongs to, or the room itself. */
+  readonly unit: string;
+  /** It belongs to the unit the player is in: the function they walk through. */
+  readonly active: boolean;
 };
 
 type MapDoor = {
@@ -95,7 +99,8 @@ const pointKey = ({ x, z }: Point): string => `${x.toFixed(3)},${z.toFixed(3)}`;
 const mapModel = (
   world: BuiltWorld,
   visited: ReadonlySet<string>,
-  current: string | null
+  current: string | null,
+  activeUnit: string | null = null
 ): MapModel => {
   const entered = world.rooms.filter(({ room }) => visited.has(room.id));
   const seen = new Set(
@@ -106,14 +111,19 @@ const mapModel = (
   );
   const rooms = world.rooms
     .filter(({ room }) => seen.has(room.id))
-    .map(({ room }): MapRoom => ({
-      id: room.id,
-      rect: roomBounds(room),
-      kind: room.kind,
-      lane: room.lane?.kind ?? null,
-      visited: visited.has(room.id),
-      current: room.id === current,
-    }));
+    .map(({ room }): MapRoom => {
+      const unit = room.cluster ?? room.id;
+      return {
+        id: room.id,
+        rect: roomBounds(room),
+        kind: room.kind,
+        lane: room.lane?.kind ?? null,
+        visited: visited.has(room.id),
+        current: room.id === current,
+        unit,
+        active: unit === activeUnit,
+      };
+    });
   const doors = new Map<string, MapDoor>();
   for (const { room, openings } of entered) {
     for (const opening of openings) {
