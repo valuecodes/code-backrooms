@@ -18,10 +18,13 @@ type WorldProps = {
 
 const HAZE = "#4d441f";
 
-/** The fill light: warm from the ceiling, mustard off the walls below. */
+/**
+ * The fill light: warm from the ceiling, mustard off the carpet below, so
+ * an unlightmapped underside (a door frame's head) is never black.
+ */
 const SKY = "#ffe9b3";
-const GROUND = "#8a7a3a";
-const FILL_INTENSITY = 0.25;
+const GROUND = "#d9c27a";
+const FILL_INTENSITY = 0.3;
 
 /** Past full fog (28 m) and inside the camera's far plane (32 m). */
 const HAZE_RADIUS = 30;
@@ -86,8 +89,9 @@ const World = ({ world }: WorldProps) => {
       <color attach="background" args={[HAZE]} />
       <fog attach="fog" args={[HAZE, 5, 28]} />
       <Haze />
-      {/* Walls, floor and ceiling take their fill from the lightmap; this
-          lights what is not lightmapped (frames, fixtures, portals). */}
+      {/* A faint flat fill on everything, under the lightmap's bounce and
+          occluded fill on walls, floor and ceiling; the only indirect light
+          frames, fixtures and portals get. */}
       <hemisphereLight args={[SKY, GROUND, FILL_INTENSITY]} />
       {areas.map((area) => (
         <Area

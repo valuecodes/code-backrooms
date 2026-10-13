@@ -70,7 +70,7 @@ const mapped = (
  * The indirect light of an area not baked yet: flat, about what the bake
  * gives an open stretch of wall, so the baked map arriving is no jump.
  */
-const PLACEHOLDER_FILL: Rgb = [0.3, 0.25, 0.14];
+const PLACEHOLDER_FILL: Rgb = [0.2, 0.16, 0.09];
 
 /** A one-texel lightmap of the flat fill, read like a baked one. */
 const placeholderLightmap = () => {

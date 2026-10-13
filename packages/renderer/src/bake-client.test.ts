@@ -157,6 +157,19 @@ describe("createBakeQueue", () => {
     expect(fake.made).toHaveLength(3);
   });
 
+  it("lets a replaced worker's late error pass without failing the next job", () => {
+    const fake = fakeWorkers();
+    const queue = createBakeQueue(fake.create);
+    const { results, onDone } = collect();
+    const cancel = queue.request(JOB, onDone("a"));
+    queue.request(JOB, onDone("b"));
+    cancel();
+    fake.made[0]?.worker.onerror?.({ message: "late" } as ErrorEvent);
+    fake.reply({ id: 1, lightmap: LIGHTMAP });
+    expect(results).toEqual(["b"]);
+    expect(fake.made[1]?.terminated).toBe(false);
+  });
+
   it("replaces a worker that broke while idle", () => {
     const fake = fakeWorkers();
     const queue = createBakeQueue(fake.create);
