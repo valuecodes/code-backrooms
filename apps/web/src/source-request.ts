@@ -56,6 +56,13 @@ const showsLanding = (request: SourceRequest, search: string): boolean => {
 const repoOfSearch = (search: string): string =>
   new URLSearchParams(search).get("repo") ?? "";
 
+/**
+ * The `?repo=` query that `repoOfSearch` reads back as `path`. Escaped, since
+ * a query reads `+` as a space; `/` stays readable, a query never splits on it.
+ */
+const searchOfRepo = (path: string): string =>
+  `?repo=${encodeURIComponent(path).replaceAll("%2F", "/")}`;
+
 /** The name the HUD and loading screen show, null for a random world. */
 const labelOfRequest = (request: SourceRequest): string | null => {
   if (request.kind === "none") {
@@ -64,5 +71,11 @@ const labelOfRequest = (request: SourceRequest): string | null => {
   return request.kind === "example" ? request.name : request.label;
 };
 
-export { labelOfRequest, repoOfSearch, requestFromParams, showsLanding };
+export {
+  labelOfRequest,
+  repoOfSearch,
+  requestFromParams,
+  searchOfRepo,
+  showsLanding,
+};
 export type { SourceRequest };

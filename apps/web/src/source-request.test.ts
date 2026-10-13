@@ -6,6 +6,7 @@ import {
   labelOfRequest,
   repoOfSearch,
   requestFromParams,
+  searchOfRepo,
   showsLanding,
 } from "./source-request";
 import type { SourceRequest } from "./source-request";
@@ -65,6 +66,21 @@ describe("repoOfSearch", () => {
     expect(repoOfSearch("?repo=o/r/tree/main/src")).toBe("o/r/tree/main/src");
     expect(repoOfSearch("?repo=o%2Fr")).toBe("o/r");
     expect(repoOfSearch("")).toBe("");
+  });
+});
+
+describe("searchOfRepo", () => {
+  it("keeps slashes readable", () => {
+    expect(searchOfRepo("o/r/tree/main/src")).toBe("?repo=o/r/tree/main/src");
+  });
+
+  it.each([
+    "o/r",
+    "o/r/tree/main/a+b",
+    "o/r/tree/v1.0/c++/@scope",
+    "o/r/tree/main/x&y=1#z",
+  ])("reads back as the same path: %s", (path) => {
+    expect(repoOfSearch(searchOfRepo(path))).toBe(path);
   });
 });
 

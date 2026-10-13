@@ -23,6 +23,7 @@ import {
   readErrorMessage,
   zipLabel,
 } from "~/local-reads";
+import { searchOfRepo } from "~/source-request";
 import type { SourceRequest } from "~/source-request";
 import { TurnstileCheck, turnstileSiteKey } from "~/turnstile";
 import { readZipFile } from "~/zip-files";
@@ -348,7 +349,7 @@ const Landing = ({
         signal: controller.signal,
       });
       // A reload comes back to this repository's field, ready to open.
-      globalThis.history.replaceState(null, "", `?repo=${path}`);
+      globalThis.history.replaceState(null, "", searchOfRepo(path));
       return files;
     });
   }, [target, token, read]);
