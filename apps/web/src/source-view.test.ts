@@ -178,6 +178,20 @@ describe("sourceView calls", () => {
     ]);
   });
 
+  it("names the file of callers that share a name", () => {
+    const caller = {
+      source: 'import { run } from "./lib";\nexport function main() { run(); }',
+    };
+    const shared = parsedFiles([
+      { path: "a.ts", ...caller },
+      { path: "b.ts", ...caller },
+      { path: "lib.ts", source: "export function run() {}" },
+    ]);
+    expect(
+      sourceView(shared.codeGraph, shared.sources, "lib.ts::run")?.callers
+    ).toEqual(["a.ts · main()", "b.ts · main()"]);
+  });
+
   it("keeps five names and counts the rest", () => {
     const names = ["a", "b", "c", "d", "e", "f", "g"];
     const fan = parsedFiles([

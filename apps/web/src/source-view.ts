@@ -40,33 +40,51 @@ const CALL_LIST_MAX = 5;
 
 const NO_CALLS: readonly string[] = [];
 
-/** The first `CALL_LIST_MAX` entries, then how many more there are. */
-const cut = (entries: readonly string[]): readonly string[] =>
-  entries.length > CALL_LIST_MAX
-    ? [...entries.slice(0, CALL_LIST_MAX), `+${entries.length - CALL_LIST_MAX}`]
-    : entries;
+/** A call or, for an ambiguous one, every function it may reach. */
+type CallEntry = CallLink | readonly FunctionNode[];
 
-/** `Class.method()` and, for a function calling itself, `↻`. */
-const linkLabel = (codeGraph: CodeGraph, link: CallLink): string => {
-  const label = labelOf(codeGraph, link.fn.id);
-  return link.recursive ? `${label} ↻` : label;
+const functionsIn = (entry: CallEntry): readonly FunctionNode[] =>
+  "fn" in entry ? [entry.fn] : entry;
+
+/**
+ * The first `CALL_LIST_MAX` entries, then how many more there are. Only
+ * those shown are labelled, so a function called from hundreds of places
+ * costs no more than one called from five. `Class.method()`, with its file
+ * (`src/a.ts · main()`) when another function shown shares the name; `↻`
+ * for a function calling itself, `maybe a() | b()` for an ambiguous call.
+ */
+const callList = (
+  codeGraph: CodeGraph,
+  entries: readonly CallEntry[]
+): readonly string[] => {
+  const shown = entries.slice(0, CALL_LIST_MAX);
+  const counts = new Map<string, number>();
+  for (const fn of shown.flatMap(functionsIn)) {
+    counts.set(fn.qualifiedName, (counts.get(fn.qualifiedName) ?? 0) + 1);
+  }
+  const name = (fn: FunctionNode): string => {
+    const label = labelOf(codeGraph, fn.id);
+    return (counts.get(fn.qualifiedName) ?? 0) > 1
+      ? `${fn.moduleId} · ${label}`
+      : label;
+  };
+  const labels = shown.map((entry) => {
+    if (!("fn" in entry)) {
+      return `maybe ${entry.map(name).join(" | ")}`;
+    }
+    return entry.recursive ? `${name(entry.fn)} ↻` : name(entry.fn);
+  });
+  const hidden = entries.length - shown.length;
+  return hidden > 0 ? [...labels, `+${hidden}`] : labels;
 };
 
 const callsOf = (codeGraph: CodeGraph, fn: FunctionNode) => {
   const index = callIndexOf(codeGraph);
-  const maybe = index
-    .maybeCalleesOf(fn.id)
-    .map(
-      (group) =>
-        `maybe ${group.map((candidate) => labelOf(codeGraph, candidate.id)).join(" | ")}`
-    );
   return {
-    callers: cut(
-      index.callersOf(fn.id).map((link) => linkLabel(codeGraph, link))
-    ),
-    callees: cut([
-      ...index.calleesOf(fn.id).map((link) => linkLabel(codeGraph, link)),
-      ...maybe,
+    callers: callList(codeGraph, index.callersOf(fn.id)),
+    callees: callList(codeGraph, [
+      ...index.calleesOf(fn.id),
+      ...index.maybeCalleesOf(fn.id),
     ]),
   };
 };
