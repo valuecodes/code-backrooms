@@ -1,97 +1,90 @@
 import type { BuiltRoom } from "@repo/types";
 import { WALL_HEIGHT } from "@repo/world-generator/config";
-import { hashString } from "@repo/world-generator/random";
 import { useEffect, useMemo } from "react";
 
-import { FIXTURE_DROP, fixturePositions } from "./fixtures";
-import { lintelTint, wallTint } from "./lane-tint";
-import type { Rgb } from "./lane-tint";
+import type { AreaLighting } from "./area-lighting";
+import { fixturePositions } from "./fixtures";
+import type { LightmapFace } from "./lightmap-layout";
+import { writeLightmapUv } from "./lightmap-layout";
 import { mergeBoxes } from "./merge";
 import { useSurfaces } from "./surfaces";
 import { tiledPlane } from "./tiled-geometry";
+import { diffuserBox, housingBoxes } from "./troffer";
+import { segmentColour } from "./wall-colour";
 
 type RoomProps = {
   readonly built: BuiltRoom;
+  /** Its area's lightmapped materials and layout. */
+  readonly lighting: AreaLighting;
+  /** Its faces in the area's lightmap: floor, ceiling, then its walls. */
+  readonly faces: readonly LightmapFace[];
 };
 
-const FIXTURE_SIZE = [1.2, 0.08, 0.3] as const;
+/** BoxGeometry and PlaneGeometry both give each face four vertices. */
+const PER_FACE = 4;
 
 /**
- * Each room's wallpaper a shade lighter or darker (within 4 %), fixed by its
- * id, so neighbouring rooms are not quite the same.
+ * One room (or corridor) in six draw calls: merged walls and lintels, floor,
+ * ceiling, merged troffer housings and diffusers. Door frames are drawn once
+ * per shared edge by the World, not here. Walls, floor and ceiling are built
+ * in world space and carry `uv1` into the area's lightmap.
  */
-const wallShade = (roomId: string): number =>
-  1 + ((hashString(roomId) % 81) - 40) / 1000;
-
-// Not clamped at 1: plain walls are white, and vertex colours just above 1
-// brighten the wallpaper texture, so lighter rooms differ as darker ones do.
-const shaded = ([r, g, b]: Rgb, shade: number): Rgb => [
-  r * shade,
-  g * shade,
-  b * shade,
-];
-
-/**
- * One room (or corridor) in five draw calls: merged walls and lintels, floor,
- * ceiling, merged fixture panels. Door frames are drawn once per shared edge
- * by the World, not here.
- */
-const Room = ({ built }: RoomProps) => {
+const Room = ({ built, lighting, faces }: RoomProps) => {
   const surfaces = useSurfaces();
   const { room } = built;
   const [x, y, z] = room.position;
   const top = y + WALL_HEIGHT;
-  // Walls take their lane's wash, lintels the full colour of their door's
-  // lane, both in the room's own shade.
+  const { layout } = lighting;
   const walls = useMemo(() => {
-    const shade = wallShade(built.room.id);
-    return mergeBoxes(
+    const merged = mergeBoxes(
       built.segments.map((segment) => ({
         ...segment,
-        color: shaded(
-          segment.kind === "lintel"
-            ? lintelTint(segment.lane)
-            : wallTint(segment.lane),
-          shade
-        ),
+        color: segmentColour(segment, built.room.id),
       })),
       surfaces.tile.wallpaper
     );
-  }, [built.room.id, built.segments, surfaces.tile.wallpaper]);
-  const floor = useMemo(
-    () => tiledPlane(room.width, room.depth, surfaces.tile.carpet),
-    [room.width, room.depth, surfaces.tile.carpet]
-  );
-  const ceiling = useMemo(
-    () => tiledPlane(room.width, room.depth, surfaces.tile.ceiling),
-    [room.width, room.depth, surfaces.tile.ceiling]
-  );
-  const fixtures = useMemo(
-    () =>
-      mergeBoxes(
-        fixturePositions(room).map((point) => ({
-          center: [point.x, point.ceiling - FIXTURE_DROP, point.z] as const,
-          size: FIXTURE_SIZE,
-        })),
-        1
-      ),
-    [room]
-  );
+    if (merged !== null) {
+      writeLightmapUv(merged, faces.slice(2), layout, PER_FACE);
+    }
+    return merged;
+  }, [built.room.id, built.segments, surfaces.tile.wallpaper, faces, layout]);
+  const floor = useMemo(() => {
+    const plane = tiledPlane(room.width, room.depth, surfaces.tile.carpet)
+      .rotateX(-Math.PI / 2)
+      .translate(x, y, z);
+    writeLightmapUv(plane, faces.slice(0, 1), layout, PER_FACE);
+    return plane;
+  }, [room.width, room.depth, surfaces.tile.carpet, x, y, z, faces, layout]);
+  const ceiling = useMemo(() => {
+    const plane = tiledPlane(room.width, room.depth, surfaces.tile.ceiling)
+      .rotateX(Math.PI / 2)
+      .translate(x, top, z);
+    writeLightmapUv(plane, faces.slice(1, 2), layout, PER_FACE);
+    return plane;
+  }, [room.width, room.depth, surfaces.tile.ceiling, x, top, z, faces, layout]);
+  const troffers = useMemo(() => {
+    const points = fixturePositions(room);
+    return {
+      housings: mergeBoxes(points.flatMap(housingBoxes), 1),
+      diffusers: mergeBoxes(points.map(diffuserBox), 1),
+    };
+  }, [room]);
   useEffect(
     () => () => {
       walls?.dispose();
       floor.dispose();
       ceiling.dispose();
-      fixtures?.dispose();
+      troffers.housings?.dispose();
+      troffers.diffusers?.dispose();
     },
-    [walls, floor, ceiling, fixtures]
+    [walls, floor, ceiling, troffers]
   );
   return (
     <group>
       {walls !== null && (
         <mesh
           geometry={walls}
-          material={surfaces.wall}
+          material={lighting.wall}
           castShadow
           receiveShadow
           dispose={null}
@@ -99,22 +92,29 @@ const Room = ({ built }: RoomProps) => {
       )}
       <mesh
         geometry={floor}
-        material={surfaces.floor}
-        position={[x, y, z]}
-        rotation={[-Math.PI / 2, 0, 0]}
+        material={lighting.floor}
         receiveShadow
         dispose={null}
       />
       <mesh
         geometry={ceiling}
-        material={surfaces.ceiling}
-        position={[x, top, z]}
-        rotation={[Math.PI / 2, 0, 0]}
+        material={lighting.ceiling}
         receiveShadow
         dispose={null}
       />
-      {fixtures !== null && (
-        <mesh geometry={fixtures} material={surfaces.fixture} dispose={null} />
+      {troffers.housings !== null && (
+        <mesh
+          geometry={troffers.housings}
+          material={surfaces.troffer}
+          dispose={null}
+        />
+      )}
+      {troffers.diffusers !== null && (
+        <mesh
+          geometry={troffers.diffusers}
+          material={surfaces.fixture}
+          dispose={null}
+        />
       )}
     </group>
   );

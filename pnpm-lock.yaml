@@ -404,6 +404,9 @@ importers:
       three:
         specifier: 'catalog:'
         version: 0.186.0
+      three-mesh-bvh:
+        specifier: 0.8.3
+        version: 0.8.3(three@0.186.0)
     devDependencies:
       '@repo/prettier':
         specifier: workspace:*
