@@ -6,7 +6,7 @@ import type { LocalFiles } from "~/zip-files";
 
 // A public GitHub repository to the files of a code world: one request to
 // this site's Worker (`api/github-zip.ts`), which fetches the repository's zip from
-// GitHub, then the same zip reader as a dropped file.
+// GitHub, then `zip-files.ts` reads it in the tab.
 
 type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 

@@ -21,22 +21,24 @@ where the current function was entered, and R to the entrance.
 
 ## Loading a repository
 
-A bare URL opens the landing page. Drop or pick a `.zip` (GitHub's
-"Download ZIP" works as is) or pick a folder. Files are read in the browser
-tab and never uploaded. Only JavaScript and TypeScript sources and manifests
-are kept, and dependency, build and test directories are skipped.
+A bare URL opens the landing page. Paste a public GitHub repository URL, such
+as `github.com/owner/repo`, or `github.com/owner/repo/tree/main/src` for one
+folder, and press open once the Cloudflare Turnstile check passes. This
+site's Worker downloads the repository's zip from GitHub in one request, and
+the page reads it in the tab. Only JavaScript and TypeScript sources and
+manifests are kept, and dependency, build and test directories are skipped.
 
-You can also paste a public GitHub repository URL, such as
-`github.com/owner/repo` or `github.com/owner/repo/tree/main/src` for one
-folder. After a Cloudflare Turnstile check, this site's Worker downloads the
-repository's zip from GitHub in one request and the page reads it like a
-dropped zip. `?repo=owner/repo` fills the field in. Running this locally
-needs `pnpm --filter web dev:worker` beside `dev`. See `AGENTS.md` for that
-and for the deploy settings.
+A loaded repository's address is its share link: `?repo=owner/repo` fills the
+field in and opens the repository as soon as the visitor's check passes,
+usually with no click. Running this locally needs `pnpm --filter web
+dev:worker` beside `dev`. See `AGENTS.md` for that.
+
+For local or private code, "walk a local folder" picks a folder instead. It is
+read in the browser tab and never uploaded.
 
 | Limit               | Value  |
 | ------------------- | ------ |
-| Zip size            | 64 MB  |
+| GitHub zip size     | 64 MB  |
 | Kept source files   | 400    |
 | Kept bytes in total | 8 MB   |
 | One file            | 256 KB |
@@ -96,35 +98,49 @@ at startup (`packages/renderer/src/textures.ts`), so there are no image assets.
 
 ## Deploy (Cloudflare)
 
-The app deploys as static assets on a Cloudflare Worker. `wrangler.jsonc` serves
-`dist/`, and `public/_headers` (copied into `dist/` by Vite) sets the security and
-cache headers. `wrangler` is a pinned devDependency, so the deploy uses the lockfile
-version rather than `npx`.
+The app deploys as a Cloudflare Worker named `code-backrooms` (`wrangler.jsonc`).
+It serves `dist/` as static assets and runs code only for `/api/*`, the GitHub
+zip route (`src/api/`). `public/_headers` (copied into `dist/` by Vite) sets the
+security and cache headers.
 
 There is no CI deploy job. To connect the repo in the Cloudflare dashboard
 (Workers & Pages → Create → Import a repository):
 
-| Setting        | Value                       |
-| -------------- | --------------------------- |
-| Root directory | `apps/web`                  |
-| Build command  | `pnpm build`                |
-| Deploy command | `pnpm exec wrangler deploy` |
+| Setting        | Value                 |
+| -------------- | --------------------- |
+| Root directory | `apps/web`            |
+| Build command  | `pnpm run build`      |
+| Deploy command | `npx wrangler deploy` |
 
-Also set these build variables (Settings → Build → Variables), so Cloudflare installs
-dependencies with the repo's toolchain. The install runs before the build command,
-so pinning versions there would be too late:
+The build image reads Node from `.nvmrc` and pnpm from the root `packageManager`
+field. If a build log shows other versions, set the `NODE_VERSION` and
+`PNPM_VERSION` build variables to match.
 
-| Variable       | Value     |
-| -------------- | --------- |
-| `NODE_VERSION` | `24.21.0` |
-| `PNPM_VERSION` | `12.4.2`  |
+### Turnstile
 
-Keep them in step with `.nvmrc` and the root `packageManager` field.
+Loading from GitHub needs a Cloudflare Turnstile widget. Create one in the
+dashboard (Turnstile → Add widget) with the production domain as a hostname,
+then set its two keys in two different places:
+
+| Key                       | Where                                                       |
+| ------------------------- | ----------------------------------------------------------- |
+| `VITE_TURNSTILE_SITE_KEY` | Settings → Build → Variables: Vite inlines it into the page |
+| `TURNSTILE_SECRET`        | Settings → Variables and Secrets, type Secret               |
+
+The secret must be a runtime secret, not a build variable: build variables exist
+only while the site builds, and without the secret the Worker answers every
+GitHub load with "loading from GitHub is not set up on this server". It can also
+be set with `pnpm --filter web exec wrangler secret put TURNSTILE_SECRET`.
+Without the site key the GitHub field is hidden and the folder picker is the
+page's only loader. The Worker verifies each token with Turnstile's `siteverify`
+before it fetches, and rate-limits each IP to 5 loads a minute.
 
 To deploy from your machine instead, run `pnpm --filter web exec wrangler login` once, then
 `pnpm --filter web deploy`.
 
-The Content-Security-Policy in `public/_headers` allows only this origin plus
-Cloudflare Web Analytics. Loading scripts, fonts, images or APIs from any other
-origin needs a matching entry there, or the browser blocks it in production (the
-Vite dev server does not apply `_headers`).
+The Content-Security-Policy in `public/_headers` allows only this origin,
+Cloudflare Web Analytics and Turnstile (`challenges.cloudflare.com` as a script
+and a frame). Loading scripts, fonts, images or APIs from any other origin needs a
+matching entry there, or the browser blocks it in production (the Vite dev server
+does not apply `_headers`). Cloudflare's Bot Fight Mode injects an inline script
+this policy blocks, so keep it off for this domain.

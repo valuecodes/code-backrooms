@@ -9,8 +9,15 @@ and every call is a door.
 
 ![Inside main(): the call room, with the if/else lanes ahead behind their tinted door frames](docs/media/hero.jpg)
 
-Drop a zip of any JavaScript or TypeScript repository on the page, or pick a
-folder. Nothing is uploaded: the code is parsed in your browser tab.
+Paste the URL of any public JavaScript or TypeScript repository on GitHub, or
+walk a local folder. The code is parsed in your browser tab, and a folder is
+never uploaded. Once a repository is open, the address bar is its share link,
+for example
+[`?repo=valuecodes/code-backrooms`](https://code-backrooms.valuecodes.fi/?repo=valuecodes/code-backrooms).
+
+A GitHub repository comes through this site's Cloudflare Worker as one zip
+download from GitHub, after a Cloudflare Turnstile check that keeps bots from
+using it as a proxy.
 
 ## What you are walking through
 
@@ -67,17 +74,17 @@ Then open http://localhost:3000.
 
 ## How it works
 
-Everything runs in the browser tab. Code decides which rooms and doors exist.
+Parsing and building run in the browser tab. Code decides which rooms and doors exist.
 A seed taken from a hash of the source decides only sizes and placement, so
 the same code always gives the same world.
 
 ```mermaid
 flowchart TD
   subgraph load["Load: apps/web"]
-    A["Zip, folder, or bundled example"] --> B["Source filter<br/>JS/TS files and manifests,<br/>size and count caps"]
+    A["GitHub repository, folder,<br/>or bundled example"] --> B["Source filter<br/>JS/TS files and manifests,<br/>size and count caps"]
   end
 
-  subgraph analyse["Analyse: Web Worker for a zip or folder"]
+  subgraph analyse["Analyse: Web Worker for a repository or folder"]
     B --> C["@repo/parser<br/>Babel AST per file"]
     C --> D["CodeGraph<br/>modules, functions, calls,<br/>control-flow trees, imports"]
   end

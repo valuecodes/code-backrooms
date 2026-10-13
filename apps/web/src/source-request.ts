@@ -4,17 +4,17 @@ import type { ExampleName } from "~/example-files";
 import type { WorldParams } from "~/params";
 
 // What the 3D app builds its world from: nothing yet (the landing page, or a
-// random or preset world), a bundled example named by the URL, or a zip,
-// folder or GitHub repository the user brought. Their files live in memory
-// only, so a reload returns to the landing page (with `?repo=` filled in for
-// a GitHub repository).
+// random or preset world), a bundled example named by the URL, or a GitHub
+// repository or folder the user brought. Their files live in memory only, so
+// a reload returns to the landing page (which reopens a GitHub repository
+// from `?repo=` once the visitor's check passes).
 
 type SourceRequest =
   | { readonly kind: "none" }
   | { readonly kind: "example"; readonly name: ExampleName }
   | {
       readonly kind: "local";
-      /** The zip's or folder's name, shown in the HUD. */
+      /** The repository's or folder's name, shown in the HUD. */
       readonly label: string;
       readonly files: readonly SourceFile[];
       /** Files over the size cap, left out before anything was read. */
@@ -51,7 +51,8 @@ const showsLanding = (request: SourceRequest, search: string): boolean => {
 
 /**
  * `?repo=`, a GitHub repository to fill in on the landing page, or "". It
- * never opens a world by itself: the fetch waits for the visitor's check.
+ * never opens a world by itself: the landing page opens it once the
+ * visitor's check passes.
  */
 const repoOfSearch = (search: string): string =>
   new URLSearchParams(search).get("repo") ?? "";

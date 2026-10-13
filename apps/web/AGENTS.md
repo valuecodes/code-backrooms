@@ -153,8 +153,8 @@ not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   whole world, on `?view=map` too; wider than 600 m the map hides rooms and
   area labels and draws zone names larger, each within its band.
 - Milestone 20: repository loading (Phase 7). A bare URL opens a
-  landing page: drop or pick a `.zip` (GitHub's "Download ZIP" works as
-  is), pick a folder, or follow Demo (`?code=self`, this repository's own
+  landing page: drop or pick a `.zip` (removed in Milestone 23), pick a
+  folder, or follow Demo (`?code=self`, this repository's own
   sources) or a bundled example. Files are read in the tab and never leave
   it, and a reload returns to the landing page. `source-filter.ts` keeps
   sources (`.ts .tsx .mts .cts .js .jsx .mjs .cjs`) and manifests
@@ -175,10 +175,10 @@ not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   toward its first doorway and back while its gaze sways
   (`landing-backdrop.tsx`, `driftPose` in `backdrop.ts`). It is skipped
   without WebGL2 (it runs under `prefers-reduced-motion` too), swallowed by an error
-  boundary if the canvas fails, and dropped as soon as a read starts. The
+  boundary if the canvas fails, and darkened while a read runs. The
   world view (`world-app.tsx`) and the backdrop are lazy chunks, so the
   landing page paints before three.js loads.
-- Milestone 22 (current): a public GitHub repository by URL. The landing
+- Milestone 22: a public GitHub repository by URL. The landing
   page takes `github.com/owner/repo`, `owner/repo` or a
   `/tree/<ref>/<folder>` URL (`github-url.ts`; refs with `/` are not
   supported). One load is one request to GitHub: the page calls this site's
@@ -191,16 +191,22 @@ not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   only once a URL is typed). Each IP is rate-limited to 5 loads a minute.
   Answers are edge-cached for 10 minutes, and zips over 64 MB are refused or
   cut off. A loaded repository writes `?repo=` so a reload or a shared link
-  fills the field in again. The visitor still presses open, because each
-  Turnstile token is single-use. Without a site key at build time the field
+  fills the field in again. Without a site key at build time the field
   is hidden, so production never falls back to the test key.
+- Milestone 23 (current): GitHub first. The landing page drops the zip
+  drop zone and picker: its card is the GitHub field, with a quiet "walk a
+  local folder" link below (the card's only button when the build has no
+  Turnstile key). A `?repo=` link opens by itself as soon as its check
+  passes, once, unless the field is edited first; the token is spent
+  through a ref so an auto-open and a click cannot send it twice. While a
+  read runs the backdrop stays and darkens over `FADE_MS`, and no read hands
+  over sooner, so the page fades into the loading screen instead of
+  cutting to black.
 
 ---
 
 ## Workspace Commands
 
-| Task       | Command                        |
-| ---------- | ------------------------------ |
 | Task       | Command                        |
 | ---------- | ------------------------------ |
 | Dev        | `pnpm --filter web dev`        |
@@ -224,14 +230,20 @@ Or run repo-wide via root `pnpm typecheck` / `pnpm test` / `pnpm build`.
 
 ### Deploying (Cloudflare Workers Builds, repository connected in the dashboard)
 
-- **Build settings:** set the root directory to the repository root. The build
-  command is `pnpm --filter web build`, and the deploy command is
-  `pnpm --filter web exec wrangler deploy`.
-- **Build variables:** `PNPM_VERSION=12.4.2` and `NODE_VERSION=24.21.0`, since the
-  build image's pnpm default is older. Also set `VITE_TURNSTILE_SITE_KEY` to the
-  widget's site key. Vite inlines it at build time, so it is a _build_ variable.
-- **Runtime secret:** `TURNSTILE_SECRET` under the Worker's Variables and Secrets.
-  `wrangler.jsonc` declares no value for it, so deploys keep it.
+- **Worker:** `code-backrooms`, the `name` in `wrangler.jsonc`. Workers Builds
+  expects the connected Worker's name to match, and local `wrangler secret` and
+  `wrangler tail` target it without `--name`.
+- **Build settings:** root directory `apps/web`, build command `pnpm run build`,
+  deploy command `npx wrangler deploy`.
+- **Build variables:** `VITE_TURNSTILE_SITE_KEY`, the widget's site key. Vite
+  inlines it at build time, so it is a _build_ variable. The build image reads
+  Node from `.nvmrc` and pnpm from `packageManager`; set `NODE_VERSION` and
+  `PNPM_VERSION` only if a build log shows other versions.
+- **Runtime secret:** `TURNSTILE_SECRET` under the Worker's Settings → Variables
+  and Secrets, type Secret, or `pnpm --filter web exec wrangler secret put
+TURNSTILE_SECRET`. Never a build variable: those exist only during the build,
+  and the Worker then answers every GitHub load with 503 "not set up on this
+  server". `wrangler.jsonc` declares no value for it, so deploys keep it.
 - **Turnstile widget:** create it in the Cloudflare dashboard. Its hostnames must
   include the production domain, plus the `workers.dev` domain if preview builds
   are on. A preview without its hostname refuses GitHub loads and everything else
@@ -252,7 +264,7 @@ src/
   app.tsx             landing page, loading screen, or the world as a lazy chunk
   world-app.tsx       the world: full-screen <Canvas>, seed and current-room
                       state, pointer lock, HUD
-  landing.tsx         the bare URL's page: zip drop and pickers, GitHub URL, Demo, examples
+  landing.tsx         the bare URL's page: GitHub URL, folder picker, Demo, examples
   github-url.ts       a GitHub URL -> owner, repo, ref, folder; checks shared with the Worker, pure
   github-files.ts     a GitHub repository -> sources: one call to the Worker, then zip-files
   github-form.tsx     the landing page's GitHub URL field, check and open button, markup only
@@ -263,10 +275,10 @@ src/
   landing-backdrop.tsx  the demo world drifting behind the landing page, lazy
   backdrop.ts         when the backdrop runs and where its camera is, pure
   backdrop-world.ts   the demo world for the backdrop, every area built
-  local-reads.ts      one read at a time, zip and folder labels, read errors, pure
+  local-reads.ts      one read at a time, folder labels, read errors, pure
   source-request.ts   what to build: nothing, a URL example, or local files, pure
   source-filter.ts    which zip or folder entries become sources, and the caps, pure
-  zip-files.ts        a zip -> sources (fflate's sync API, two passes)
+  zip-files.ts        a GitHub zip -> sources (fflate's sync API, two passes)
   folder-files.ts     a folder pick -> sources, reading only the kept files
   use-source-files.ts a request's files: bundled at once, `self` as its own chunk
   world-setup.ts      a request -> everything a page needs to generate its world

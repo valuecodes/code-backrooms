@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ChangeEvent, DragEvent, ReactNode } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 
 import { backdropAllowed } from "~/backdrop";
 import { filesFromFolder } from "~/folder-files";
@@ -16,23 +16,16 @@ import { readGitHubRepo } from "~/github-files";
 import { GitHubForm } from "~/github-form";
 import type { GitHubField } from "~/github-form";
 import { gitHubPath, parseGitHubUrl } from "~/github-url";
-import {
-  createReadGuard,
-  folderLabel,
-  isZipName,
-  readErrorMessage,
-  zipLabel,
-} from "~/local-reads";
+import { createReadGuard, folderLabel, readErrorMessage } from "~/local-reads";
 import { searchOfRepo } from "~/source-request";
 import type { SourceRequest } from "~/source-request";
 import { TurnstileCheck, turnstileSiteKey } from "~/turnstile";
-import { readZipFile } from "~/zip-files";
 import type { LocalFiles } from "~/zip-files";
 
-// The bare URL's page: bring a repository as a zip or a folder, paste a
-// public GitHub URL, or open this one (`?code=self`). A zip or folder is read
-// in the tab and never leaves it; a GitHub repository comes through this
-// site's Worker (`api/`) as one zip download.
+// The bare URL's page: paste a public GitHub URL, pick a local folder, or
+// open this repository (`?code=self`). A GitHub repository comes through this
+// site's Worker (`api/`) as one zip download; a folder is read in the tab and
+// never leaves it.
 
 /** Bundled examples linked under the Demo button. */
 const EXAMPLES: readonly string[] = ["demo", "loops", "switches", "repo"];
@@ -83,14 +76,22 @@ const useBackdrop = (): boolean => {
 const BUTTON =
   "cursor-pointer rounded border border-amber-100/30 px-3 py-1 hover:bg-amber-100/10 has-disabled:cursor-default has-disabled:opacity-40";
 
+const LINK =
+  "cursor-pointer underline decoration-amber-100/30 hover:text-amber-50 has-disabled:cursor-default has-disabled:opacity-40";
+
+/**
+ * How long the backdrop takes to darken once a read starts. A read never
+ * hands over sooner, so even a quick one fades into the black loading screen
+ * instead of cutting to it.
+ */
+const FADE_MS = 300;
+
 type LandingViewProps = {
-  /** The zip, folder or repository being read, or null. */
+  /** What is being read, as the line to show ("downloading o/r…"), or null. */
   readonly reading: string | null;
   readonly error: string | null;
-  readonly dragging: boolean;
-  readonly onZip: (file: File) => void;
   readonly onFolder: (files: readonly File[]) => void;
-  readonly onDragging: (dragging: boolean) => void;
+  /** The GitHub field; absent when this build has no Turnstile key. */
   readonly github?: GitHubField;
   /** Drawn behind the page; none in tests and where WebGL cannot run. */
   readonly backdrop?: ReactNode;
@@ -99,10 +100,36 @@ type LandingViewProps = {
 /** The picked files, copied out before the input is reset. */
 const takeFiles = (event: ChangeEvent<HTMLInputElement>): File[] => {
   const files = [...(event.currentTarget.files ?? [])];
-  // Picking the same file again still fires a change.
+  // Picking the same folder again still fires a change.
   event.currentTarget.value = "";
   return files;
 };
+
+/** A folder picker styled by `className`: a button or a quiet link. */
+const FolderPicker = ({
+  busy,
+  className,
+  onFolder,
+  children,
+}: {
+  readonly busy: boolean;
+  readonly className: string;
+  readonly onFolder: (files: readonly File[]) => void;
+  readonly children: string;
+}) => (
+  <label className={className}>
+    {children}
+    <input
+      type="file"
+      multiple
+      // React's types omit it; the browser reads the attribute.
+      {...{ webkitdirectory: "" }}
+      className="sr-only"
+      disabled={busy}
+      onChange={(event) => onFolder(takeFiles(event))}
+    />
+  </label>
+);
 
 /** A link, or plain text while a read runs: an anchor would still follow Enter. */
 const PageLink = ({
@@ -128,26 +155,11 @@ const PageLink = ({
 const LandingView = ({
   reading,
   error,
-  dragging,
-  onZip,
   onFolder,
-  onDragging,
   github,
   backdrop,
 }: LandingViewProps) => {
   const busy = reading !== null;
-  const onDragOver = (event: DragEvent) => {
-    event.preventDefault();
-    onDragging(!busy);
-  };
-  const onDrop = (event: DragEvent) => {
-    event.preventDefault();
-    onDragging(false);
-    const [file] = event.dataTransfer.files;
-    if (!busy && file !== undefined) {
-      onZip(file);
-    }
-  };
   return (
     <main
       className="relative isolate flex min-h-dvh w-screen flex-col items-center justify-center gap-8 overflow-hidden bg-black px-6 py-10 font-mono text-sm text-amber-100/80"
@@ -156,7 +168,11 @@ const LandingView = ({
       {backdrop !== undefined && (
         <div aria-hidden className="absolute inset-0 -z-10">
           {backdrop}
-          <div className="absolute inset-0 bg-black/45" />
+          <div
+            className={`absolute inset-0 bg-black transition-opacity duration-300 ${
+              busy ? "opacity-90" : "opacity-45"
+            }`}
+          />
         </div>
       )}
       <div className="flex max-w-prose flex-col gap-2 text-center drop-shadow">
@@ -170,60 +186,37 @@ const LandingView = ({
       </div>
       <section
         aria-label="Load a repository"
-        className={`flex w-full max-w-lg flex-col items-center gap-4 rounded border border-dashed px-6 py-8 text-center backdrop-blur-sm ${
-          dragging
-            ? "border-amber-200 bg-amber-100/10"
-            : "border-amber-100/30 bg-black/60"
-        }`}
-        onDragOver={onDragOver}
-        onDragLeave={() => onDragging(false)}
-        onDrop={onDrop}
+        className="flex w-full max-w-lg flex-col items-center gap-4 rounded border border-amber-100/30 bg-black/60 px-6 py-6 text-center backdrop-blur-sm"
       >
-        {busy ? (
-          <p className="animate-pulse">reading {reading}…</p>
+        {github === undefined ? (
+          <FolderPicker busy={busy} className={BUTTON} onFolder={onFolder}>
+            choose a folder
+          </FolderPicker>
         ) : (
-          <p>drop a .zip of a repository here</p>
+          <GitHubForm field={github} busy={busy} />
         )}
-        <div className="flex flex-wrap justify-center gap-3">
-          <label className={BUTTON}>
-            choose zip
-            <input
-              type="file"
-              accept=".zip,application/zip"
-              className="sr-only"
-              disabled={busy}
-              onChange={(event) => {
-                const [file] = takeFiles(event);
-                if (file !== undefined) {
-                  onZip(file);
-                }
-              }}
-            />
-          </label>
-          <label className={BUTTON}>
-            choose folder
-            <input
-              type="file"
-              multiple
-              // React's types omit it; the browser reads the attribute.
-              {...{ webkitdirectory: "" }}
-              className="sr-only"
-              disabled={busy}
-              onChange={(event) => onFolder(takeFiles(event))}
-            />
-          </label>
-        </div>
-        {github !== undefined && <GitHubForm field={github} busy={busy} />}
+        {busy && <p className="animate-pulse">{reading}</p>}
         {error !== null && (
           <p role="alert" className="text-red-300">
             {error}
           </p>
         )}
         <p className="text-xs text-amber-100/50">
-          nothing is uploaded: read in this tab only · up to 400 source files, 8
-          MB
+          {github === undefined
+            ? "read in this tab, never uploaded"
+            : "public repositories"}{" "}
+          · up to 400 source files, 8 MB
         </p>
       </section>
+      {github !== undefined && (
+        <p className="-mt-4 text-xs text-amber-100/60">
+          or{" "}
+          <FolderPicker busy={busy} className={LINK} onFolder={onFolder}>
+            walk a local folder
+          </FolderPicker>
+          , read in this tab and never uploaded
+        </p>
+      )}
       <div className="flex flex-col items-center gap-2">
         <PageLink
           href="?code=self"
@@ -252,9 +245,9 @@ const LandingView = ({
 };
 
 /**
- * The landing page: reads a zip, folder or GitHub repository, then hands its
- * files to `onLoad`. `initialRepo` fills the GitHub field (`?repo=`); the
- * visitor still presses open, since the fetch needs their Turnstile token.
+ * The landing page: reads a GitHub repository or a folder, then hands its
+ * files to `onLoad`. `initialRepo` fills the GitHub field (`?repo=`, a shared
+ * link) and opens it as soon as the visitor's Turnstile check passes, once.
  */
 const Landing = ({
   onLoad,
@@ -265,9 +258,13 @@ const Landing = ({
 }) => {
   const [reading, setReading] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
   const [repoUrl, setRepoUrl] = useState(initialRepo);
   const [token, setToken] = useState<string | null>(null);
+  // The same token, taken synchronously: an auto-open and a click in the
+  // same tick must not both spend it.
+  const unspent = useRef<string | null>(null);
+  // A shared `?repo=` link opens once its check passes, unless edited first.
+  const autoOpen = useRef(parseGitHubUrl(initialRepo) !== null);
   // Bumped to remount the check after each use: a token is accepted once.
   const [checkRound, setCheckRound] = useState(0);
   const download = useRef<AbortController | null>(null);
@@ -285,15 +282,16 @@ const Landing = ({
   );
 
   const read = useCallback(
-    (name: string, label: string, load: () => Promise<LocalFiles>) => {
+    (status: string, label: string, load: () => Promise<LocalFiles>) => {
       if (reading !== null) {
         return;
       }
       const id = guard.start();
-      setReading(name);
+      setReading(status);
       setFailure(null);
-      void load().then(
-        ({ files, skipped }) => {
+      const faded = new Promise((resolve) => setTimeout(resolve, FADE_MS));
+      void Promise.all([load(), faded]).then(
+        ([{ files, skipped }]) => {
           if (guard.isCurrent(id)) {
             onLoad({ kind: "local", label, files, skipped });
           }
@@ -309,50 +307,54 @@ const Landing = ({
     [reading, guard, onLoad]
   );
 
-  const onZip = useCallback(
-    (file: File) => {
-      if (!isZipName(file.name)) {
-        setFailure("drop a .zip file (use choose folder for folders)");
-        return;
-      }
-      read(file.name, zipLabel(file.name), () => readZipFile(file));
-    },
-    [read]
-  );
-
   const onFolder = useCallback(
     (files: readonly File[]) => {
       if (files.length === 0) {
         return;
       }
       const label = folderLabel(files);
-      read(label, label, () => filesFromFolder(files));
+      read(`reading ${label}…`, label, () => filesFromFolder(files));
     },
     [read]
   );
+
+  const onToken = useCallback((next: string | null) => {
+    unspent.current = next;
+    setToken(next);
+  }, []);
 
   const target = useMemo(() => parseGitHubUrl(repoUrl), [repoUrl]);
 
   const onRepo = useCallback(() => {
     // The button is disabled until both hold; Enter is checked the same way.
-    if (target === null || token === null) {
+    const spent = unspent.current;
+    if (target === null || spent === null || reading !== null) {
       return;
     }
+    unspent.current = null;
+    autoOpen.current = false;
     const path = gitHubPath(target);
     const controller = new AbortController();
     download.current = controller;
     setToken(null);
     setCheckRound((round) => round + 1);
-    read(path, path, async () => {
-      const files = await readGitHubRepo(target, token, {
+    read(`downloading ${path} from GitHub…`, path, async () => {
+      const files = await readGitHubRepo(target, spent, {
         fetch: (url, init) => globalThis.fetch(url, init),
         signal: controller.signal,
       });
-      // A reload comes back to this repository's field, ready to open.
+      // The address bar is now this world's share link.
       globalThis.history.replaceState(null, "", searchOfRepo(path));
       return files;
     });
-  }, [target, token, read]);
+  }, [target, reading, read]);
+
+  // A shared link opens by itself once the check hands over a token.
+  useEffect(() => {
+    if (autoOpen.current && token !== null) {
+      onRepo();
+    }
+  }, [token, onRepo]);
 
   const github: GitHubField | undefined =
     siteKey === null
@@ -360,6 +362,7 @@ const Landing = ({
       : {
           url: repoUrl,
           onUrl: (url) => {
+            autoOpen.current = false;
             setRepoUrl(url);
             setFailure(null);
           },
@@ -370,7 +373,7 @@ const Landing = ({
             <TurnstileCheck
               key={checkRound}
               siteKey={siteKey}
-              onToken={setToken}
+              onToken={onToken}
             />
           ),
         };
@@ -379,14 +382,12 @@ const Landing = ({
     <LandingView
       reading={reading}
       error={failure}
-      dragging={dragging}
-      onZip={onZip}
       onFolder={onFolder}
-      onDragging={setDragging}
       github={github}
-      // Dropped once a read starts, freeing the GPU before the world loads.
+      // Kept, darkened, through the read: the page unmounts on `onLoad`, which
+      // frees the GPU before the world is parsed.
       backdrop={
-        backdrop && reading === null ? (
+        backdrop ? (
           <BackdropBoundary>
             <Suspense fallback={null}>
               <LandingBackdrop />

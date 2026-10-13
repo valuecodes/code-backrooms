@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  createReadGuard,
-  folderLabel,
-  isZipName,
-  readErrorMessage,
-  zipLabel,
-} from "./local-reads";
+import { createReadGuard, folderLabel, readErrorMessage } from "./local-reads";
 import { LocalLoadError } from "./source-filter";
 
 describe("createReadGuard", () => {
@@ -24,21 +18,6 @@ describe("createReadGuard", () => {
     const id = guard.start();
     guard.cancel();
     expect(guard.isCurrent(id)).toBe(false);
-  });
-});
-
-describe("zip names", () => {
-  it("accepts .zip in any case and nothing else", () => {
-    expect(isZipName("repo-main.zip")).toBe(true);
-    expect(isZipName("A.ZIP")).toBe(true);
-    expect(isZipName("a.zip.txt")).toBe(false);
-    expect(isZipName("notes.txt")).toBe(false);
-  });
-
-  it("labels a zip by its name without the extension", () => {
-    expect(zipLabel("repo-main.zip")).toBe("repo-main");
-    expect(zipLabel("A.ZIP")).toBe("A");
-    expect(zipLabel(".zip")).toBe(".zip");
   });
 });
 
