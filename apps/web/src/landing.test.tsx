@@ -11,6 +11,7 @@ const render = (
     reading?: string | null;
     error?: string | null;
     backdrop?: ReactNode;
+    github?: { url: string; ready: boolean };
   } = {}
 ): string =>
   renderToStaticMarkup(
@@ -21,6 +22,16 @@ const render = (
       onZip={ignore}
       onFolder={ignore}
       onDragging={ignore}
+      github={
+        state.github === undefined
+          ? undefined
+          : {
+              ...state.github,
+              onUrl: ignore,
+              onOpen: ignore,
+              check: <div id="check" />,
+            }
+      }
       backdrop={state.backdrop}
     />
   );
@@ -60,6 +71,34 @@ describe("LandingView", () => {
 
   it("says that nothing is uploaded", () => {
     expect(render()).toContain("nothing is uploaded");
+  });
+
+  it("has no GitHub field when the build has no Turnstile key", () => {
+    expect(render()).not.toContain("GitHub repository URL");
+  });
+
+  it("offers a GitHub URL field whose open waits for the check", () => {
+    const empty = render({ github: { url: "", ready: false } });
+    expect(empty).toContain('aria-label="GitHub repository URL"');
+    expect(empty).toMatch(/<button type="submit"[^>]*disabled=""/);
+    // The check (and Turnstile's script) only once a URL is typed.
+    expect(empty).not.toContain('id="check"');
+
+    const typed = render({ github: { url: "o/r", ready: false } });
+    expect(typed).toContain('value="o/r"');
+    expect(typed).toContain('id="check"');
+
+    const ready = render({ github: { url: "o/r", ready: true } });
+    expect(ready).not.toMatch(/<button type="submit"[^>]*disabled=""/);
+  });
+
+  it("disables the GitHub field and hides the check while reading", () => {
+    const html = render({
+      reading: "o/r",
+      github: { url: "o/r", ready: true },
+    });
+    expect(html).toMatch(/<button type="submit"[^>]*disabled=""/);
+    expect(html).not.toContain('id="check"');
   });
 
   it("shows a failed read's message as an alert", () => {

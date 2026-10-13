@@ -111,11 +111,11 @@ const megabytes = (bytes: number): string => (bytes / (1024 * 1024)).toFixed(1);
 /** The fatal reason for what survived the rules, or null when it loads. */
 const fatalOf = (kept: readonly KeptEntry[]): string | null => {
   if (kept.length > MAX_KEPT_FILES) {
-    return `${kept.length} files to load, more than the ${MAX_KEPT_FILES} allowed: zip or pick a subfolder`;
+    return `${kept.length} files to load, more than the ${MAX_KEPT_FILES} allowed: load a subfolder`;
   }
   const bytes = kept.reduce((sum, entry) => sum + entry.size, 0);
   if (bytes > MAX_KEPT_BYTES) {
-    return `${megabytes(bytes)} MB of sources, more than the ${megabytes(MAX_KEPT_BYTES)} MB allowed: zip or pick a subfolder`;
+    return `${megabytes(bytes)} MB of sources, more than the ${megabytes(MAX_KEPT_BYTES)} MB allowed: load a subfolder`;
   }
   if (kept.every((entry) => isManifest(entry.path))) {
     return "no JavaScript or TypeScript sources found";

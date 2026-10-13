@@ -4,6 +4,7 @@ import { examples } from "./examples";
 import { parseWorldParams } from "./params";
 import {
   labelOfRequest,
+  repoOfSearch,
   requestFromParams,
   showsLanding,
 } from "./source-request";
@@ -49,9 +50,21 @@ describe("showsLanding", () => {
     expect(showsLanding(NONE, search)).toBe(false);
   });
 
+  it("still shows for ?repo=, which waits for the visitor's check", () => {
+    expect(showsLanding(NONE, "?repo=o/r")).toBe(true);
+  });
+
   it("never shows once there is something to build", () => {
     expect(showsLanding({ kind: "example", name: "demo" }, "")).toBe(false);
     expect(showsLanding(LOCAL, "")).toBe(false);
+  });
+});
+
+describe("repoOfSearch", () => {
+  it("reads ?repo=, slashes escaped or not", () => {
+    expect(repoOfSearch("?repo=o/r/tree/main/src")).toBe("o/r/tree/main/src");
+    expect(repoOfSearch("?repo=o%2Fr")).toBe("o/r");
+    expect(repoOfSearch("")).toBe("");
   });
 });
 

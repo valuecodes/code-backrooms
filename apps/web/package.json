@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 3000",
+    "dev:worker": "mkdir -p dist && wrangler dev --port 8787",
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "pnpm build && wrangler deploy",

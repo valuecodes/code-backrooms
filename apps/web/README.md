@@ -26,6 +26,14 @@ A bare URL opens the landing page. Drop or pick a `.zip` (GitHub's
 tab and never uploaded. Only JavaScript and TypeScript sources and manifests
 are kept, and dependency, build and test directories are skipped.
 
+You can also paste a public GitHub repository URL, such as
+`github.com/owner/repo` or `github.com/owner/repo/tree/main/src` for one
+folder. After a Cloudflare Turnstile check, this site's Worker downloads the
+repository's zip from GitHub in one request and the page reads it like a
+dropped zip. `?repo=owner/repo` fills the field in. Running this locally
+needs `pnpm --filter web dev:worker` beside `dev`. See `AGENTS.md` for that
+and for the deploy settings.
+
 | Limit               | Value  |
 | ------------------- | ------ |
 | Zip size            | 64 MB  |

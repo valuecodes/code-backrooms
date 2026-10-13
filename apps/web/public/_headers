@@ -2,10 +2,12 @@
 # The CSP allows Cloudflare Web Analytics / Browser RUM: the injected beacon script comes from
 # static.cloudflareinsights.com and reports to /cdn-cgi/rum on this origin or cloudflareinsights.com.
 # style-src 'self' is enough: React applies `style` props through the CSSOM, which CSP doesn't block.
+# Cloudflare Turnstile (the check before a GitHub load) runs a script and an iframe from
+# challenges.cloudflare.com. The GitHub zip itself comes from this origin's Worker (/api/*).
 # Loading anything else from another origin (scripts, fonts, APIs) needs an entry here.
 
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data:; style-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data:; style-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()

@@ -131,7 +131,8 @@ push to `main` and on PRs, plus CodeQL code scanning. `secrets:scan` needs eithe
 - JavaScript and TypeScript only.
 - Up to 400 source files and 8 MB per repository.
 - Calls through objects (`obj.method()`) and callbacks show as closed doors.
-- Loading straight from a GitHub URL is not supported yet.
+- GitHub URLs load public repositories only, and branch names containing `/` are not
+  supported.
 
 ## License
 
