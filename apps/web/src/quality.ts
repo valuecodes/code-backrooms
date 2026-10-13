@@ -1,12 +1,13 @@
 import type { Quality } from "@repo/renderer/effects";
 import { useSyncExternalStore } from "react";
 
-// The rendering quality: one value for the whole page, kept in localStorage
-// so a browser that cannot afford the post-processing stays on `low`.
+// The rendering quality: one value for the whole page, kept in localStorage.
+// `low` by default: the post-processing chain costs roughly a frame on top
+// of the frame, so it is opted into with Q rather than paid by everyone.
 
 const KEY = "quality";
 
-const DEFAULT_QUALITY: Quality = "high";
+const DEFAULT_QUALITY: Quality = "low";
 
 type QualityStorage = Pick<Storage, "getItem" | "setItem">;
 

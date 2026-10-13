@@ -57,8 +57,8 @@ const Effects = ({ quality }: { readonly quality: Quality }) => {
     configuration.intensity = 2.5;
     configuration.halfRes = true;
     configuration.depthAwareUpsampling = true;
-    configuration.aoSamples = 12;
-    configuration.denoiseSamples = 6;
+    configuration.aoSamples = 8;
+    configuration.denoiseSamples = 4;
     configuration.denoiseRadius = 8;
     // Tone mapping follows, so the pass must hand on linear light.
     configuration.gammaCorrection = false;
@@ -72,7 +72,8 @@ const Effects = ({ quality }: { readonly quality: Quality }) => {
     <EffectComposer multisampling={0} enableNormalPass={false}>
       <primitive object={occlusion} />
       <Bloom mipmapBlur luminanceThreshold={1} intensity={0.35} />
-      <Noise opacity={0.035} />
+      <Noise opacity={0.01} />
+
       <Vignette offset={0.3} darkness={0.45} />
       <ChromaticAberration
         offset={[0.0006, 0.0006]}
