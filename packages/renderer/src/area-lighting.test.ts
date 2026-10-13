@@ -133,6 +133,27 @@ describe("createAreaLighting", () => {
     expect(store.get(B).floor.lightMap).toBe(surfaces.lightMap);
   });
 
+  it("bakes an area the budget held back once budget is freed", () => {
+    const size = createAreaLighting(shared(), fakeQueue().queue).get(A).layout;
+    const budget = size.width * size.height;
+    // Freed by an area leaving.
+    const leaving = fakeQueue();
+    const store = createAreaLighting(shared(), leaving.queue, budget);
+    store.sync([A, B]);
+    expect(leaving.jobs).toHaveLength(1);
+    store.sync([B]);
+    expect(leaving.jobs).toHaveLength(2);
+    // Freed by a bake failing.
+    const failing = fakeQueue();
+    const other = createAreaLighting(shared(), failing.queue, budget);
+    other.sync([A, B]);
+    failing.finish(0, null);
+    expect(failing.jobs).toHaveLength(2);
+    // The failed area is not tried again.
+    other.sync([A, B]);
+    expect(failing.jobs).toHaveLength(2);
+  });
+
   it("gives back a failed bake's budget and keeps the placeholder", () => {
     const surfaces = shared();
     const fake = fakeQueue();
