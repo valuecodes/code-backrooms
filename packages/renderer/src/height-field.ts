@@ -7,6 +7,8 @@ import { createRng } from "@repo/world-generator/random";
  *
  * A height field is `size × size` values in [0, 1], row-major, row 0 at the
  * top of the texture. Every generator wraps modulo `size`, so the maps tile.
+ * The loops run once per Canvas over a few hundred thousand texels each,
+ * so they index typed arrays directly rather than call per texel.
  */
 
 /** RGBA texels over a plain buffer, as `ImageData` takes them. */
@@ -33,22 +35,34 @@ const latticeNoise = (
   for (let i = 0; i < lattice.length; i += 1) {
     lattice[i] = rng();
   }
-  const at = (cx: number, cy: number): number =>
-    lattice[wrap(cy, cells) * cells + wrap(cx, cells)] ?? 0;
+  // Per axis: the cell before and after each texel and the blend between.
   const span = size / cells;
+  const before = new Int32Array(size);
+  const after = new Int32Array(size);
+  const blend = new Float32Array(size);
+  for (let i = 0; i < size; i += 1) {
+    const cell = Math.floor(i / span);
+    before[i] = cell % cells;
+    after[i] = (cell + 1) % cells;
+    blend[i] = smoothstep(i / span - cell);
+  }
   const out = new Float32Array(size * size);
   for (let y = 0; y < size; y += 1) {
-    const fy = y / span;
-    const cy = Math.floor(fy);
-    const ty = smoothstep(fy - cy);
+    const row0 = (before[y] ?? 0) * cells;
+    const row1 = (after[y] ?? 0) * cells;
+    const ty = blend[y] ?? 0;
+    const base = y * size;
     for (let x = 0; x < size; x += 1) {
-      const fx = x / span;
-      const cx = Math.floor(fx);
-      const tx = smoothstep(fx - cx);
-      const top = at(cx, cy) + (at(cx + 1, cy) - at(cx, cy)) * tx;
-      const bottom =
-        at(cx, cy + 1) + (at(cx + 1, cy + 1) - at(cx, cy + 1)) * tx;
-      out[y * size + x] = top + (bottom - top) * ty;
+      const x0 = before[x] ?? 0;
+      const x1 = after[x] ?? 0;
+      const tx = blend[x] ?? 0;
+      const a = lattice[row0 + x0] ?? 0;
+      const b = lattice[row0 + x1] ?? 0;
+      const c = lattice[row1 + x0] ?? 0;
+      const d = lattice[row1 + x1] ?? 0;
+      const top = a + (b - a) * tx;
+      const bottom = c + (d - c) * tx;
+      out[base + x] = top + (bottom - top) * ty;
     }
   }
   return out;
@@ -61,17 +75,27 @@ type FbmOptions = {
   readonly gain?: number;
 };
 
-/** Fractal sum of periodic value noise, normalised to [0, 1]. */
+/**
+ * Fractal sum of periodic value noise, normalised to [0, 1]. No octave is
+ * finer than two texels per cell: that would only add per-texel noise,
+ * which the surfaces add themselves where they want it. So a small field
+ * (a test's) gets coarser noise than a large one, never none.
+ */
 const fbm = (
   seed: number,
   size: number,
   { octaves, cells, gain = 0.5 }: FbmOptions
 ): Float32Array => {
   const out = new Float32Array(size * size);
+  const first = Math.min(cells, size / 2);
   let amplitude = 1;
   let total = 0;
   for (let octave = 0; octave < octaves; octave += 1) {
-    const noise = latticeNoise(seed + octave * 7919, size, cells * 2 ** octave);
+    const octaveCells = first * 2 ** octave;
+    if (octaveCells * 2 > size) {
+      break;
+    }
+    const noise = latticeNoise(seed + octave * 7919, size, octaveCells);
     for (let i = 0; i < out.length; i += 1) {
       out[i] = (out[i] ?? 0) + (noise[i] ?? 0) * amplitude;
     }
@@ -84,35 +108,38 @@ const fbm = (
   return out;
 };
 
+/** One axis of a wrapping box blur with a running sum: O(n), any radius. */
+const blurAxis = (
+  input: Float32Array,
+  size: number,
+  radius: number,
+  stepX: number,
+  stepY: number
+): Float32Array => {
+  const out = new Float32Array(size * size);
+  const window = 2 * radius + 1;
+  for (let line = 0; line < size; line += 1) {
+    const start = line * stepY;
+    let sum = 0;
+    for (let d = -radius; d <= radius; d += 1) {
+      sum += input[start + wrap(d, size) * stepX] ?? 0;
+    }
+    for (let i = 0; i < size; i += 1) {
+      out[start + i * stepX] = sum / window;
+      sum -= input[start + wrap(i - radius, size) * stepX] ?? 0;
+      sum += input[start + wrap(i + radius + 1, size) * stepX] ?? 0;
+    }
+  }
+  return out;
+};
+
 /** Box blur of radius `radius`, wrapping, two separable passes. */
 const blur = (
   height: Float32Array,
   size: number,
   radius: number
-): Float32Array => {
-  const horizontal = new Float32Array(size * size);
-  const window = 2 * radius + 1;
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      let sum = 0;
-      for (let d = -radius; d <= radius; d += 1) {
-        sum += height[y * size + wrap(x + d, size)] ?? 0;
-      }
-      horizontal[y * size + x] = sum / window;
-    }
-  }
-  const out = new Float32Array(size * size);
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      let sum = 0;
-      for (let d = -radius; d <= radius; d += 1) {
-        sum += horizontal[wrap(y + d, size) * size + x] ?? 0;
-      }
-      out[y * size + x] = sum / window;
-    }
-  }
-  return out;
-};
+): Float32Array =>
+  blurAxis(blurAxis(height, size, radius, 1, size), size, radius, size, 1);
 
 /**
  * Tangent-space normal map from a height field: central differences that
@@ -127,15 +154,18 @@ const heightToNormal = (
 ): Rgba => {
   const out = new Uint8ClampedArray(size * size * 4);
   for (let y = 0; y < size; y += 1) {
+    const row = y * size;
+    const rowUp = wrap(y - 1, size) * size;
+    const rowDown = wrap(y + 1, size) * size;
     for (let x = 0; x < size; x += 1) {
-      const left = height[y * size + wrap(x - 1, size)] ?? 0;
-      const right = height[y * size + wrap(x + 1, size)] ?? 0;
-      const up = height[wrap(y - 1, size) * size + x] ?? 0;
-      const down = height[wrap(y + 1, size) * size + x] ?? 0;
+      const left = height[row + wrap(x - 1, size)] ?? 0;
+      const right = height[row + wrap(x + 1, size)] ?? 0;
+      const up = height[rowUp + x] ?? 0;
+      const down = height[rowDown + x] ?? 0;
       const dx = ((right - left) / 2) * strength;
       const dy = ((down - up) / 2) * strength;
-      const length = Math.hypot(dx, dy, 1);
-      const i = (y * size + x) * 4;
+      const length = Math.sqrt(dx * dx + dy * dy + 1);
+      const i = (row + x) * 4;
       out[i] = 128 + (-dx / length) * 127;
       out[i + 1] = 128 + (dy / length) * 127;
       out[i + 2] = 128 + (1 / length) * 127;
@@ -217,24 +247,36 @@ const downsample = (rgba: Rgba, size: number): Rgba => {
 
 /** Mustard wallpaper: embossed stripes, the diamond motif and paper grain. */
 const wallpaperHeight = (size: number): Float32Array => {
-  const grain = fbm(11, size, { octaves: 4, cells: 32 });
-  const out = new Float32Array(size * size);
+  const grain = fbm(11, size, { octaves: 2, cells: 128 });
   const stripes = 16;
   const diamonds = 4;
   const cell = size / diamonds;
+  // Per axis: the soft-edged stripe, as flocked paper, and each texel's
+  // distance from its diamond cell's centre, scaled to the motif's shape.
+  const stripe = new Float32Array(size);
+  const across = new Float32Array(size);
+  const along = new Float32Array(size);
+  for (let i = 0; i < size; i += 1) {
+    const phase = ((i * stripes) / size) % 1;
+    stripe[i] = phase < 0.45 ? smoothstep(Math.min(1, phase / 0.08)) : 0;
+    const offset = Math.abs((i % cell) / cell - 0.5);
+    across[i] = offset / 0.45;
+    along[i] = offset / 0.7;
+  }
+  const out = new Float32Array(size * size);
   for (let y = 0; y < size; y += 1) {
+    const dy = along[y] ?? 0;
+    const row = y * size;
     for (let x = 0; x < size; x += 1) {
-      // Soft-edged stripes, as flocked paper.
-      const phase = ((x * stripes) / size) % 1;
-      const stripe = phase < 0.45 ? smoothstep(Math.min(1, phase / 0.08)) : 0;
       // The diamond outline: an L1 ring around each cell's centre.
-      const dx = Math.abs(((x % cell) + cell) % cell) / cell - 0.5;
-      const dy = Math.abs(((y % cell) + cell) % cell) / cell - 0.5;
-      const ring = Math.abs(Math.abs(dx) / 0.45 + Math.abs(dy) / 0.7 - 0.5);
+      const ring = Math.abs((across[x] ?? 0) + dy - 0.5);
       const diamond = ring < 0.04 ? 1 - ring / 0.04 : 0;
-      const i = y * size + x;
+      const i = row + x;
       out[i] = clamp01(
-        0.45 + 0.1 * stripe + 0.12 * diamond + 0.25 * ((grain[i] ?? 0) - 0.5)
+        0.45 +
+          0.12 * (stripe[x] ?? 0) +
+          0.15 * diamond +
+          0.1 * ((grain[i] ?? 0) - 0.5)
       );
     }
   }
@@ -243,7 +285,7 @@ const wallpaperHeight = (size: number): Float32Array => {
 
 /** Low-pile carpet: dense fibre noise over a looser weave. */
 const carpetHeight = (size: number): Float32Array => {
-  const fibres = fbm(23, size, { octaves: 5, cells: 64, gain: 0.6 });
+  const fibres = fbm(23, size, { octaves: 4, cells: 32, gain: 0.6 });
   const weave = fbm(29, size, { octaves: 2, cells: 8 });
   const rng = createRng(31);
   const out = new Float32Array(size * size);
@@ -258,18 +300,21 @@ const carpetHeight = (size: number): Float32Array => {
 /** Drop-ceiling tile: fissures, pin holes and the seam around the edge. */
 const ceilingHeight = (size: number): Float32Array => {
   const texture = fbm(41, size, { octaves: 3, cells: 16 });
-  const fissures = fbm(43, size, { octaves: 4, cells: 24, gain: 0.55 });
+  const fissures = fbm(43, size, { octaves: 3, cells: 24, gain: 0.55 });
   const out = new Float32Array(size * size);
   const seam = Math.max(2, Math.round(size / 170));
   for (let y = 0; y < size; y += 1) {
+    const edgeRow = y < seam || y >= size - seam;
+    const row = y * size;
     for (let x = 0; x < size; x += 1) {
-      const i = y * size + x;
-      const fissure = (fissures[i] ?? 0) > 0.62 ? 0.3 : 0;
-      let h = 0.75 + 0.08 * ((texture[i] ?? 0) - 0.5) - fissure;
-      if (x < seam || x >= size - seam || y < seam || y >= size - seam) {
-        h = 0.2;
+      const i = row + x;
+      if (edgeRow || x < seam || x >= size - seam) {
+        out[i] = 0.2;
+        continue;
       }
-      out[i] = clamp01(h);
+      // Sparse, shallow fissures: the tops of the finer noise only.
+      const fissure = (fissures[i] ?? 0) > 0.7 ? 0.12 : 0;
+      out[i] = clamp01(0.75 + 0.05 * ((texture[i] ?? 0) - 0.5) - fissure);
     }
   }
   // Pin holes, placed modulo the size so they tile.
