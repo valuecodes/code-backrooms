@@ -11,7 +11,7 @@ const render = (
     reading?: string | null;
     error?: string | null;
     backdrop?: ReactNode;
-    github?: { url: string; ready: boolean };
+    github?: { url: string; valid: boolean; ready: boolean };
   } = {}
 ): string =>
   renderToStaticMarkup(
@@ -78,24 +78,31 @@ describe("LandingView", () => {
   });
 
   it("offers a GitHub URL field whose open waits for the check", () => {
-    const empty = render({ github: { url: "", ready: false } });
+    const empty = render({ github: { url: "", valid: false, ready: false } });
     expect(empty).toContain('aria-label="GitHub repository URL"');
     expect(empty).toMatch(/<button type="submit"[^>]*disabled=""/);
-    // The check (and Turnstile's script) only once a URL is typed.
+    // The check (and Turnstile's script) only once the URL is valid.
     expect(empty).not.toContain('id="check"');
+    expect(empty).not.toContain("a public repository");
 
-    const typed = render({ github: { url: "o/r", ready: false } });
+    const typed = render({ github: { url: "o/r", valid: true, ready: false } });
     expect(typed).toContain('value="o/r"');
     expect(typed).toContain('id="check"');
 
-    const ready = render({ github: { url: "o/r", ready: true } });
+    const ready = render({ github: { url: "o/r", valid: true, ready: true } });
     expect(ready).not.toMatch(/<button type="submit"[^>]*disabled=""/);
+  });
+
+  it("explains what to type instead of loading the check for a bad URL", () => {
+    const html = render({ github: { url: "o", valid: false, ready: false } });
+    expect(html).toContain("a public repository: github.com/owner/repo");
+    expect(html).not.toContain('id="check"');
   });
 
   it("disables the GitHub field and hides the check while reading", () => {
     const html = render({
       reading: "o/r",
-      github: { url: "o/r", ready: true },
+      github: { url: "o/r", valid: true, ready: true },
     });
     expect(html).toMatch(/<button type="submit"[^>]*disabled=""/);
     expect(html).not.toContain('id="check"');
