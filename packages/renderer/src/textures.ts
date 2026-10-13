@@ -20,8 +20,12 @@ import type { Rgba } from "./height-field";
 /** Metres covered by one repeat of each texture. */
 const TILE = { wallpaper: 1, carpet: 1, ceiling: 0.6 } as const;
 
-/** Texels across the colour and normal maps; the ORM map is half that. */
-const SIZE = 1024;
+/**
+ * Texels across the colour and normal maps, 2 mm each on a 1 m tile; the
+ * ORM map is half that. Generation is synchronous at Canvas mount, so the
+ * size is bounded by its cost as much as by sharpness.
+ */
+const SIZE = 512;
 
 /** The painters below were drawn for a 512 canvas; their measures scale. */
 const S = SIZE / 512;
@@ -186,7 +190,7 @@ const WALLPAPER: SurfaceLook = {
   draw: drawWallpaper,
   height: wallpaperHeight,
   relief: 6,
-  shade: 0.3,
+  shade: 0.15,
   roughness: 0.85,
   spread: 0.1,
   cavity: 2,
@@ -206,7 +210,7 @@ const CEILING: SurfaceLook = {
   draw: drawCeiling,
   height: ceilingHeight,
   relief: 8,
-  shade: 0.4,
+  shade: 0.2,
   roughness: 0.92,
   spread: 0.06,
   cavity: 3,

@@ -19,7 +19,7 @@ type Quality = "low" | "high";
  * Shared by both paths: the renderer tone-maps at `low`, and at `high` the
  * composer's AgX pass reads the renderer's exposure too.
  */
-const EXPOSURE = 1;
+const EXPOSURE = 1.15;
 
 /**
  * The frame's look, the same at every quality: AgX tone mapping, with the
