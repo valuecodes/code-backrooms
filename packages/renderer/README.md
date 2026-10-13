@@ -4,6 +4,7 @@ React Three Fiber components, player and lights for a built world.
 
 ```tsx
 import { PointerLook } from "@repo/renderer/controls";
+import { Effects } from "@repo/renderer/effects";
 import { Player } from "@repo/renderer/player";
 import { World } from "@repo/renderer/world";
 
@@ -11,6 +12,7 @@ import { World } from "@repo/renderer/world";
   <World world={areaWorld} />
   <Player world={areaWorld} enabled={locked} onRoomChange={setRoomId} />
   <PointerLook />
+  <Effects quality="high" />
 </Canvas>;
 ```
 
@@ -49,3 +51,13 @@ shaders compile once (and again only for a material an area brings first),
 and a single static shadow map that re-renders only
 when the shadow light hops to another fixture or an area joins. Every light buzzes with a
 phase fixed by its fixture's position, so neighbours never flicker in step.
+
+The wallpaper, carpet and ceiling tile are generated on the fly
+(`textures.ts`): each is a seeded, periodic height field (`height-field.ts`)
+that gives a colour map, a normal map and one occlusion-roughness map, so
+nothing is fetched and the maps tile without a seam. `Effects` sets the
+frame's look at either quality, AgX tone mapping at one exposure; at `high`
+it adds ambient occlusion (n8ao), bloom off the fixtures, grain, a vignette
+and a touch of lens fringing through `@react-three/postprocessing`, tone
+mapped last. The haze past the fog is a sphere around the camera rather than
+the clear colour, so it is tone mapped like the walls at both qualities.

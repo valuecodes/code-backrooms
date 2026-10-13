@@ -29,7 +29,7 @@ import type { LocalFiles } from "~/zip-files";
 const EXAMPLES: readonly string[] = ["demo", "loops", "switches", "repo"];
 
 const HINTS =
-  "WASD move · Shift sprint · mouse look · E source · Tab world map · Backspace back · Esc release";
+  "WASD move · Shift sprint · mouse look · E source · Tab world map · Backspace back · Q quality · Esc release";
 
 // The demo world drifting behind the page: its own chunk, fetched after the
 // page has painted, so the pickers never wait for three.js.

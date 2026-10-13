@@ -5,8 +5,10 @@
   "compilerOptions": {
     // `vite/client` declares the `*.css` (and other asset) modules that
     // `import "./globals.css"` relies on. Without it TypeScript 7 rejects the
-    // side-effect import with TS2882.
-    "types": ["vite/client"],
+    // side-effect import with TS2882. `@repo/renderer/n8ao` declares the
+    // untyped `n8ao` module the renderer's effects import: an ambient
+    // declaration has to be in this program too, and `types` is how.
+    "types": ["vite/client", "@repo/renderer/n8ao"],
     // `~/` is the only way up the tree: oxlint bans `../` imports. Vite and
     // Vitest read this via `resolve.tsconfigPaths`.
     "paths": { "~/*": ["./src/*"] }

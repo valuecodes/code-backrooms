@@ -1,10 +1,12 @@
 import { Canvas, useFrame } from "@react-three/fiber";
+import { Effects } from "@repo/renderer/effects";
 import { World } from "@repo/renderer/world";
 import type { Placement } from "@repo/types";
 import { useMemo } from "react";
 
 import { driftPose } from "~/backdrop";
 import { backdropWorld } from "~/backdrop-world";
+import { useQuality } from "~/quality";
 import { startPlacement } from "~/world-map-model";
 
 // Loaded lazily by the landing page: the demo world, seen through a camera
@@ -25,6 +27,7 @@ const DriftCamera = ({ start }: { readonly start: Placement }) => {
 /** The demo world filling its parent, or nothing when it cannot be built. */
 const LandingBackdrop = () => {
   const world = useMemo(() => backdropWorld(), []);
+  const quality = useQuality();
   const start = useMemo(
     () => (world === null ? null : startPlacement(world)),
     [world]
@@ -47,6 +50,7 @@ const LandingBackdrop = () => {
     >
       <World world={world} />
       <DriftCamera start={start} />
+      <Effects quality={quality} />
     </Canvas>
   );
 };

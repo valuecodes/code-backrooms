@@ -21,6 +21,7 @@ const raw: Readonly<Record<string, string>> = import.meta.glob(
     "./packages/*/tsconfig.json",
     "./tooling/*/tsconfig.json",
     "!**/*.test.*",
+    "!**/*.d.ts",
     "!**/node_modules/**",
   ],
   { base: "../../../", query: "?raw", import: "default", eager: true }

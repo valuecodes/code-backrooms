@@ -1,9 +1,12 @@
+import type { Quality } from "@repo/renderer/effects";
+
 import type { ZoneProgress } from "~/use-area-world";
 
 type HudProps = {
   readonly locked: boolean;
   readonly seed: number;
   readonly rooms: number;
+  readonly quality: Quality;
   /** Modules of a code world generated so far and in all, each its own area. */
   readonly modules: { readonly built: number; readonly total: number };
   /** The zone the player is in, with its modules generated so far and in all. */
@@ -32,6 +35,7 @@ const hints: readonly (readonly [string, string])[] = [
   ["Backspace", "return to the caller"],
   ["R", "back to the entrance"],
   ["N", "next seed"],
+  ["Q", "toggle quality"],
   ["M", "local map"],
   ["Tab", "world map"],
   ["Esc", "release the mouse"],
@@ -93,9 +97,10 @@ const Hud = ({
   warnings,
   notices,
   error,
+  quality,
   ...rest
 }: HudProps) => {
-  const where = whereOf(rest);
+  const where = `${whereOf(rest)} · quality ${quality}`;
   const keys = rest.label === null ? hints : [...hints, ...codeHints];
   if (locked) {
     return (
