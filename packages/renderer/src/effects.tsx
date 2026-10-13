@@ -27,23 +27,27 @@ const EXPOSURE = 1.15;
  *
  * At `high` the frame goes through a composer: ambient occlusion, bloom off
  * the fixtures, grain, a vignette and a touch of lens fringing, tone-mapped
- * last. The composer takes `toneMapping` over while mounted and gives AgX
- * back when it unmounts, so switching quality never changes the brightness.
+ * last. The composer turns the renderer's own tone mapping off while it is
+ * mounted (its effect runs before this component's, being a child) and
+ * gives the previous mapping back when it unmounts; so AgX is set on the
+ * renderer only at `low`, where nothing else maps, and never over the
+ * composer's `NoToneMapping`.
  */
 const Effects = ({ quality }: { readonly quality: Quality }) => {
   const get = useThree((state) => state.get);
+  const high = quality === "high";
   useEffect(() => {
     const { gl } = get();
-    gl.toneMapping = AgXToneMapping;
     gl.toneMappingExposure = EXPOSURE;
-  }, [get]);
-  const high = quality === "high";
-  // The composer sizes its passes on every resize; the constructor only
-  // needs a first size, so the pass is not rebuilt when the window changes.
-  const occlusion = useMemo(() => {
     if (!high) {
-      return null;
+      gl.toneMapping = AgXToneMapping;
     }
+  }, [get, high]);
+  // One pass per Canvas, kept across quality changes: `Pass.dispose` does
+  // not reach the pass's own fullscreen objects, so rebuilding it on every
+  // toggle would leak them. The composer sizes it on every resize; the
+  // constructor only needs a first size.
+  const occlusion = useMemo(() => {
     const { gl, scene, camera } = get();
     const { width, height } = gl.getDrawingBufferSize(new Vector2());
     const pass = new N8AOPostPass(scene, camera, width, height);
@@ -59,9 +63,9 @@ const Effects = ({ quality }: { readonly quality: Quality }) => {
     // Tone mapping follows, so the pass must hand on linear light.
     configuration.gammaCorrection = false;
     return pass;
-  }, [high, get]);
-  useEffect(() => () => occlusion?.dispose(), [occlusion]);
-  if (occlusion === null) {
+  }, [get]);
+  useEffect(() => () => occlusion.dispose(), [occlusion]);
+  if (!high) {
     return null;
   }
   return (
