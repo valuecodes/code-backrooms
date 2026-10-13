@@ -18,6 +18,8 @@ type WorldMapOverlayProps = {
   readonly links: readonly AreaLink[];
   /** Where the player is; only the marker follows it. */
   readonly feed: PoseFeed;
+  /** The function (or hub) the player is in, drawn brighter. */
+  readonly activeUnit: string | null;
   /** Walking: the locked pointer sends the map no wheel or drag. */
   readonly locked: boolean;
 };
@@ -39,6 +41,7 @@ const WorldMapOverlay = ({
   labelOf,
   links,
   feed,
+  activeUnit,
   locked,
 }: WorldMapOverlayProps) => {
   const model = useMemo(
@@ -74,6 +77,7 @@ const WorldMapOverlay = ({
           svgRef={view.ref}
           model={model}
           player={player}
+          activeUnit={activeUnit}
           done={world.pending.length === 0}
         />
       </div>

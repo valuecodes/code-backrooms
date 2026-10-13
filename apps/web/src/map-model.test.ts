@@ -132,6 +132,23 @@ describe("mapModel", () => {
     expect(mapModel(world, new Set(), null).portals).toEqual([]);
   });
 
+  it("marks the rooms of the unit the player is in", () => {
+    const everywhere = new Set(demo.rooms.map(({ room }) => room.id));
+    const main = demo.rooms
+      .filter(({ room }) => room.cluster === "demo.ts::main")
+      .map(({ room }) => room.id);
+    expect(main.length).toBeGreaterThan(1);
+    const model = mapModel(demo, everywhere, main[0] ?? null, "demo.ts::main");
+    expect(
+      model.rooms.filter((room) => room.active).map((room) => room.id)
+    ).toEqual(main);
+    expect(model.rooms.find((room) => room.id === "demo.ts")?.unit).toBe(
+      "demo.ts"
+    );
+    const none = mapModel(demo, everywhere, main[0] ?? null);
+    expect(none.rooms.some((room) => room.active)).toBe(false);
+  });
+
   it("draws one area of a world of several: only its rooms", () => {
     const { codeGraph } = codeGraphOf(examples.repo);
     if (codeGraph === null) {

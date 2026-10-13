@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/code-graph.ts",
     "./area-links": "./src/area-links.ts",
+    "./call-index": "./src/call-index.ts",
     "./cfg": "./src/cfg.ts",
     "./cfg-checks": "./src/cfg-checks.ts",
     "./flow": "./src/flow.ts",

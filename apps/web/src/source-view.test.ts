@@ -1,4 +1,5 @@
 import type { CodeGraph, FlowStep } from "@repo/code-graph";
+import type { SourceFile } from "@repo/parser";
 import { describe, expect, it } from "vitest";
 
 import { examples } from "./examples";
@@ -7,14 +8,18 @@ import { sourceView } from "./source-view";
 import type { SourceView } from "./source-view";
 import { codeGraphOf } from "./world-from-code";
 
-/** Parses an example or fails the test with the parser's message. */
-const parsed = (name: "demo" | "loops") => {
-  const result = codeGraphOf(examples[name]);
+/** Parses files or fails the test with the parser's message. */
+const parsedFiles = (files: readonly SourceFile[]) => {
+  const result = codeGraphOf(files);
   if (result.error !== null) {
-    throw new Error(`${name}: ${result.error}`);
+    throw new Error(`${files[0]?.path}: ${result.error}`);
   }
   return result;
 };
+
+/** Parses an example or fails the test with the parser's message. */
+const parsed = (name: "demo" | "loops" | "portals" | "resolution") =>
+  parsedFiles(examples[name]);
 
 /** The first top-level flow node of `fnId` of the given kind. */
 const topLevel = (
@@ -121,5 +126,71 @@ describe("sourceView", () => {
     expect(view).toMatchObject({ fn: "main()", lines: "3–8" });
     expect(markedLines(view)).toEqual([3, 4, 5, 6, 7, 8]);
     expectWholeLines(view, examples.loops[0].source);
+  });
+});
+
+describe("sourceView calls", () => {
+  const demo = parsed("demo");
+
+  it("lists a function's callers and callees", () => {
+    expect(
+      sourceView(demo.codeGraph, demo.sources, "demo.ts::getUser")
+    ).toMatchObject({ callers: ["main()"], callees: ["loadSession()"] });
+  });
+
+  it("lists the function's calls in a room of its flow too", () => {
+    const fork = topLevel(demo.codeGraph, "demo.ts::main", "branch");
+    expect(sourceView(demo.codeGraph, demo.sources, fork.id)).toMatchObject({
+      callers: [],
+      callees: ["getUser()", "showDashboard()", "showLogin()"],
+    });
+  });
+
+  it("lists nothing for a hub", () => {
+    expect(sourceView(demo.codeGraph, demo.sources, "demo.ts")).toMatchObject({
+      callers: [],
+      callees: [],
+    });
+  });
+
+  it("marks a function calling itself", () => {
+    const portals = parsed("portals");
+    expect(
+      sourceView(portals.codeGraph, portals.sources, "portals.ts::countdown")
+    ).toMatchObject({
+      callers: ["countdown() ↻", "main()"],
+      callees: ["countdown() ↻"],
+    });
+  });
+
+  it("names an ambiguous call's candidates as maybe", () => {
+    const resolution = parsed("resolution");
+    expect(
+      sourceView(
+        resolution.codeGraph,
+        resolution.sources,
+        "resolution.ts::main"
+      )?.callees
+    ).toEqual([
+      "pick()",
+      "settle()",
+      "maybe Circle.render() | Square.render()",
+    ]);
+  });
+
+  it("keeps five names and counts the rest", () => {
+    const names = ["a", "b", "c", "d", "e", "f", "g"];
+    const fan = parsedFiles([
+      {
+        path: "fan.ts",
+        source: [
+          `function main() {\n${names.map((name) => `  ${name}();`).join("\n")}\n}`,
+          ...names.map((name) => `function ${name}() {}`),
+        ].join("\n"),
+      },
+    ]);
+    expect(
+      sourceView(fan.codeGraph, fan.sources, "fan.ts::main")?.callees
+    ).toEqual(["a()", "b()", "c()", "d()", "e()", "+2"]);
   });
 });

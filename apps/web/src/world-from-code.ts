@@ -313,6 +313,7 @@ export {
   breadcrumbOf,
   codeGraphOf,
   describeRoom,
+  labelOf,
   promptOf,
   sourceSeedOf,
   worldFromCode,

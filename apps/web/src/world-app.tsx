@@ -198,6 +198,7 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
           world={generated.world}
           visited={visitedIn(visits, seed)}
           current={roomId}
+          activeUnit={navigation.roomId}
           feed={feed}
         />
       )}
@@ -236,6 +237,7 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
           labelOf={labelOfArea}
           links={areaLinks}
           feed={feed}
+          activeUnit={navigation.roomId}
           locked={locked}
         />
       )}
