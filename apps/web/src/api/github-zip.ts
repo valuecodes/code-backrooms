@@ -1,19 +1,17 @@
-import { isOwner, isRef, isRepo, TOKEN_HEADER, ZIP_ROUTE } from "~/github-url";
+import { isOwner, isRef, isRepo, TOKEN_HEADER } from "~/github-url";
 
-// The Cloudflare Worker in front of the static app. It serves one route,
-// `GET /api/github/zip`, which fetches a public repository's zip from
+// `GET /api/github/zip`: fetches a public repository's zip from
 // codeload.github.com (which sends no CORS headers, so the page cannot) and
-// streams it back unchanged. Every other request goes to the static assets.
+// streams it back unchanged.
 //
 // One load is one request to GitHub, and only after the visitor passed a
 // Turnstile challenge and a per-IP rate limit. Responses are cached at the
 // edge for ten minutes, so repeat loads of a repository never reach GitHub.
-// The Worker builds the codeload URL itself from checked names: it is not an
+// The route builds the codeload URL itself from checked names: it is not an
 // open proxy.
 
-/** The bindings `wrangler.jsonc` declares; the secret is set in Cloudflare. */
-type Env = {
-  readonly ASSETS: { readonly fetch: (request: Request) => Promise<Response> };
+/** The bindings this route uses; the secret is set in Cloudflare. */
+type ZipEnv = {
   readonly GITHUB_LIMITER: {
     readonly limit: (options: {
       readonly key: string;
@@ -99,7 +97,7 @@ const capped = (
 /** `GET /api/github/zip?owner=&repo=[&ref=]`, the Turnstile token in a header. */
 const handleZip = async (
   request: Request,
-  env: Env,
+  env: ZipEnv,
   fetcher: Fetch
 ): Promise<Response> => {
   if (request.method !== "GET") {
@@ -156,20 +154,5 @@ const handleZip = async (
   });
 };
 
-/** The Worker: the zip route, else the static assets. */
-const handle = (
-  request: Request,
-  env: Env,
-  fetcher: Fetch
-): Promise<Response> =>
-  new URL(request.url).pathname === ZIP_ROUTE
-    ? handleZip(request, env, fetcher)
-    : env.ASSETS.fetch(request);
-
-export default {
-  fetch: (request: Request, env: Env): Promise<Response> =>
-    handle(request, env, (url, init) => fetch(url, init)),
-};
-
-export { handle };
-export type { Env, Fetch };
+export { handleZip };
+export type { Fetch, ZipEnv };

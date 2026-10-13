@@ -8,7 +8,7 @@
   // The Worker serves only /api/* (the GitHub zip route); everything else is Vite's
   // build output, including public/_headers, served without running it. No
   // not_found_handling: the app is a single page without routes, so unknown paths 404.
-  "main": "src/worker.ts",
+  "main": "src/api/worker.ts",
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

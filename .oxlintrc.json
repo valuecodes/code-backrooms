@@ -465,7 +465,7 @@
       "rules": { "react/no-unknown-property": "off" }
     },
     {
-      "files": ["apps/web/src/worker.ts"],
+      "files": ["apps/web/src/api/worker.ts"],
       "rules": { "import/no-default-export": "off" }
     }
   ]

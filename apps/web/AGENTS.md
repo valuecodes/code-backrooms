@@ -182,7 +182,7 @@ not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   page takes `github.com/owner/repo`, `owner/repo` or a
   `/tree/<ref>/<folder>` URL (`github-url.ts`; refs with `/` are not
   supported). One load is one request to GitHub: the page calls this site's
-  Worker (`worker.ts`, `GET /api/github/zip`), which fetches the repository's
+  Worker (`api/`, `GET /api/github/zip`), which fetches the repository's
   zip from codeload.github.com, since codeload sends no CORS headers, and
   streams it back. The page then reads it with `filesFromZip`, keeping only
   the folder's files when one is named. The Worker builds the codeload URL
@@ -257,7 +257,9 @@ src/
   github-files.ts     a GitHub repository -> sources: one call to the Worker, then zip-files
   github-form.tsx     the landing page's GitHub URL field, check and open button, markup only
   turnstile.tsx       the Turnstile check before a GitHub load, script loaded on demand
-  worker.ts           the Cloudflare Worker: /api/github/zip, else the static assets
+  api/                the Cloudflare Worker, run only for /api/* (wrangler.jsonc `main`)
+    worker.ts         the entry: routes /api/github/zip, else the static assets
+    github-zip.ts     the route: checks, rate limit, Turnstile, one codeload fetch
   landing-backdrop.tsx  the demo world drifting behind the landing page, lazy
   backdrop.ts         when the backdrop runs and where its camera is, pure
   backdrop-world.ts   the demo world for the backdrop, every area built
