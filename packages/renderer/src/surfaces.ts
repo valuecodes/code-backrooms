@@ -1,6 +1,8 @@
 import { createContext, useContext } from "react";
-import { MeshStandardMaterial, Vector2 } from "three";
+import { DataUtils, MeshStandardMaterial, Vector2 } from "three";
 
+import { lightmapTexture } from "./area-lighting";
+import type { Rgb } from "./lane-tint";
 import { createSurfaceTextures, TILE } from "./textures";
 import type { SurfaceMaps } from "./textures";
 
@@ -12,8 +14,10 @@ type Surfaces = {
   readonly wall: MeshStandardMaterial;
   readonly floor: MeshStandardMaterial;
   readonly ceiling: MeshStandardMaterial;
-  /** The glowing fluorescent fixture body. */
+  /** The glowing diffuser of a fluorescent troffer. */
   readonly fixture: MeshStandardMaterial;
+  /** The enamelled housing around it. */
+  readonly troffer: MeshStandardMaterial;
   /** Dark wood door frames. */
   readonly frame: MeshStandardMaterial;
   /** The dark plane filling a call portal: a cold glow. */
@@ -62,21 +66,53 @@ const mapped = (
   aoMapIntensity: occlusion,
 });
 
+/**
+ * The indirect light of an area not baked yet: flat, about what the bake
+ * gives an open stretch of wall, so the baked map arriving is no jump.
+ */
+const PLACEHOLDER_FILL: Rgb = [0.3, 0.25, 0.14];
+
+/** A one-texel lightmap of the flat fill, read like a baked one. */
+const placeholderLightmap = () => {
+  const [r, g, b] = PLACEHOLDER_FILL.map((value) =>
+    DataUtils.toHalfFloat(value)
+  );
+  return lightmapTexture(
+    new Uint16Array([r ?? 0, g ?? 0, b ?? 0, DataUtils.toHalfFloat(1)]),
+    1,
+    1
+  );
+};
+
 const createSurfaces = (anisotropy: number): Surfaces => {
   const textures = createSurfaceTextures(anisotropy);
+  // Walls, floor and ceiling carry a lightmap from the start, so the shader
+  // is the same before and after an area's bake lands; Areas use clones.
+  const lightMap = placeholderLightmap();
   // Walls carry vertex colours: white as built, a lane's wash inside a fork
   // of a function.
   const wall = new MeshStandardMaterial({
     ...mapped(textures.wallpaper, 0.7, 0.7),
     vertexColors: true,
+    lightMap,
   });
-  const floor = new MeshStandardMaterial(mapped(textures.carpet, 1, 0.9));
-  const ceiling = new MeshStandardMaterial(mapped(textures.ceiling, 0.8, 0.8));
+  const floor = new MeshStandardMaterial({
+    ...mapped(textures.carpet, 1, 0.9),
+    lightMap,
+  });
+  const ceiling = new MeshStandardMaterial({
+    ...mapped(textures.ceiling, 0.8, 0.8),
+    lightMap,
+  });
   const fixture = new MeshStandardMaterial({
     color: "#fff8e1",
     emissive: "#fff1c4",
     emissiveIntensity: 1.6,
     roughness: 0.4,
+  });
+  const troffer = new MeshStandardMaterial({
+    color: "#e8e4da",
+    roughness: 0.45,
   });
   // Frames are coloured per vertex: dark wood, or a lane's colour.
   const frame = new MeshStandardMaterial({
@@ -105,6 +141,7 @@ const createSurfaces = (anisotropy: number): Surfaces => {
     floor,
     ceiling,
     fixture,
+    troffer,
     frame,
     voidCall,
     voidReturn,
@@ -118,6 +155,7 @@ const createSurfaces = (anisotropy: number): Surfaces => {
     floor,
     ceiling,
     fixture,
+    troffer,
     frame,
     voidCall,
     voidReturn,
@@ -130,6 +168,7 @@ const createSurfaces = (anisotropy: number): Surfaces => {
       for (const material of materials) {
         material.dispose();
       }
+      lightMap.dispose();
       for (const maps of Object.values(textures)) {
         for (const texture of Object.values(maps)) {
           texture.dispose();

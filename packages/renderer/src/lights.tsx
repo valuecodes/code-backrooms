@@ -1,10 +1,17 @@
 import { useFrame } from "@react-three/fiber";
 import { hashString } from "@repo/world-generator/random";
 import { useEffect, useMemo, useRef } from "react";
-import type { PointLight } from "three";
+import type { PointLight, RectAreaLight } from "three";
+import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 
 import type { FixturePoint } from "./fixtures";
-import { LIGHT_DROP } from "./fixtures";
+import {
+  LIGHT_COLOR,
+  LIGHT_DISTANCE,
+  LIGHT_DROP,
+  LIGHT_INTENSITY,
+} from "./fixtures";
+import { DIFFUSER, DIFFUSER_DROP } from "./troffer";
 
 type LightPoolProps = {
   readonly fixtures: readonly FixturePoint[];
@@ -12,9 +19,31 @@ type LightPoolProps = {
 
 /** Lights in flight at once. Fixed, so the shaders compile exactly once. */
 const POOL_SIZE = 8;
-const LIGHT_INTENSITY = 14;
-const LIGHT_COLOR = "#fff2cc";
-const LIGHT_DISTANCE = 9;
+
+/**
+ * Area lights on the nearest fixtures, for the diffuser's true shape in the
+ * floor's sheen. Always mounted, so their count, too, is fixed.
+ */
+const RECT_COUNT = 2;
+/**
+ * The share of a fixture's light its area light takes; the point light at
+ * the same fixture keeps the rest, and with it the shadow.
+ */
+const RECT_SHARE = 0.6;
+const DIFFUSER_AREA = DIFFUSER.length * DIFFUSER.width;
+
+/** An area light emits along its −z: turned to face the floor. */
+const FACING_DOWN = [-Math.PI / 2, 0, 0] as const;
+
+let rectAreaReady = false;
+
+/** The area-light lookup tables, set up once per page. */
+const prepareRectAreaLights = () => {
+  if (!rectAreaReady) {
+    RectAreaLightUniformsLib.init();
+    rectAreaReady = true;
+  }
+};
 
 /** Slot 0 (the nearest fixture) is the one shadow caster. */
 const SHADOW_SLOT = 0;
@@ -65,12 +94,15 @@ const nearestFixtures = (
 
 /**
  * A fixed pool of point lights that follows the player: each frame the lights
- * move to the nearest fixtures. The shadow map is static (the Canvas turns
+ * move to the nearest fixtures, and the nearest few also get an area light
+ * the size of the diffuser. The shadow map is static (the Canvas turns
  * `shadowMap.autoUpdate` off), re-rendered only when the shadow light hops to
  * a new fixture or the world changes.
  */
 const LightPool = ({ fixtures }: LightPoolProps) => {
+  prepareRectAreaLights();
   const lights = useRef<(PointLight | null)[]>([]);
+  const rects = useRef<(RectAreaLight | null)[]>([]);
   const nearest = useRef<number[]>([]);
   const distances = useRef<number[]>([]);
   const shadowFixture = useRef(-1);
@@ -92,6 +124,7 @@ const LightPool = ({ fixtures }: LightPoolProps) => {
     );
     for (let slot = 0; slot < POOL_SIZE; slot += 1) {
       const light = lights.current[slot];
+      const rect = slot < RECT_COUNT ? rects.current[slot] : undefined;
       const index = nearest.current[slot];
       const fixture = index === undefined ? undefined : fixtures[index];
       if (light === null || light === undefined) {
@@ -99,13 +132,29 @@ const LightPool = ({ fixtures }: LightPoolProps) => {
       }
       if (slot >= count || fixture === undefined || index === undefined) {
         light.intensity = 0;
+        if (rect) {
+          rect.intensity = 0;
+        }
         continue;
       }
       light.position.set(fixture.x, fixture.ceiling - LIGHT_DROP, fixture.z);
       // The phase follows the fixture, so a light keeps its buzz when the
       // pool hands it to another slot.
-      light.intensity =
+      const strength =
         LIGHT_INTENSITY * flicker(clock.elapsedTime + (phases[index] ?? 0));
+      if (rect) {
+        // An area light's intensity is luminance: a fixture's on-axis
+        // intensity spread over the diffuser.
+        rect.position.set(
+          fixture.x,
+          fixture.ceiling - DIFFUSER_DROP - DIFFUSER.thickness,
+          fixture.z
+        );
+        rect.intensity = (strength * RECT_SHARE) / DIFFUSER_AREA;
+        light.intensity = strength * (1 - RECT_SHARE);
+      } else {
+        light.intensity = strength;
+      }
       if (slot === SHADOW_SLOT && index !== shadowFixture.current) {
         shadowFixture.current = index;
         gl.shadowMap.needsUpdate = true;
@@ -129,6 +178,19 @@ const LightPool = ({ fixtures }: LightPoolProps) => {
           shadow-mapSize={[512, 512]}
           shadow-bias={-0.003}
           shadow-camera-far={12}
+        />
+      ))}
+      {Array.from({ length: RECT_COUNT }, (_, slot) => (
+        <rectAreaLight
+          key={`rect-${slot}`}
+          ref={(light) => {
+            rects.current[slot] = light;
+          }}
+          color={LIGHT_COLOR}
+          intensity={0}
+          width={DIFFUSER.length}
+          height={DIFFUSER.width}
+          rotation={FACING_DOWN}
         />
       ))}
     </>

@@ -24,7 +24,8 @@
     "n8ao": "2.0.1",
     "postprocessing": "6.39.5",
     "react": "catalog:",
-    "three": "catalog:"
+    "three": "catalog:",
+    "three-mesh-bvh": "0.8.3"
   },
   "devDependencies": {
     "@repo/prettier": "workspace:*",

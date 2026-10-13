@@ -1,12 +1,17 @@
-import type { BuiltArea, RoomData } from "@repo/types";
+import type { RoomData } from "@repo/types";
 import { WALL_HEIGHT } from "@repo/world-generator/config";
+
+import type { AreaRooms } from "./lightmap-layout";
 
 /** Distance between fluorescent panels in the ceiling grid. */
 const LIGHT_SPACING = 4;
-/** How far below the ceiling the fixture body hangs. */
-const FIXTURE_DROP = 0.04;
 /** Where the light itself sits, well clear of the fixture and ceiling. */
 const LIGHT_DROP = 0.3;
+
+/** Each fixture's light: shared by the live pool and the bake. */
+const LIGHT_INTENSITY = 14;
+const LIGHT_COLOR = "#fff2cc";
+const LIGHT_DISTANCE = 9;
 
 type FixturePoint = {
   readonly x: number;
@@ -36,10 +41,10 @@ const fixturePositions = (room: RoomData): readonly FixturePoint[] => {
 };
 
 /** Each area's fixtures, worked out once: an area never changes once built. */
-const fixturesByArea = new WeakMap<BuiltArea, readonly FixturePoint[]>();
+const fixturesByArea = new WeakMap<AreaRooms, readonly FixturePoint[]>();
 
 /** Every fixture of an area's rooms, in room order. */
-const areaFixtures = (area: BuiltArea): readonly FixturePoint[] => {
+const areaFixtures = (area: AreaRooms): readonly FixturePoint[] => {
   const known = fixturesByArea.get(area);
   if (known !== undefined) {
     return known;
@@ -51,5 +56,12 @@ const areaFixtures = (area: BuiltArea): readonly FixturePoint[] => {
   return created;
 };
 
-export { areaFixtures, FIXTURE_DROP, fixturePositions, LIGHT_DROP };
+export {
+  areaFixtures,
+  fixturePositions,
+  LIGHT_COLOR,
+  LIGHT_DISTANCE,
+  LIGHT_DROP,
+  LIGHT_INTENSITY,
+};
 export type { FixturePoint };
