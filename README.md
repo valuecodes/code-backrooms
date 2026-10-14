@@ -60,6 +60,7 @@ world. The world shows what _can_ run, not a trace of what did run.
 | 1–9           | Pick a callee at a violet choice portal |
 | Backspace     | Back to where this function was entered |
 | R             | Back to the entrance                    |
+| I             | Renderer stats (draws, triangles, …)    |
 | Esc           | Release the mouse                       |
 
 ## Run it locally
