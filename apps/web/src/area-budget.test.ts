@@ -35,7 +35,7 @@ const repoStore = (seed = 1): AreaStore => {
 const loadedOf = (store: AreaStore) =>
   store.snapshot().world.areas.map(({ id }) => id);
 
-const NO_PINS = { roomId: null, units: [], returnUnit: null } as const;
+const NO_PINS = { roomId: null, units: [], needed: [] } as const;
 
 describe("evictions", () => {
   const seen = new Map([
@@ -162,7 +162,7 @@ describe("createUnloader", () => {
     expect(loadedOf(store)).toEqual([ENTRANCE_ID, a]);
   });
 
-  it("generates the area of the return unit again when it was unloaded", () => {
+  it("generates the area of a needed unit again when it was unloaded", () => {
     const store = repoStore();
     const unload = createUnloader(store, 2);
     const [a, b] = store.snapshot().world.pending;
@@ -174,10 +174,11 @@ describe("createUnloader", () => {
     const caller = [...store.snapshot().world.areaOf].find(
       ([, area]) => area === a
     )?.[0];
-    unload({ ...NO_PINS, roomId: b ?? null, returnUnit: caller ?? null });
+    const needed = [caller ?? ""];
+    unload({ ...NO_PINS, roomId: b ?? null, needed });
     expect(loadedOf(store)).toEqual([ENTRANCE_ID, b, a]);
     // Pinned now, so the next call keeps it although it is over the budget.
-    unload({ ...NO_PINS, roomId: b ?? null, returnUnit: caller ?? null });
+    unload({ ...NO_PINS, roomId: b ?? null, needed });
     expect(loadedOf(store)).toEqual([ENTRANCE_ID, b, a]);
   });
 });
