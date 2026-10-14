@@ -15,7 +15,7 @@ describe("createStatsWindow", () => {
     expect(stats.tick(1499, info(3))).toBeNull();
   });
 
-  it("samples the last frame's counts and the mean frame time at the edge", () => {
+  it("samples the last frame's counts and the mean frame interval at the edge", () => {
     const stats = createStatsWindow(500);
     stats.tick(1000, info(1));
     stats.tick(1250, info(2));
@@ -25,8 +25,15 @@ describe("createStatsWindow", () => {
       triangles: 400,
       geometries: 40,
       textures: 6,
-      frameMs: 125,
+      frameMs: 500 / 3,
     });
+  });
+
+  it("divides by intervals, not ticks, in the first window", () => {
+    const stats = createStatsWindow(500);
+    stats.tick(1000, info(1));
+    stats.tick(1250, info(2));
+    expect(stats.tick(1500, info(3))).toMatchObject({ frameMs: 250 });
   });
 
   it("starts a new window after each sample", () => {

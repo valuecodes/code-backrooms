@@ -26,5 +26,11 @@ describe("statsText", () => {
     expect(statsText({ ...sample, triangles: 1_234_567 }, 1)).toContain(
       "1.2M tris · 420 geo · 36 tex · 1 area"
     );
+    expect(statsText({ ...sample, triangles: 999_500 }, 1)).toContain(
+      "1.0M tris"
+    );
+    expect(statsText({ ...sample, triangles: 999_499 }, 1)).toContain(
+      "999k tris"
+    );
   });
 });
