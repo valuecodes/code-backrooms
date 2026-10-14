@@ -4,7 +4,7 @@ import { Effects } from "@repo/renderer/effects";
 import { Player } from "@repo/renderer/player";
 import { World } from "@repo/renderer/world";
 import type { Target } from "@repo/world-generator/interaction";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { choiceDigit } from "~/choice-keys";
 import { Hud } from "~/hud";
@@ -50,7 +50,9 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
   // Generated once per seed, then grown an area at a time: it never
   // regenerates while the player moves.
   const generated = useAreaWorld(seed, worldOptions);
-  const { ensurePortal, ensureUnit, candidatesOf } = generated;
+  const { ensurePortal, ensureUnit, candidatesOf, failedUnit } = generated;
+  // The target a candidate was last picked at (see the key handler).
+  const picked = useRef<Target | null>(null);
   const navigation = useNavigation(seed, generated.current);
   const { onRoomChange, back, home, choose, onPortal: stepPortal } = navigation;
 
@@ -120,12 +122,22 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
         home();
       } else if (locked && event.code === "KeyE") {
         setSourceOpen((open) => !open);
-      } else if (locked && target?.kind === "portal") {
+      } else if (
+        locked &&
+        target?.kind === "portal" &&
+        picked.current !== target
+      ) {
         const digit = choiceDigit(event.code);
         const candidate =
           digit === null ? undefined : candidatesOf(target.portalId)[digit - 1];
         if (candidate !== undefined) {
           ensureUnit(candidate);
+          // One pick per sighting of the portal: a second key before the
+          // teleport is seen would push a second frame for a recursive
+          // candidate, whose unit is the one the player is already in.
+          if (!failedUnit(candidate)) {
+            picked.current = target;
+          }
           choose(target.portalId, candidate);
         }
       }
@@ -140,6 +152,7 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
     target,
     candidatesOf,
     ensureUnit,
+    failedUnit,
     choose,
   ]);
 

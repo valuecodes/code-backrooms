@@ -53,6 +53,29 @@ describe("areaLinksOf", () => {
     ]);
   });
 
+  it("links a choice to every other module it offers, once per site", () => {
+    const graph = chain();
+    const [first] = graph.callSites;
+    if (first === undefined) {
+      throw new Error("chain has no call sites");
+    }
+    const choice = {
+      ...first,
+      id: `${first.callerId}@999`,
+      calleeId: null,
+      resolution: "ambiguous" as const,
+      candidateIds: ["a.ts::helper", "b.ts::three", "c.ts::four"],
+    };
+    const links = areaLinksOf({
+      ...graph,
+      callSites: [...graph.callSites, choice],
+    }).filter((link) => link.kind === "call" && link.fromArea === "a.ts");
+    expect(links).toEqual([
+      { fromArea: "a.ts", toArea: "b.ts", kind: "call", count: 3 },
+      { fromArea: "a.ts", toArea: "c.ts", kind: "call", count: 1 },
+    ]);
+  });
+
   it("never links a module to itself", () => {
     const links = areaLinksOf(chain());
     expect(links.filter((link) => link.fromArea === link.toArea)).toEqual([]);
