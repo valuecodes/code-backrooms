@@ -34,4 +34,9 @@ describe("Hud", () => {
   it("shows the current level while walking", () => {
     expect(render(true)).toContain("seed 7 · 20 rooms · quality low");
   });
+
+  it("links home to the landing page only before walking", () => {
+    expect(render(false)).toContain('href="/"');
+    expect(render(true)).not.toContain('href="/"');
+  });
 });

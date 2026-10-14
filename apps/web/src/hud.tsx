@@ -135,6 +135,15 @@ const Hud = ({
   }
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-8 bg-black/55 px-6 text-center text-amber-50">
+      {/* A bare URL is the landing page. The click stays here: anywhere else
+          on the page it would lock the pointer on the way out. */}
+      <a
+        href="/"
+        onClick={(event) => event.stopPropagation()}
+        className="pointer-events-auto absolute top-4 left-4 text-sm text-amber-100/70 hover:text-amber-50"
+      >
+        ← Home
+      </a>
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
           Code Backrooms
