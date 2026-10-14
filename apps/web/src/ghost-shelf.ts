@@ -27,12 +27,13 @@ const ghostGroups = (world: AreaWorld): readonly (readonly string[])[] => {
 
 /**
  * Every ghost's slot: rows on a shelf AREA_GAP above every generated area
- * (-Z), as wide as they are, each zone's ghosts starting a row of their
- * own. A function of the world alone; the shelf moves out as the world
- * grows towards it, and a ghost leaves it once its area is generated.
+ * (-Z), unloaded ones included, as wide as they are, each zone's ghosts
+ * starting a row of their own. A function of the world alone; the shelf
+ * moves out as the world grows towards it, and a ghost leaves it once its
+ * area is generated.
  */
 const ghostSlots = (world: AreaWorld): ReadonlyMap<string, Rect> => {
-  const rects = world.areas.map((area) => area.bounds);
+  const rects = [...world.areas, ...world.unloaded].map((area) => area.bounds);
   const minX = rects.length === 0 ? 0 : Math.min(...rects.map((r) => r.minX));
   const maxX = rects.length === 0 ? 0 : Math.max(...rects.map((r) => r.maxX));
   const top =

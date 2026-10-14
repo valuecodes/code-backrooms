@@ -86,6 +86,23 @@ describe("WorldMap", () => {
     expect(done).not.toContain('data-area-state="pending"');
   });
 
+  it("draws an unloaded area dotted, with its label and no rooms", () => {
+    const graph = repo();
+    const store = codeAreaStore(graph, 1);
+    const labelOf = (id: string) => areaLabelOf(graph, id);
+    store.ensure("src/index.ts");
+    store.evict("src/index.ts");
+    const markup = render(store.snapshot().world, { labelOf });
+    expect(countOf(markup, 'data-area-state="unloaded"')).toBe(1);
+    expect(markup).toContain('stroke-dasharray="1 2"');
+    expect(markup).toContain(">src/index.ts</text>");
+    const group = markup.slice(
+      markup.indexOf('data-area="src/index.ts"'),
+      markup.indexOf("</g>", markup.indexOf('data-area="src/index.ts"'))
+    );
+    expect(countOf(group, "map-detail")).toBe(1);
+  });
+
   it("draws a failed area red with its message", () => {
     const world = codeAreaStore(repo(), 1).snapshot().world;
     const [failed, ...pending] = world.pending;

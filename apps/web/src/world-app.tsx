@@ -57,11 +57,30 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
   // Generated once per seed, then grown an area at a time: it never
   // regenerates while the player moves.
   const generated = useAreaWorld(seed, worldOptions);
-  const { ensurePortal, ensureUnit, candidatesOf } = generated;
+  const { ensurePortal, ensureUnit, candidatesOf, unload } = generated;
   // The target a candidate was last picked at (see the key handler).
   const picked = useRef<Target | null>(null);
   const navigation = useNavigation(seed, generated.current);
-  const { onRoomChange, back, home, choose, onPortal: stepPortal } = navigation;
+  const {
+    onRoomChange,
+    back: pop,
+    home,
+    choose,
+    onPortal: stepPortal,
+  } = navigation;
+  const top = navigation.frames.at(-1) ?? null;
+  // Backspace and a return portal land in the top frame's caller, which
+  // may have been unloaded: generate it first, so the teleport lands.
+  const returnUnit = top?.callerRoomId ?? null;
+  const ensureReturn = useCallback(() => {
+    if (returnUnit !== null) {
+      ensureUnit(returnUnit);
+    }
+  }, [returnUnit, ensureUnit]);
+  const back = useCallback(() => {
+    ensureReturn();
+    pop();
+  }, [ensureReturn, pop]);
 
   const onRoom = useCallback(
     (id: string | null) => {
@@ -77,9 +96,10 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
   const onPortal = useCallback(
     (portalId: string) => {
       ensurePortal(portalId);
+      ensureReturn();
       stepPortal(portalId);
     },
-    [ensurePortal, stepPortal]
+    [ensurePortal, ensureReturn, stepPortal]
   );
 
   // The portal in front of the player leads into an area not generated yet:
@@ -90,6 +110,31 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
       ensurePortal(target.portalId);
     }
   }, [target, ensurePortal, generated.world]);
+
+  // Keep the world within its budget of built areas after every change (a
+  // load included, not only a step into another area). Kept: where the
+  // player is, where navigation says they are (ahead of the Player after a
+  // teleport), the top frame's ends and the portal ahead; never the whole
+  // stack, so the pins stay bounded. An unload changes the world and runs
+  // this once more, with nothing left to unload.
+  const calleeUnit = top?.calleeRoomId ?? null;
+  const portalAhead = target?.kind === "portal" ? target.portalId : null;
+  useEffect(() => {
+    unload({
+      roomId,
+      units: [navigation.roomId, calleeUnit].filter((unit) => unit !== null),
+      returnUnit,
+      portalId: portalAhead,
+    });
+  }, [
+    unload,
+    generated.world,
+    roomId,
+    navigation.roomId,
+    calleeUnit,
+    returnUnit,
+    portalAhead,
+  ]);
 
   // A new seed or a reopened line starts without the last sample, which
   // described another world or an earlier moment.

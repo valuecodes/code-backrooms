@@ -7,6 +7,7 @@ import type {
   Point,
   Rect,
   RoomKind,
+  UnloadedArea,
 } from "@repo/types";
 import { roomBounds } from "@repo/world-generator/geometry";
 import { areaAt } from "@repo/world-generator/locate";
@@ -16,9 +17,10 @@ import { ghostSlots } from "~/ghost-shelf";
 // What the whole-world map draws, worked out without React or the DOM: every
 // area of the world, generated or not, the zones' bands, the links between
 // areas and the player. An area not generated yet has no place in the world,
-// so it is drawn as a ghost on a shelf above the world (`ghostSlots`).
+// so it is drawn as a ghost on a shelf above the world (`ghostSlots`); one
+// unloaded keeps its place, drawn as an outline without rooms.
 
-type AreaState = "generated" | "pending" | "failed";
+type AreaState = "generated" | "unloaded" | "pending" | "failed";
 
 type MapAreaRoom = {
   readonly id: string;
@@ -34,9 +36,9 @@ type MapArea = {
   readonly kind: "entrance" | "zone" | "module";
   readonly zoneId: string | null;
   readonly state: AreaState;
-  /** Its footprint once generated, otherwise its ghost's slot. */
+  /** Its footprint once generated (unloaded since or not), else its ghost's slot. */
   readonly rect: Rect;
-  /** Its rooms and corridors; none for a ghost. */
+  /** Its rooms and corridors; none for a ghost or an unloaded area. */
   readonly rooms: readonly MapAreaRoom[];
   /** Why it could not be generated, for a failed area. */
   readonly error: string | null;
@@ -47,11 +49,14 @@ type MapArea = {
 type MapZone = {
   readonly id: string;
   readonly name: string;
-  /** Its band: each of its generated areas, padded; ghosts sit on the shelf. */
+  /**
+   * Its band: each of its generated areas, unloaded ones too, padded;
+   * ghosts sit on the shelf.
+   */
   readonly rects: readonly Rect[];
   /** Where its name goes: its hub's band rect, or its first; null with none. */
   readonly rect: Rect | null;
-  /** Its module areas (not its hub) generated so far and in all. */
+  /** Its module areas (not its hub) generated so far, unloaded too, and in all. */
   readonly built: number;
   readonly total: number;
 };
@@ -150,6 +155,23 @@ const generatedArea = (
   entry: area.id === world.entry,
 });
 
+/** An unloaded area: its outline where it was, without rooms. */
+const unloadedArea = (
+  world: AreaWorld,
+  area: UnloadedArea,
+  label: string
+): MapArea => ({
+  id: area.id,
+  label,
+  kind: kindOf(world, area.id),
+  zoneId: area.zoneId,
+  state: "unloaded",
+  rect: area.bounds,
+  rooms: [],
+  error: null,
+  entry: area.id === world.entry,
+});
+
 /** Pending areas, then failed ones, each as a ghost in its slot. */
 const ghostAreas = (
   world: AreaWorld,
@@ -181,13 +203,16 @@ const zonesOf = (
   world: AreaWorld,
   areas: ReadonlyMap<string, MapArea>
 ): readonly MapZone[] => {
-  const built = new Set(world.areas.map((area) => area.id));
+  const built = new Set([
+    ...world.areas.map((area) => area.id),
+    ...world.unloaded.map((area) => area.id),
+  ]);
   return world.zones.map((zone): MapZone => {
     // Its hub comes first and is not a module.
     const [hub] = zone.areas;
     const generated = zone.areas.flatMap((id) => {
       const area = areas.get(id);
-      return area?.state === "generated" ? [area] : [];
+      return area !== undefined && built.has(area.id) ? [area] : [];
     });
     const rects = generated.map((area) => padded(area.rect, ZONE_PAD));
     const labelled =
@@ -301,7 +326,8 @@ const labelFontSize = (bounds: Rect): number =>
 
 /**
  * The whole world for the map: every generated area with its rooms, every
- * pending or failed one as a ghost on the shelf above the world, each
+ * unloaded one as its outline, every pending or failed one as a ghost on
+ * the shelf above the world, each
  * zone's band, the links between areas, and the player when placed.
  */
 const worldMapModel = (
@@ -315,6 +341,9 @@ const worldMapModel = (
 ): WorldMapModel => {
   const areas = [
     ...world.areas.map((area) => generatedArea(world, area, labelOf(area.id))),
+    ...world.unloaded.map((area) =>
+      unloadedArea(world, area, labelOf(area.id))
+    ),
     ...ghostAreas(world, errors, labelOf),
   ];
   const byId = new Map(areas.map((area) => [area.id, area]));

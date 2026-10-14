@@ -11,7 +11,8 @@ type HeaderOptions = {
 
 /** `repo · seed 7 · 3/9 areas · 1 failed`. */
 const mapHeader = ({ name, seed, world }: HeaderOptions): string => {
-  const built = world.areas.length;
+  // An unloaded area was generated: it counts as built.
+  const built = world.areas.length + world.unloaded.length;
   const failed = world.failed.length;
   const total = built + world.pending.length + failed;
   return `${name} · seed ${seed} · ${built}/${total} areas · ${failed} failed`;
