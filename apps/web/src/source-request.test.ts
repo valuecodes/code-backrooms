@@ -47,6 +47,7 @@ describe("showsLanding", () => {
     "?code=bogus",
     "?eager=1",
     "?view=map",
+    "?stats=1",
   ])("opens a world directly for %s", (search) => {
     expect(showsLanding(NONE, search)).toBe(false);
   });

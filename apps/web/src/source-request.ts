@@ -35,6 +35,7 @@ const WORLD_KEYS: readonly string[] = [
   "code",
   "eager",
   "view",
+  "stats",
 ];
 
 /**
