@@ -37,10 +37,16 @@ type AreaView = {
   readonly rooms: number;
   /** Generates the area a portal leads into, unless it exists or failed. */
   readonly ensurePortal: (portalId: string) => void;
+  /** Generates the area of a unit (a choice's candidate), unless it exists or failed. */
+  readonly ensureUnit: (unitId: string) => void;
+  /** A choice portal's candidates, in order; none for any other portal. */
+  readonly candidatesOf: (portalId: string) => readonly string[];
   /** Generates the first pending area; false once none is left. */
   readonly ensureNext: () => boolean;
   /** The area a portal leads into when that area could not be generated. */
   readonly failedArea: (portalId: string) => string | null;
+  /** Whether a unit's area could not be generated. */
+  readonly failedUnit: (unitId: string) => boolean;
   /** Modules generated so far and in all; areas of other worlds count as one. */
   readonly modules: { readonly built: number; readonly total: number };
   /** Milliseconds the last area generated on the way took; null when eager. */
@@ -130,6 +136,20 @@ const targetAreaOf = (world: AreaWorld, portalId: string): string | null => {
     }
   }
   return null;
+};
+
+/** A choice portal's candidates in `world`, or none for any other portal. */
+const candidatesOf = (
+  world: AreaWorld,
+  portalId: string
+): readonly string[] => {
+  for (const area of world.areas) {
+    const portal = area.graph.portals?.find(({ id }) => id === portalId);
+    if (portal !== undefined) {
+      return portal.kind === "choice" ? (portal.candidates ?? []) : [];
+    }
+  }
+  return [];
 };
 
 /**
@@ -251,6 +271,24 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
     },
     [store]
   );
+  const ensureUnit = useCallback(
+    (unitId: string) => {
+      const now = store?.snapshot();
+      if (store === null || now === undefined) {
+        return;
+      }
+      const area = now.world.areaOf.get(unitId);
+      if (area !== undefined && now.world.pending.includes(area)) {
+        store.ensure(area);
+      }
+    },
+    [store]
+  );
+  const candidates = useCallback(
+    (portalId: string) =>
+      store === null ? [] : candidatesOf(store.snapshot().world, portalId),
+    [store]
+  );
   const next = useCallback(
     () => (store === null ? false : ensureNext(store)),
     [store]
@@ -265,6 +303,13 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
     },
     [state]
   );
+  const failedUnit = useCallback(
+    (unitId: string) => {
+      const area = state?.world.areaOf.get(unitId);
+      return area !== undefined && state?.errors.has(area) === true;
+    },
+    [state]
+  );
   const total = options.codeGraph?.modules.length ?? 1;
   const built =
     state === null ? 0 : builtModules(state.world, options.codeGraph !== null);
@@ -273,8 +318,11 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
     current,
     rooms,
     ensurePortal,
+    ensureUnit,
+    candidatesOf: candidates,
     ensureNext: next,
     failedArea,
+    failedUnit,
     modules: { built, total },
     lastMs: options.eager ? null : (state?.lastMs ?? null),
     warnings,
@@ -285,6 +333,7 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
 
 export {
   builtModules,
+  candidatesOf,
   ensureNext,
   storeFor,
   targetAreaOf,

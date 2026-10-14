@@ -94,10 +94,13 @@ const FLOW_STEP_DEPTH_MAX = 8;
 const FLOW_PORTAL_PITCH = 2;
 /** An interior is folded until it fits in this many metres and rooms. */
 const FLOW_BUDGET = { width: 32, depth: 96, rooms: 64 } as const;
+/** The most candidates a choice portal offers: one per digit key, 1 to 9. */
+const CHOICE_MAX = 9;
 
 export {
   AREA_GAP,
   ARRIVAL_INSET,
+  CHOICE_MAX,
   CORRIDOR_LENGTHS,
   CORRIDOR_WIDTH,
   CORRIDOR_WIDTHS,

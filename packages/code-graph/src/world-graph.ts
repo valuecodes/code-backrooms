@@ -119,6 +119,8 @@ type Realised = {
   readonly jumps: readonly Portal[];
   /** Closed frames, each on and "to" its own room. */
   readonly markers: readonly Portal[];
+  /** Ambiguous calls, each on and "to" its own room, with its candidates. */
+  readonly choices: readonly Portal[];
 };
 
 /**
@@ -129,7 +131,7 @@ type Realised = {
  * callers of a shared function, a second room calling the same callee),
  * one per call site. Portals get their graph form, `from` the flow room
  * and `to` the callee, the module hub, for a jump a room of the same
- * cluster, or for a marker its own room.
+ * cluster, or for a marker or a choice its own room.
  */
 const realise = (
   cluster: RoomCluster,
@@ -180,15 +182,24 @@ const realise = (
     id: portal.id,
     kind: portal.kind,
     from: portal.roomId,
-    to: portal.kind === "marker" ? portal.roomId : (portal.target ?? hubId),
+    to:
+      portal.kind === "marker" || portal.kind === "choice"
+        ? portal.roomId
+        : (portal.target ?? hubId),
     ...(portal.label === undefined ? {} : { label: portal.label }),
+    ...(portal.candidates === undefined
+      ? {}
+      : { candidates: portal.candidates }),
   });
+  const ofKind = (kind: Portal["kind"]): readonly Portal[] =>
+    portals.filter((portal) => portal.kind === kind).map(toPortal);
   return {
     cluster: { ...cluster, ports: kept, portals },
-    calls: portals.filter((portal) => portal.kind === "call").map(toPortal),
-    returns: portals.filter((portal) => portal.kind === "return").map(toPortal),
-    jumps: portals.filter((portal) => portal.kind === "jump").map(toPortal),
-    markers: portals.filter((portal) => portal.kind === "marker").map(toPortal),
+    calls: ofKind("call"),
+    returns: ofKind("return"),
+    jumps: ofKind("jump"),
+    markers: ofKind("marker"),
+    choices: ofKind("choice"),
   };
 };
 
@@ -277,6 +288,7 @@ const moduleWorld = (
   const returns: Portal[] = [];
   const jumps: Portal[] = [];
   const markers: Portal[] = [];
+  const choices: Portal[] = [];
   for (const fn of functions) {
     const cluster = clusters.get(fn.id);
     if (cluster === undefined) {
@@ -299,6 +311,7 @@ const moduleWorld = (
     returns.push(...realised.returns);
     jumps.push(...realised.jumps);
     markers.push(...realised.markers);
+    choices.push(...realised.choices);
   }
   const {
     hubs,
@@ -325,7 +338,7 @@ const moduleWorld = (
     lobbies,
     rooms,
     connections,
-    portals: [...calls, ...returns, ...jumps, ...markers],
+    portals: [...calls, ...returns, ...jumps, ...markers, ...choices],
   };
 };
 
@@ -336,9 +349,10 @@ const moduleWorld = (
  * are many; a top-level class's root methods open off a lobby of their
  * own, which takes one door of the hub), a door for each call on the
  * breadth-first tree from those roots through the rooms' ports, a call portal for every other resolved
- * call, and a closed marker in every room holding calls the world cannot
- * follow (ambiguous, dynamic, external or unresolved; never a portal to a
- * guess). The hub holds a module portal to every module it imports or
+ * call, a choice portal for an ambiguous call with up to CHOICE_MAX
+ * candidates (the player picks one), and a closed marker in every room
+ * holding other calls the world cannot follow (ambiguous, dynamic, external
+ * or unresolved; never a portal to a guess). The hub holds a module portal to every module it imports or
  * re-exports from; portals into another zone name it (`zoneLabels`).
  * Portals into other modules lead to units of their areas, listed in
  * `external`; the hub is the start room. Edges in
@@ -381,13 +395,20 @@ const toWorldGraph = (
       };
     }),
   ];
-  // Only calls and module portals leave the module; the rest stay inside.
+  // Only calls, module portals and choices' candidates leave the module;
+  // the rest stay inside.
   const ids = new Set(rooms.map((room) => room.id));
   const external = [
     ...new Set(
       portals
-        .filter(({ kind }) => kind === "call" || kind === "module")
-        .map((portal) => portal.to)
+        .flatMap((portal) => {
+          if (portal.kind === "choice") {
+            return portal.candidates ?? [];
+          }
+          return portal.kind === "call" || portal.kind === "module"
+            ? [portal.to]
+            : [];
+        })
         .filter((to) => !ids.has(to))
     ),
   ].toSorted();

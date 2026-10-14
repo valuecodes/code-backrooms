@@ -91,8 +91,9 @@ type ClusterDoor = {
  * A portal on a cluster room's wall. With `wall` and `along` it is placed
  * already (cluster coordinates); without, the layout finds free wall.
  * `target`: the unit entered for `call`, a room of this cluster for `jump`,
- * absent for `return` (the consumer decides where returns land) and for
- * `marker` (it leads nowhere). A marker is always placed already.
+ * absent for `return` (the consumer decides where returns land), for
+ * `marker` (it leads nowhere) and for `choice` (the player picks one of its
+ * `candidates`). A marker or a choice is always placed already.
  */
 type ClusterPortal = {
   readonly id: string;
@@ -102,6 +103,8 @@ type ClusterPortal = {
   readonly along?: number;
   readonly target?: string;
   readonly label?: string;
+  /** For `choice`: the units the call may enter, in source order. */
+  readonly candidates?: readonly string[];
 };
 
 type RoomCluster = {
@@ -151,9 +154,11 @@ type Connection = {
  * a plain teleport to `to` that leaves the stack alone. `marker`: a closed
  * frame that cannot be entered, standing for calls the world cannot follow.
  * `module`: from a module's hub to another module's hub; it empties the
- * stack, as entering a hub does.
+ * stack, as entering a hub does. `choice`: a call with several possible
+ * callees; it cannot be walked into, the player picks one of its
+ * `candidates`, which pushes a frame like a call.
  */
-type PortalKind = "call" | "return" | "jump" | "marker" | "module";
+type PortalKind = "call" | "return" | "jump" | "marker" | "module" | "choice";
 
 /**
  * A directed jump drawn as a door-like frame on a wall of `from`. Not part of
@@ -167,12 +172,18 @@ type Portal = {
   /**
    * Where it leads: for `call` and `return`, a graph room (a unit lands at
    * its entry), possibly `from`'s own; for `jump`, a room of the same
-   * cluster as `from`; for `marker`, `from` itself. A `call` or `module`
-   * portal may instead name a unit of another area (`WorldGraph.external`).
+   * cluster as `from`; for `marker` and `choice`, `from` itself. A `call`
+   * or `module` portal may instead name a unit of another area
+   * (`WorldGraph.external`).
    */
   readonly to: string;
   /** Free text, like GraphRoom.label (the callee's name). */
   readonly label?: string;
+  /**
+   * For `choice`: the units the player may pick from, graph rooms or
+   * `external` ones, in source order.
+   */
+  readonly candidates?: readonly string[];
 };
 
 type WorldGraph = {
@@ -183,8 +194,9 @@ type WorldGraph = {
   /** Defaults to the first room. */
   readonly start?: string;
   /**
-   * Units of other areas that `call` and `module` portals may lead to. None
-   * is a room of this graph; their arrival is resolved once areas are joined.
+   * Units of other areas that `call` and `module` portals may lead to, or a
+   * `choice` portal may offer. None is a room of this graph; their arrival
+   * is resolved once areas are joined.
    */
   readonly external?: readonly string[];
 };

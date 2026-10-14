@@ -41,10 +41,11 @@ const hints: readonly (readonly [string, string])[] = [
   ["Esc", "release the mouse"],
 ];
 
-/** Only a code world has source to show. */
+/** Only a code world has source to show, and calls to choose between. */
 const codeHints: readonly (readonly [string, string])[] = [
   ["E", "show the source"],
   ["Wheel", "scroll the source"],
+  ["1–9", "pick a callee at a choice portal"],
 ];
 
 /** `6 modules` once all are generated, `2/6 modules · last 14 ms` on the way. */

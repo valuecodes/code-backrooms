@@ -16,6 +16,7 @@ import {
 } from "@repo/world-generator/config";
 
 import type { BranchNode, LoopNode, SwitchNode } from "./code-graph";
+import { extraSlots } from "./flow-markers";
 import { PORT_PITCH } from "./flow-measure";
 import type { FlowRoomSpec } from "./flow-measure";
 
@@ -120,9 +121,9 @@ const southWidth = (count: number): number =>
         (2 * PORTAL_MARGIN + (count - 1) * FLOW_PORTAL_PITCH) / GRID - 1e-9
       ) * GRID;
 
-/** The portals on a room's walls: one per callee beyond its ports, a marker. */
+/** The portals on a room's walls: one per callee and choice, a marker. */
 const portalSlots = (room: FlowRoomSpec): number =>
-  room.callees.length + (room.markers.length > 0 ? 1 : 0);
+  room.callees.length + extraSlots(room.markers, room.choices);
 
 const laneWidth = (lane: LaneSpec): number => {
   const boxed = boxedRoom(lane);

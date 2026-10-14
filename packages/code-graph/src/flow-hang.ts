@@ -11,9 +11,10 @@ import {
   MIN_SHARED,
 } from "@repo/world-generator/config";
 
+import { extraSlots } from "./flow-markers";
 import { PORTAL_TAIL } from "./flow-measure";
 import type { FlowCallee, FlowRoomSpec } from "./flow-measure";
-import { callPortalId, markerPortalId } from "./ids";
+import { callPortalId, choicePortalId, markerPortalId } from "./ids";
 
 type Side = "east" | "west";
 
@@ -106,8 +107,9 @@ const portHangs = (
  * past the previous port on its wall, so the room grows when the column is
  * busy on that side. Every other callee gets a pre-placed portal: below the
  * port at FLOW_PORTAL_PITCH on a wall that has one, from the top of the
- * room on a wall that does not, alternating walls. A room with calls the
- * world cannot follow gets one marker after them, placed the same way. A
+ * room on a wall that does not, alternating walls. Each choice, then one
+ * marker for the calls the world cannot follow, come after them, placed
+ * the same way. A
  * `blocked` side wall holds a fallthrough door, so it gets no portals; with
  * both blocked they go on the south wall, centred (a room walled in like
  * that neither rejoins nor ends, so nothing else is there).
@@ -129,10 +131,10 @@ const hangCallees = (
   const primary: Side =
     trackers.west.lastHi < trackers.east.lastHi ? "west" : "east";
   const hangs = portHangs(spec.callees, free, primary);
-  // One callee per free wall gets a port; the rest get portals, then the
-  // marker takes one more slot.
+  // One callee per free wall gets a port; the rest get portals, then each
+  // choice and the marker take one more slot.
   const extras = spec.callees.slice(Math.min(spec.callees.length, free.length));
-  const slots = extras.length + (spec.markers.length > 0 ? 1 : 0);
+  const slots = extras.length + extraSlots(spec.markers, spec.choices);
   const firstExtraWall: Side =
     free.length === 1 ? (free[0] ?? primary) : primary;
   const extraWall = (position: number): WallSide => {
@@ -219,25 +221,36 @@ const hangCallees = (
     }
     placedOn[wall] += 1;
     const callee = extras[position];
-    portals.push(
-      callee === undefined
-        ? {
-            id: markerPortalId(spec.id),
-            kind: "marker",
-            roomId: spec.id,
-            wall,
-            along,
-            label: `${spec.markers.length} call${spec.markers.length === 1 ? "" : "s"}`,
-          }
-        : {
-            id: callPortalId(callee.siteId),
-            kind: "call",
-            roomId: spec.id,
-            wall,
-            along,
-            target: callee.unitId,
-          }
-    );
+    const choice = spec.choices[position - extras.length];
+    if (callee !== undefined) {
+      portals.push({
+        id: callPortalId(callee.siteId),
+        kind: "call",
+        roomId: spec.id,
+        wall,
+        along,
+        target: callee.unitId,
+      });
+    } else if (choice === undefined) {
+      portals.push({
+        id: markerPortalId(spec.id),
+        kind: "marker",
+        roomId: spec.id,
+        wall,
+        along,
+        label: `${spec.markers.length} call${spec.markers.length === 1 ? "" : "s"}`,
+      });
+    } else {
+      portals.push({
+        id: choicePortalId(choice.siteId),
+        kind: "choice",
+        roomId: spec.id,
+        wall,
+        along,
+        label: "choose",
+        candidates: choice.candidates,
+      });
+    }
   }
   return { depth, ports, portals };
 };

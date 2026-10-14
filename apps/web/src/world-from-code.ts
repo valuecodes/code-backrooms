@@ -257,11 +257,16 @@ const doorPrompt = (codeGraph: CodeGraph | null, target: Target): string => {
     : `→ ${labelOf(codeGraph, target.targetRoomId)}`;
 };
 
-/** What stepping through the thing in front of the player would do. */
+/**
+ * What stepping through the thing in front of the player would do; at a
+ * choice portal, the keys that pick each candidate, `(closed)` after one
+ * whose area `failedUnit` reports could not be generated.
+ */
 const promptOf = (
   codeGraph: CodeGraph | null,
   frames: readonly Frame[],
-  target: Target | null
+  target: Target | null,
+  failedUnit: (unitId: string) => boolean = () => false
 ): string | null => {
   if (target === null) {
     return null;
@@ -289,6 +294,14 @@ const promptOf = (
   }
   if (subject.kind === "zone") {
     return `→ ${subject.zone.name}`;
+  }
+  // `choose · shape.render(…)  1 Circle.render()  2 Square.render()`.
+  if (subject.kind === "choice") {
+    const options = subject.candidates.map((fn, index) => {
+      const closed = failedUnit(fn.id) ? " (closed)" : "";
+      return `${index + 1} ${labelOf(codeGraph, fn.id)}${closed}`;
+    });
+    return `choose · ${subject.site.calleeName}(…)  ${options.join("  ")}`;
   }
   // A marker leads nowhere: it names the calls the world cannot follow.
   if (subject.kind === "marker") {

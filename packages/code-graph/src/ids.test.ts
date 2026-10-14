@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   callPortalId,
   callSiteId,
+  choicePortalId,
   classId,
   ENTRANCE_ID,
   flowNodeId,
@@ -197,6 +198,15 @@ describe("portal ids", () => {
     expect(parsePortalId(marker)).toEqual({
       kind: "marker",
       roomId: "m.ts::f@12:step",
+    });
+  });
+
+  it("round-trips choice portals", () => {
+    const choice = choicePortalId("m.ts::f@42");
+    expect(choice).toBe("choice:m.ts::f@42");
+    expect(parsePortalId(choice)).toEqual({
+      kind: "choice",
+      callSiteId: "m.ts::f@42",
     });
   });
 
