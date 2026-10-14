@@ -2,8 +2,9 @@
 // what a whole-repository map draws between areas that may still be pending.
 
 import type { WorldGraph } from "@repo/types";
+import { CHOICE_MAX } from "@repo/world-generator/config";
 
-import type { CodeGraph } from "./code-graph";
+import type { CallSite, CodeGraph } from "./code-graph";
 import { entranceGraph } from "./entrance";
 import { entryModules } from "./entrypoints";
 import { moduleLinks } from "./module-links";
@@ -51,10 +52,27 @@ const hubAreaLinks = (graph: CodeGraph): readonly AreaLink[] => {
 };
 
 /**
- * Calls from each module into other modules: resolved call sites by the
- * module of their caller (a function, or the module itself for top-level
- * calls, which have no call edge) and of their callee, counted per pair,
- * callees in the order first called.
+ * The functions a site's call may enter: its callee, or for an ambiguous
+ * call offered at a choice portal every candidate; none for the rest.
+ */
+const calleesOf = (site: CallSite): readonly string[] => {
+  if (site.calleeId !== null) {
+    return [site.calleeId];
+  }
+  const candidates = site.candidateIds ?? [];
+  return site.resolution === "ambiguous" &&
+    candidates.length >= 2 &&
+    candidates.length <= CHOICE_MAX
+    ? candidates
+    : [];
+};
+
+/**
+ * Calls from each module into other modules: resolved call sites, and
+ * choices once per module they offer, by the module of their caller (a
+ * function, or the module itself for top-level calls, which have no call
+ * edge) and of their callee, counted per pair, callees in the order first
+ * called.
  */
 const callLinks = (
   graph: CodeGraph
@@ -65,16 +83,20 @@ const callLinks = (
   ]);
   const counts = new Map<string, Map<string, number>>();
   for (const site of graph.callSites) {
-    if (site.calleeId === null) {
-      continue;
-    }
     const from = moduleOf.get(site.callerId);
-    const to = moduleOf.get(site.calleeId);
-    if (from === undefined || to === undefined || from === to) {
+    const tos = new Set(
+      calleesOf(site).flatMap((id) => {
+        const to = moduleOf.get(id);
+        return to === undefined || to === from ? [] : [to];
+      })
+    );
+    if (from === undefined || tos.size === 0) {
       continue;
     }
     const targets = counts.get(from) ?? new Map<string, number>();
-    targets.set(to, (targets.get(to) ?? 0) + 1);
+    for (const to of tos) {
+      targets.set(to, (targets.get(to) ?? 0) + 1);
+    }
     counts.set(from, targets);
   }
   return new Map(

@@ -202,7 +202,9 @@ const createNavigator = (world: World): Navigator => {
   /**
    * Enters `calleeId` from a choice portal, pushing a frame like a call
    * portal does. Only from the player's own unit, so a second pick made
-   * before the first one's teleport is seen does nothing; a candidate that
+   * before the first one's teleport is seen does nothing (unless the first
+   * entered that same unit again: the app allows one pick per sighting of
+   * the portal for that); a candidate that
    * is not offered, or whose area was never joined in, stays put.
    */
   const choose = (
