@@ -37,8 +37,12 @@ type AreaView = {
   readonly rooms: number;
   /** Generates the area a portal leads into, unless it exists or failed. */
   readonly ensurePortal: (portalId: string) => void;
-  /** Generates the area of a unit (a choice's candidate), unless it exists or failed. */
-  readonly ensureUnit: (unitId: string) => void;
+  /**
+   * Generates the area of a unit (a choice's candidate), unless it exists
+   * or failed; true when the area is generated once it returns, from the
+   * store as of now (a failure on this call included).
+   */
+  readonly ensureUnit: (unitId: string) => boolean;
   /** A choice portal's candidates, in order; none for any other portal. */
   readonly candidatesOf: (portalId: string) => readonly string[];
   /** Generates the first pending area; false once none is left. */
@@ -275,12 +279,16 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
     (unitId: string) => {
       const now = store?.snapshot();
       if (store === null || now === undefined) {
-        return;
+        return false;
       }
       const area = now.world.areaOf.get(unitId);
-      if (area !== undefined && now.world.pending.includes(area)) {
+      if (area === undefined) {
+        return false;
+      }
+      if (now.world.pending.includes(area)) {
         store.ensure(area);
       }
+      return store.snapshot().world.areas.some(({ id }) => id === area);
     },
     [store]
   );
