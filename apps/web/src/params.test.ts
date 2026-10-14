@@ -19,6 +19,7 @@ describe("parseWorldParams", () => {
       code: null,
       eager: false,
       view: "world",
+      stats: false,
     });
   });
 
@@ -32,6 +33,7 @@ describe("parseWorldParams", () => {
       code: "demo",
       eager: true,
       view: "world",
+      stats: false,
     });
   });
 
@@ -47,6 +49,11 @@ describe("parseWorldParams", () => {
     expect(parseWorldParams("?view=MAP").view).toBe("world");
     expect(parseWorldParams("?view=3d").view).toBe("world");
     expect(parseWorldParams("?view").view).toBe("world");
+  });
+
+  it("shows the stats only for stats=1", () => {
+    expect(parseWorldParams("?stats=1").stats).toBe(true);
+    expect(parseWorldParams("?stats").stats).toBe(false);
   });
 
   it("is eager only for eager=1", () => {
@@ -65,6 +72,7 @@ describe("parseWorldParams", () => {
       code: null,
       eager: false,
       view: "world",
+      stats: false,
     });
     expect(parseWorldParams("?rooms=-5")).toMatchObject({ rooms: 1 });
     expect(parseWorldParams("?rooms=20junk&seed=1.5")).toMatchObject({

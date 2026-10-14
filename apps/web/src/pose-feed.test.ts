@@ -30,4 +30,16 @@ describe("createPoseFeed", () => {
     expect(seen).toEqual([1, 2]);
     expect(feed.get()?.position.x).toBe(3);
   });
+
+  it("forgets the latest pose on clear and tells subscribers", () => {
+    const feed = createPoseFeed();
+    feed.publish(pose(1));
+    let calls = 0;
+    feed.subscribe(() => {
+      calls += 1;
+    });
+    feed.clear();
+    expect(feed.get()).toBeNull();
+    expect(calls).toBe(1);
+  });
 });

@@ -16,6 +16,8 @@ type WorldParams = {
   readonly eager: boolean;
   /** `?view=map`: the whole world as a 2D map, without WebGL. */
   readonly view: "world" | "map";
+  /** `?stats=1`: show the renderer's numbers from the start (I toggles them). */
+  readonly stats: boolean;
 };
 
 /** Random and preset worlds without a `?seed`. */
@@ -62,6 +64,7 @@ const parseWorldParams = (search: string): WorldParams => {
     code: code !== null && isExampleName(code) ? code : null,
     eager: params.get("eager") === "1",
     view: params.get("view") === "map" ? "map" : "world",
+    stats: params.get("stats") === "1",
   };
 };
 

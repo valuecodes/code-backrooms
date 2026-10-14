@@ -2,11 +2,14 @@ import { Canvas } from "@react-three/fiber";
 import { PointerLook } from "@repo/renderer/controls";
 import { Effects } from "@repo/renderer/effects";
 import { Player } from "@repo/renderer/player";
+import { RenderStats } from "@repo/renderer/stats";
+import type { RenderSample } from "@repo/renderer/stats";
 import { World } from "@repo/renderer/world";
 import type { Target } from "@repo/world-generator/interaction";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { choiceDigit } from "~/choice-keys";
+import { createFeed } from "~/feed";
 import { Hud } from "~/hud";
 import { mapKeyAction } from "~/map-keys";
 import { EMPTY_VISITS, visit, visitedIn } from "~/map-model";
@@ -16,6 +19,7 @@ import { createPoseFeed } from "~/pose-feed";
 import { getQuality, setQuality, toggleQuality, useQuality } from "~/quality";
 import { SourcePanel } from "~/source-panel";
 import { sourceView } from "~/source-view";
+import { StatsLine } from "~/stats-line";
 import { useAreaWorld, zoneProgress } from "~/use-area-world";
 import { useNavigation } from "~/use-navigation";
 import { breadcrumbOf, describeRoom, promptOf } from "~/world-from-code";
@@ -25,6 +29,8 @@ import type { WorldSetup } from "~/world-setup";
 
 // Fed from the render loop and read only by the open maps, never by the app.
 const feed = createPoseFeed();
+// Likewise for the renderer's numbers, read only by the open stats line.
+const statsFeed = createFeed<RenderSample>();
 
 const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
   const {
@@ -45,6 +51,7 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
   const [sourceOpen, setSourceOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(true);
   const [worldMapOpen, setWorldMapOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(initial.stats);
   const [visits, setVisits] = useState(EMPTY_VISITS);
   const quality = useQuality();
   // Generated once per seed, then grown an area at a time: it never
@@ -84,8 +91,15 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
     }
   }, [target, ensurePortal, generated.world]);
 
-  // N: next seed (the only thing that regenerates the world) and Q: the
-  // rendering quality, in any pointer state. Backspace and R navigate, E
+  // A new seed or a reopened line starts without the last sample, which
+  // described another world or an earlier moment.
+  useEffect(() => {
+    statsFeed.clear();
+  }, [seed, statsOpen]);
+
+  // N: next seed (the only thing that regenerates the world), Q: the
+  // rendering quality and I: the renderer's numbers, in any pointer state.
+  // Backspace and R navigate, E
   // shows the source and M the local map, only while walking, so a free
   // pointer leaves them alone; so do 1 to 9, which pick a candidate at a
   // choice portal (its area is generated first, so the pick lands). Tab
@@ -115,6 +129,8 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
         setSeed(nextSeed);
       } else if (event.code === "KeyQ") {
         setQuality(toggleQuality(getQuality()));
+      } else if (event.code === "KeyI") {
+        setStatsOpen((open) => !open);
       } else if (locked && event.code === "Backspace") {
         event.preventDefault();
         back();
@@ -213,6 +229,7 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
           }}
         >
           <World world={generated.world} />
+          {statsOpen && <RenderStats onSample={statsFeed.publish} />}
           <Player
             world={generated.world}
             enabled={locked}
@@ -237,6 +254,9 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
       )}
       {locked && sourceOpen && sources !== null && (
         <SourcePanel view={source} />
+      )}
+      {statsOpen && generated.world !== null && (
+        <StatsLine feed={statsFeed} areas={generated.world.areas.length} />
       )}
       <Hud
         locked={locked}

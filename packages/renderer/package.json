@@ -8,6 +8,7 @@
     "./lane-tint": "./src/lane-tint.ts",
     "./n8ao": "./src/n8ao.d.ts",
     "./player": "./src/player.tsx",
+    "./stats": "./src/stats.tsx",
     "./world": "./src/world.tsx"
   },
   "scripts": {

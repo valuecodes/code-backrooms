@@ -36,6 +36,7 @@ const hints: readonly (readonly [string, string])[] = [
   ["R", "back to the entrance"],
   ["N", "next seed"],
   ["Q", "toggle quality"],
+  ["I", "renderer stats"],
   ["M", "local map"],
   ["Tab", "world map"],
   ["Esc", "release the mouse"],
