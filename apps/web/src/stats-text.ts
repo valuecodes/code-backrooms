@@ -2,13 +2,14 @@ import type { RenderSample } from "@repo/renderer/stats";
 
 /** `420`, `184k`, `1.2M`: short enough to read while walking. */
 const shortCount = (count: number): string => {
-  if (count >= 1_000_000) {
-    return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count < 1000) {
+    return String(count);
   }
-  if (count >= 1000) {
-    return `${Math.round(count / 1000)}k`;
-  }
-  return String(count);
+  // 999 500 rounds to 1000k: it reads as 1.0M instead.
+  const thousands = Math.round(count / 1000);
+  return thousands < 1000
+    ? `${thousands}k`
+    : `${(count / 1_000_000).toFixed(1)}M`;
 };
 
 /**

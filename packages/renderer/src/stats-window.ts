@@ -27,7 +27,11 @@ const createStatsWindow = (everyMs: number): StatsWindow => {
   let frames = 0;
   return {
     tick: (now, info) => {
-      started ??= now;
+      // The first tick only opens the window: no frame interval precedes it.
+      if (started === null) {
+        started = now;
+        return null;
+      }
       frames += 1;
       const elapsed = now - started;
       if (elapsed < everyMs) {
