@@ -50,7 +50,7 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
   // Generated once per seed, then grown an area at a time: it never
   // regenerates while the player moves.
   const generated = useAreaWorld(seed, worldOptions);
-  const { ensurePortal, ensureUnit, candidatesOf, failedUnit } = generated;
+  const { ensurePortal, ensureUnit, candidatesOf } = generated;
   // The target a candidate was last picked at (see the key handler).
   const picked = useRef<Target | null>(null);
   const navigation = useNavigation(seed, generated.current);
@@ -131,11 +131,12 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
         const candidate =
           digit === null ? undefined : candidatesOf(target.portalId)[digit - 1];
         if (candidate !== undefined) {
-          ensureUnit(candidate);
           // One pick per sighting of the portal: a second key before the
           // teleport is seen would push a second frame for a recursive
-          // candidate, whose unit is the one the player is already in.
-          if (!failedUnit(candidate)) {
+          // candidate, whose unit is the one the player is already in. A
+          // candidate whose area failed goes nowhere, so it leaves the
+          // other keys free.
+          if (ensureUnit(candidate)) {
             picked.current = target;
           }
           choose(target.portalId, candidate);
@@ -152,7 +153,6 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
     target,
     candidatesOf,
     ensureUnit,
-    failedUnit,
     choose,
   ]);
 
