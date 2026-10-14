@@ -17,6 +17,7 @@ import { GitHubForm } from "~/github-form";
 import type { GitHubField } from "~/github-form";
 import { gitHubPath, parseGitHubUrl } from "~/github-url";
 import { createReadGuard, folderLabel, readErrorMessage } from "~/local-reads";
+import { SourceLink } from "~/source-link";
 import { searchOfRepo } from "~/source-request";
 import type { SourceRequest } from "~/source-request";
 import { TurnstileCheck, turnstileSiteKey } from "~/turnstile";
@@ -240,6 +241,7 @@ const LandingView = ({
         </p>
       </div>
       <p className="text-xs text-amber-100/50">{HINTS}</p>
+      <SourceLink />
     </main>
   );
 };
