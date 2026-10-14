@@ -24,6 +24,8 @@ type Navigation = {
   readonly placement: Teleport | null;
   readonly onRoomChange: (roomId: string | null) => void;
   readonly onPortal: (portalId: string) => void;
+  /** Enters one of a choice portal's candidates. */
+  readonly choose: (portalId: string, calleeId: string) => void;
   readonly back: () => void;
   readonly home: () => void;
 };
@@ -100,6 +102,11 @@ const useNavigation = (
     ),
     onPortal: useCallback(
       (portalId: string) => step({ type: "portal", portalId }),
+      [step]
+    ),
+    choose: useCallback(
+      (portalId: string, calleeId: string) =>
+        step({ type: "choose", portalId, calleeId }),
       [step]
     ),
     back: useCallback(() => step({ type: "back" }), [step]),

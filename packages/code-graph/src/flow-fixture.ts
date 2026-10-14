@@ -190,7 +190,8 @@ const clusterOf = (
 /**
  * Runs the world generator's contract over a cluster: it tiles its box, its
  * doors (and jumps) share edges and reach every room, its ports lie on the
- * boundary, its jump portals lead to its own rooms, its markers are placed.
+ * boundary, its jump portals lead to its own rooms, its markers and choices
+ * are placed.
  */
 const valid = (cluster: RoomCluster): RoomCluster => {
   const callees = new Set([
@@ -203,6 +204,10 @@ const valid = (cluster: RoomCluster): RoomCluster => {
         : [portal.target]
     ),
   ]);
+  // A choice's candidates that are no room here stand for other units.
+  const external = [
+    ...new Set(cluster.portals.flatMap((portal) => portal.candidates ?? [])),
+  ].filter((id) => id !== FN && !callees.has(id));
   const graph: WorldGraph = {
     rooms: [
       { id: FN, width: cluster.width, depth: cluster.depth, cluster },
@@ -213,8 +218,15 @@ const valid = (cluster: RoomCluster): RoomCluster => {
       id: portal.id,
       kind: portal.kind,
       from: portal.roomId,
-      to: portal.kind === "marker" ? portal.roomId : (portal.target ?? FN),
+      to:
+        portal.kind === "marker" || portal.kind === "choice"
+          ? portal.roomId
+          : (portal.target ?? FN),
+      ...(portal.candidates === undefined
+        ? {}
+        : { candidates: portal.candidates }),
     })),
+    ...(external.length > 0 ? { external } : {}),
   };
   validateGraph(graph);
   return cluster;

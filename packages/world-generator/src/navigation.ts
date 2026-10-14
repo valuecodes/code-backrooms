@@ -31,6 +31,12 @@ type NavigationEvent =
   | { readonly type: "room"; readonly roomId: string | null }
   /** From the player: it stepped into a portal. */
   | { readonly type: "portal"; readonly portalId: string }
+  /** A digit at a choice portal: enter `calleeId`, one of its candidates. */
+  | {
+      readonly type: "choose";
+      readonly portalId: string;
+      readonly calleeId: string;
+    }
   /** Backspace: the same as the current room's return portal. */
   | { readonly type: "back" }
   /** R: back to the world start with an empty stack. */
@@ -159,7 +165,7 @@ const createNavigator = (world: World): Navigator => {
   const enterPortal = (state: NavigationState, portal: BuiltPortal): Step => {
     const { kind, from, to } = portal.portal;
     const { arrival } = portal;
-    if (kind === "marker") {
+    if (kind === "marker" || kind === "choice") {
       return stay(state);
     }
     if (kind === "return") {
@@ -191,6 +197,44 @@ const createNavigator = (world: World): Navigator => {
           ]
         : state.frames;
     return { state: { frames, roomId: unitOf(to) }, teleport: arrival };
+  };
+
+  /**
+   * Enters `calleeId` from a choice portal, pushing a frame like a call
+   * portal does. Only from the player's own unit, so a second pick made
+   * before the first one's teleport is seen does nothing; a candidate that
+   * is not offered, or whose area was never joined in, stays put.
+   */
+  const choose = (
+    state: NavigationState,
+    portal: BuiltPortal,
+    calleeId: string
+  ): Step => {
+    const { id, kind, from, candidates } = portal.portal;
+    const arrival = built.entries.get(calleeId);
+    if (
+      kind !== "choice" ||
+      unitOf(from) !== state.roomId ||
+      candidates?.includes(calleeId) !== true ||
+      arrival === undefined
+    ) {
+      return stay(state);
+    }
+    return {
+      state: {
+        frames: [
+          ...state.frames,
+          {
+            portalId: id,
+            callerRoomId: unitOf(from),
+            calleeRoomId: calleeId,
+            returnTo: portal.returnPoint,
+          },
+        ],
+        roomId: calleeId,
+      },
+      teleport: arrival,
+    };
   };
 
   const moveTo = (state: NavigationState, roomId: string): Step => {
@@ -235,6 +279,12 @@ const createNavigator = (world: World): Navigator => {
       case "portal": {
         const portal = portals.get(event.portalId);
         return portal === undefined ? stay(state) : enterPortal(state, portal);
+      }
+      case "choose": {
+        const portal = portals.get(event.portalId);
+        return portal === undefined
+          ? stay(state)
+          : choose(state, portal, event.calleeId);
       }
       case "back": {
         const exit =

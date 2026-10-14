@@ -1,7 +1,13 @@
 import type { Connection, GraphRoom, RoomSize, WorldGraph } from "@repo/types";
 
 import { validateCluster } from "./cluster-graph";
-import { GRID, MAX_DEGREE, MIN_SHARED, ROOM_SIZE_CLASSES } from "./config";
+import {
+  CHOICE_MAX,
+  GRID,
+  MAX_DEGREE,
+  MIN_SHARED,
+  ROOM_SIZE_CLASSES,
+} from "./config";
 import { createRng, nextInt, pick, pickWeighted, shuffle } from "./random";
 import type { Rng } from "./random";
 
@@ -32,8 +38,10 @@ const onGrid = (value: number): boolean =>
  * MIN_SHARED, undirected connections between distinct known rooms with no
  * duplicates, portals with unique ids from a known room (a cluster's rooms
  * included) to a known graph room (possibly its own; a jump's to a room of
- * the same cluster; a marker's to its own cluster room, which placed it and
- * gave it no target; a call's or module's possibly to an `external` unit,
+ * the same cluster; a marker's or choice's to its own cluster room, which
+ * placed it and gave it no target, a choice offering 2 to
+ * CHOICE_MAX distinct known or `external` units; a call's or
+ * module's possibly to an `external` unit,
  * none of which is a room here; a module's from a hub), clusters that satisfy
  * `validateCluster` and whose reserved ports and placed portals name known
  * rooms and portals, and one connected component over the connections.
@@ -66,6 +74,7 @@ const validateGraph = (graph: WorldGraph): void => {
   const unitOf = new Map<string, string>();
   const clusterJumps = new Map<string, string | undefined>();
   const clusterMarkers = new Set<string>();
+  const clusterChoices = new Set<string>();
   const placedPortals = new Map<string, string>();
   for (const room of graph.rooms) {
     if (room.cluster === undefined) {
@@ -97,6 +106,18 @@ const validateGraph = (graph: WorldGraph): void => {
           );
         }
         clusterMarkers.add(portal.id);
+      }
+      if (portal.kind === "choice") {
+        if (
+          portal.target !== undefined ||
+          portal.wall === undefined ||
+          portal.along === undefined
+        ) {
+          throw new Error(
+            `Choice "${portal.id}" must be placed by its cluster and have no target`
+          );
+        }
+        clusterChoices.add(portal.id);
       }
       if (portal.wall !== undefined) {
         if (placedPortals.has(portal.id)) {
@@ -160,8 +181,25 @@ const validateGraph = (graph: WorldGraph): void => {
       known =
         unitOf.has(portal.to) &&
         unitOf.get(portal.to) === unitOf.get(portal.from);
-    } else if (portal.kind === "marker") {
+    } else if (portal.kind === "marker" || portal.kind === "choice") {
       known = unitOf.has(portal.from) && portal.to === portal.from;
+    }
+    if (portal.kind === "choice") {
+      const candidates = portal.candidates ?? [];
+      if (
+        candidates.length < 2 ||
+        candidates.length > CHOICE_MAX ||
+        new Set(candidates).size !== candidates.length ||
+        candidates.some((id) => !ids.has(id) && !external.has(id))
+      ) {
+        throw new Error(
+          `Choice "${portal.id}" must offer 2 to ${CHOICE_MAX} distinct known units`
+        );
+      }
+    } else if (portal.candidates !== undefined) {
+      throw new Error(
+        `Portal "${portal.id}" (${portal.kind}) offers candidates; only a choice does`
+      );
     }
     if (!roomIds.has(portal.from) || !known) {
       throw new Error(
@@ -182,6 +220,12 @@ const validateGraph = (graph: WorldGraph): void => {
     if (clusterMarkers.has(portal.id) !== (portal.kind === "marker")) {
       throw new Error(
         `Portal "${portal.id}" (${portal.kind}) does not match its cluster's marker`
+      );
+    }
+    // So is a choice.
+    if (clusterChoices.has(portal.id) !== (portal.kind === "choice")) {
+      throw new Error(
+        `Portal "${portal.id}" (${portal.kind}) does not match its cluster's choice`
       );
     }
     const placedOn = placedPortals.get(portal.id);

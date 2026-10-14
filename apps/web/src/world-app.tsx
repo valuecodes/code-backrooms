@@ -6,6 +6,7 @@ import { World } from "@repo/renderer/world";
 import type { Target } from "@repo/world-generator/interaction";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { choiceDigit } from "~/choice-keys";
 import { Hud } from "~/hud";
 import { mapKeyAction } from "~/map-keys";
 import { EMPTY_VISITS, visit, visitedIn } from "~/map-model";
@@ -49,9 +50,9 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
   // Generated once per seed, then grown an area at a time: it never
   // regenerates while the player moves.
   const generated = useAreaWorld(seed, worldOptions);
-  const { ensurePortal } = generated;
+  const { ensurePortal, ensureUnit, candidatesOf } = generated;
   const navigation = useNavigation(seed, generated.current);
-  const { onRoomChange, back, home, onPortal: stepPortal } = navigation;
+  const { onRoomChange, back, home, choose, onPortal: stepPortal } = navigation;
 
   const onRoom = useCallback(
     (id: string | null) => {
@@ -84,8 +85,10 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
   // N: next seed (the only thing that regenerates the world) and Q: the
   // rendering quality, in any pointer state. Backspace and R navigate, E
   // shows the source and M the local map, only while walking, so a free
-  // pointer leaves them alone. Tab shows the world map while walking and,
-  // like Esc once the pointer is free, closes it (`map-keys`).
+  // pointer leaves them alone; so do 1 to 9, which pick a candidate at a
+  // choice portal (its area is generated first, so the pick lands). Tab
+  // shows the world map while walking and, like Esc once the pointer is
+  // free, closes it (`map-keys`).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // Ctrl/Cmd+R and friends belong to the browser.
@@ -117,11 +120,28 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
         home();
       } else if (locked && event.code === "KeyE") {
         setSourceOpen((open) => !open);
+      } else if (locked && target?.kind === "portal") {
+        const digit = choiceDigit(event.code);
+        const candidate =
+          digit === null ? undefined : candidatesOf(target.portalId)[digit - 1];
+        if (candidate !== undefined) {
+          ensureUnit(candidate);
+          choose(target.portalId, candidate);
+        }
       }
     };
     globalThis.addEventListener("keydown", onKeyDown);
     return () => globalThis.removeEventListener("keydown", onKeyDown);
-  }, [locked, worldMapOpen, back, home]);
+  }, [
+    locked,
+    worldMapOpen,
+    back,
+    home,
+    target,
+    candidatesOf,
+    ensureUnit,
+    choose,
+  ]);
 
   // Keep the URL shareable: it always names the seed on screen. Not for a
   // zip or folder: no URL can name those files, and a `?seed` would reload
@@ -223,7 +243,12 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
         )}
         prompt={
           failed === null
-            ? promptOf(codeGraph, navigation.frames, target)
+            ? promptOf(
+                codeGraph,
+                navigation.frames,
+                target,
+                generated.failedUnit
+              )
             : `closed · ${failed} could not be laid out`
         }
         warnings={generated.warnings}

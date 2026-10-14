@@ -63,6 +63,7 @@ const PORTAL_COLOURS: Record<PortalKind, string> = {
   jump: "#9ca3af",
   marker: "#57534e",
   module: "#4ade80",
+  choice: "#a78bfa",
 };
 
 const NO_ROOMS: ReadonlySet<string> = new Set();

@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import { examples } from "./examples";
 import {
   builtModules,
+  candidatesOf,
   ensureNext,
   storeFor,
   targetAreaOf,
@@ -229,6 +230,65 @@ describe("a lazy walk through the repo example", () => {
     expect(entered.teleport).not.toBeNull();
     // The entrance did not move: the player's start is where it was.
     expect(after.built.start).toBe(before.built.start);
+  });
+});
+
+/** `s.run()` may be `Base.run` or the override in another file. */
+const overrides = () => {
+  const { codeGraph, error } = codeGraphOf([
+    { path: "base.ts", source: "export class Base { run() {} }" },
+    {
+      path: "fast.ts",
+      source:
+        'import { Base } from "./base";\nexport class Fast extends Base { run() {} }',
+    },
+    {
+      path: "main.ts",
+      source:
+        'import { Base } from "./base";\nimport "./fast";\nexport function main(s: Base) { s.run(); }',
+    },
+  ]);
+  if (codeGraph === null) {
+    throw new Error(`overrides: ${error}`);
+  }
+  return codeGraph;
+};
+
+describe("a choice with a candidate in another module", () => {
+  it("lists the candidates and lands in the far one once its area is ensured", () => {
+    const store = storeOf(1, { codeGraph: overrides(), eager: false });
+    store.ensure("main.ts");
+    const { world } = store.snapshot();
+    const choice = world.areas
+      .flatMap((area) => area.graph.portals ?? [])
+      .find((portal) => portal.kind === "choice");
+    if (choice === undefined) {
+      throw new Error("no choice portal in main.ts");
+    }
+    expect(candidatesOf(world, choice.id)).toEqual([
+      "base.ts::Base.run",
+      "fast.ts::Fast.run",
+    ]);
+    expect(candidatesOf(world, "no such portal")).toEqual([]);
+    const state = { frames: [], roomId: "main.ts::main" };
+    const event = {
+      type: "choose",
+      portalId: choice.id,
+      calleeId: "fast.ts::Fast.run",
+    } as const;
+    expect(
+      createNavigator(mergeAreas(world)).step(state, event).teleport
+    ).toBeNull();
+    const area = world.areaOf.get("fast.ts::Fast.run");
+    expect(area).toBe("fast.ts");
+    store.ensure(area ?? "");
+    expect(checkAreas(store.snapshot().world)).toEqual([]);
+    const entered = createNavigator(mergeAreas(store.snapshot().world)).step(
+      state,
+      event
+    );
+    expect(entered.state.roomId).toBe("fast.ts::Fast.run");
+    expect(entered.teleport).not.toBeNull();
   });
 });
 

@@ -31,6 +31,7 @@ const LOOKS: readonly Look[] = [
   "jump",
   "marker",
   "module",
+  "choice",
   "pending",
 ];
 
@@ -73,8 +74,8 @@ const voidPlanes = (
 
 /**
  * Every portal of an area: the frames as one mesh (the same dark wood as
- * the doorways) and one plane mesh per kind, dark and faintly glowing, or
- * for a marker a dull board that closes the frame. A portal into an area
+ * the doorways) and one plane mesh per kind, dark and faintly glowing (a
+ * choice violet), or for a marker a dull board that closes the frame. A portal into an area
  * not generated yet stays dark until it is.
  */
 const Portals = ({ portals, pending }: PortalsProps) => {
@@ -111,6 +112,7 @@ const Portals = ({ portals, pending }: PortalsProps) => {
     jump: surfaces.voidJump,
     marker: surfaces.markerPanel,
     module: surfaces.voidModule,
+    choice: surfaces.voidChoice,
     pending: surfaces.voidPending,
   } satisfies Record<Look, unknown>;
   return (

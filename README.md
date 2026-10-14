@@ -57,6 +57,7 @@ world. The world shows what _can_ run, not a trace of what did run.
 | E             | Show the current room's source code     |
 | Tab           | Map of the whole world                  |
 | M             | Hide the map of the rooms you walked    |
+| 1–9           | Pick a callee at a violet choice portal |
 | Backspace     | Back to where this function was entered |
 | R             | Back to the entrance                    |
 | Esc           | Release the mouse                       |

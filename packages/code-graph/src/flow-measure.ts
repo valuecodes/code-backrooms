@@ -20,7 +20,13 @@ import type {
   FunctionNode,
 } from "./code-graph";
 import { countStatements, escapingJumps, hasReturn, isTerminal } from "./flow";
-import { markerSitesOf, withStrays } from "./flow-markers";
+import {
+  extraSlots,
+  markerSitesOf,
+  splitChoices,
+  withStrays,
+} from "./flow-markers";
+import type { FlowChoice } from "./flow-markers";
 import { flowNodeText, resolvedSites, siteIdsUnder } from "./flow-text";
 import type { SiteIndex } from "./flow-text";
 import { flowNodeId, parseFlowNodeId, taggedFlowNodeId } from "./ids";
@@ -46,6 +52,8 @@ type FlowRoomSpec = {
    * the room gets one marker for them all when there are any.
    */
   readonly markers: readonly string[];
+  /** Ambiguous calls the player picks a callee for: a choice portal each. */
+  readonly choices: readonly FlowChoice[];
   /** The depth with both side walls free for its calls: what the budget counts. */
   readonly depth: number;
   /** The depth its contents alone need; the placer grows it for the calls. */
@@ -125,15 +133,18 @@ const PORTAL_TAIL = 1.5;
 /**
  * Wall for the callees when both side walls are free: the first two get a
  * port each (one per side wall), the rest a pre-placed portal each below
- * the port, alternating walls, at FLOW_PORTAL_PITCH, and a marker after
- * them; PORTAL_TAIL after the last keeps it clear of the corner. A marker
- * alone needs a tail on either side of it.
+ * the port, alternating walls, at FLOW_PORTAL_PITCH, then the `slots`
+ * other portals (choices, a marker) after them; PORTAL_TAIL after the last
+ * keeps it clear of the corner. Without callees those portals alternate
+ * walls from the top, with a tail on either side.
  */
-const sitesDepth = (callees: number, marker: boolean): number => {
+const sitesDepth = (callees: number, slots: number): number => {
   if (callees === 0) {
-    return marker ? 2 * PORTAL_TAIL : 0;
+    return slots === 0
+      ? 0
+      : 2 * PORTAL_TAIL + (Math.ceil(slots / 2) - 1) * FLOW_PORTAL_PITCH;
   }
-  const extras = Math.max(0, callees - 2) + (marker ? 1 : 0);
+  const extras = Math.max(0, callees - 2) + slots;
   const extrasPerWall = Math.ceil(extras / 2);
   return extrasPerWall === 0
     ? FLOW_CALL_DEPTH
@@ -145,11 +156,11 @@ const depthOf = (
   statements: number,
   callees: number,
   entry: boolean,
-  marker = false
+  slots = 0
 ): number =>
   Math.max(
     baseDepth(role, statements),
-    sitesDepth(callees, marker),
+    sitesDepth(callees, slots),
     entry ? FLOW_TOP_MIN_DEPTH : 0
   );
 
@@ -250,7 +261,10 @@ const specOf = (
   const role = roleOf(node);
   const ids = siteIdsUnder(node);
   const callees = calleesOf(ids, sites);
-  const markers = withStrays(markerSitesOf(node, sites), sites, entry);
+  const { markers, choices } = splitChoices(
+    withStrays(markerSitesOf(node, sites), sites, entry),
+    sites
+  );
   const statements = countStatements(node);
   const terminal = isTerminal(node);
   return {
@@ -262,7 +276,14 @@ const specOf = (
     calls: resolvedSites(ids, sites).length,
     callees,
     markers,
-    depth: depthOf(role, statements, callees.length, entry, markers.length > 0),
+    choices,
+    depth: depthOf(
+      role,
+      statements,
+      callees.length,
+      entry,
+      extraSlots(markers, choices)
+    ),
     floor: depthOf(role, statements, 0, entry),
     terminal,
     ...exitsOf(node, terminal),
@@ -277,7 +298,10 @@ const emptyBodySpec = (
   fn: FunctionNode,
   sites: SiteIndex | null = null
 ): FlowRoomSpec => {
-  const markers = sites?.strays ?? [];
+  const { markers, choices } =
+    sites === null
+      ? { markers: [], choices: [] }
+      : splitChoices(sites.strays, sites);
   return {
     kind: "room",
     id: flowNodeId(fn.id, fn.flow.span.start, "step", "empty"),
@@ -287,7 +311,8 @@ const emptyBodySpec = (
     calls: 0,
     callees: [],
     markers,
-    depth: depthOf("step", 0, 0, true, markers.length > 0),
+    choices,
+    depth: depthOf("step", 0, 0, true, extraSlots(markers, choices)),
     floor: depthOf("step", 0, 0, true),
     terminal: false,
   };

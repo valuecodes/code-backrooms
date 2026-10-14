@@ -20,7 +20,12 @@ import type {
 import { isTerminal, jumpsTo } from "./flow";
 import { BODY_LANE } from "./flow-composite";
 import type { FlowTree, ForkSpec, LaneSpec, LoopSpec } from "./flow-composite";
-import { headerMarkerSites, withStrays } from "./flow-markers";
+import {
+  extraSlots,
+  headerMarkerSites,
+  splitChoices,
+  withStrays,
+} from "./flow-markers";
 import { calleesOf, depthOf, emptyBodySpec, specOf } from "./flow-measure";
 import type { FlowRoomSpec } from "./flow-measure";
 import {
@@ -115,8 +120,8 @@ const tagged = (
 
 /**
  * A room of a composite holding the calls of its header or condition:
- * `callSiteIds` the resolved ones, `markers` the ones the world cannot
- * follow.
+ * `callSiteIds` the resolved ones, `markerIds` the ones the world cannot
+ * follow (its choices among them).
  */
 const headerSpec = (
   id: string,
@@ -128,7 +133,10 @@ const headerSpec = (
   entry: boolean
 ): FlowRoomSpec => {
   const callees = calleesOf(callSiteIds, sites);
-  const markers = withStrays(markerIds, sites, entry);
+  const { markers, choices } = splitChoices(
+    withStrays(markerIds, sites, entry),
+    sites
+  );
   return {
     kind: "room",
     id,
@@ -138,7 +146,14 @@ const headerSpec = (
     calls: resolvedSites(callSiteIds, sites).length,
     callees,
     markers,
-    depth: depthOf(role, 1, callees.length, entry, markers.length > 0),
+    choices,
+    depth: depthOf(
+      role,
+      1,
+      callees.length,
+      entry,
+      extraSlots(markers, choices)
+    ),
     floor: depthOf(role, 1, 0, entry),
     terminal: false,
   };
@@ -157,6 +172,7 @@ const plainSpec = (
   calls: 0,
   callees: [],
   markers: [],
+  choices: [],
   depth: FLOW_LEAF_DEPTH,
   floor: FLOW_LEAF_DEPTH,
   terminal: false,

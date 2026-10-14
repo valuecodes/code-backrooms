@@ -5,6 +5,7 @@ import type {
   CallSite,
   CodeGraph,
   FlowStep,
+  FunctionNode,
   SourceSpan,
 } from "./code-graph";
 import { replaceComposite } from "./flow-budget";
@@ -12,7 +13,7 @@ import { clusterOf, FN, fnWith, site, switchNode, valid } from "./flow-fixture";
 import { layoutFlow, planFlow } from "./flow-layout";
 import { indexSites } from "./flow-text";
 import { measureTree } from "./flow-tree";
-import { markerPortalId } from "./ids";
+import { choicePortalId, markerPortalId } from "./ids";
 import { portalSubject } from "./subjects";
 import { toWorldGraph } from "./world-graph";
 
@@ -35,6 +36,21 @@ const open = (start: number): CallSite => ({
   kind: "call",
   awaited: false,
   span: spanOf(start, start + 3),
+});
+
+/** An ambiguous call at [start, start + 3) that may call any of `count` methods. */
+const ambiguous = (
+  start: number,
+  count: number,
+  prefix = "m.ts::C"
+): CallSite => ({
+  ...open(start),
+  calleeName: "x.render",
+  resolution: "ambiguous",
+  candidateIds: Array.from(
+    { length: count },
+    (_, index) => `${prefix}${index}.render`
+  ),
 });
 
 /** A plain statement spanning [start, end). */
@@ -80,6 +96,14 @@ const branchIn = (
     span: spanOf(start, end),
     steps: [],
   },
+});
+
+/** A method of module `m.ts` with an empty body: a choice's candidate. */
+const candidate = (id: string): FunctionNode => ({
+  ...fnWith([]),
+  id,
+  name: "render",
+  qualifiedName: id.slice("m.ts::".length),
 });
 
 const markersIn = (cluster: ReturnType<typeof clusterOf>, roomId: string) =>
@@ -212,6 +236,140 @@ describe("markers", () => {
     expect(
       cluster.portals.filter((portal) => portal.kind === "marker")
     ).toHaveLength(plan.markers.size);
+  });
+
+  it("offers an ambiguous call with 2 to 9 candidates at a choice, not the marker", () => {
+    const room = `${FN}@200:step`;
+    const cluster = valid(
+      clusterOf(
+        [stepIn(100, 120), stepIn(200, 240)],
+        [ambiguous(205, 2), ambiguous(215, 10, "m.ts::D"), open(225)]
+      )
+    );
+    // The last room's return portal stays on its south wall.
+    const portals = cluster.portals.filter(
+      (portal) => portal.roomId === room && portal.kind !== "return"
+    );
+    expect(portals.map((portal) => portal.kind)).toEqual(["choice", "marker"]);
+    const [choice, marker] = portals;
+    expect(choice).toMatchObject({
+      id: choicePortalId(`${FN}@205`),
+      label: "choose",
+      candidates: ["m.ts::C0.render", "m.ts::C1.render"],
+    });
+    expect(choice).not.toHaveProperty("target");
+    // Ten candidates are too many keys: that call stays on the marker.
+    expect(marker?.label).toBe("2 calls");
+    expect(
+      planFlow(fnWith([stepIn(200, 240)]), [ambiguous(205, 2)]).markers
+    ).toEqual(new Map());
+  });
+
+  it("gives a room one choice per set of candidates, folded or not", () => {
+    const room = `${FN}@200:step`;
+    const cluster = valid(
+      clusterOf(
+        [stepIn(200, 240)],
+        [ambiguous(205, 2), ambiguous(215, 2), ambiguous(225, 3)]
+      )
+    );
+    expect(
+      cluster.portals
+        .filter((portal) => portal.roomId === room && portal.kind === "choice")
+        .map((portal) => portal.id)
+    ).toEqual([choicePortalId(`${FN}@205`), choicePortalId(`${FN}@225`)]);
+    const steps = Array.from({ length: 70 }, (_, index) =>
+      stepIn(1000 + index * 10, 1000 + index * 10 + 8)
+    );
+    const sites = steps.map((_, index) => ambiguous(1000 + index * 10 + 2, 2));
+    const plan = planFlow(fnWith(steps), sites);
+    expect(plan.folds.size).toBeGreaterThan(0);
+    const folded = valid(layoutFlow(plan));
+    const choices = folded.portals.filter((portal) => portal.kind === "choice");
+    // Every room keeps at most one choice for the same two candidates.
+    expect(new Set(choices.map((portal) => portal.roomId)).size).toBe(
+      choices.length
+    );
+  });
+
+  it("puts a choice on its own room in the graph and names its candidates", () => {
+    const fn = fnWith([stepIn(100, 120)]);
+    const graph: CodeGraph = {
+      modules: [
+        {
+          id: "m.ts",
+          path: "m.ts",
+          language: "typescript",
+          lineCount: 1,
+          imports: [],
+          exports: [],
+        },
+      ],
+      functions: [
+        fn,
+        candidate("m.ts::C0.render"),
+        candidate("m.ts::C1.render"),
+      ],
+      classes: [],
+      callSites: [ambiguous(105, 2)],
+      edges: [],
+    };
+    const room = `${FN}@100:step`;
+    const id = choicePortalId(`${FN}@105`);
+    expect(portalSubject(graph, id)).toMatchObject({
+      kind: "choice",
+      site: { id: `${FN}@105` },
+      caller: { id: FN },
+      candidates: [{ id: "m.ts::C0.render" }, { id: "m.ts::C1.render" }],
+    });
+    const world = toWorldGraph(graph);
+    expect(world.portals?.filter((portal) => portal.kind === "choice")).toEqual(
+      [
+        {
+          id,
+          kind: "choice",
+          from: room,
+          to: room,
+          label: "choose",
+          candidates: ["m.ts::C0.render", "m.ts::C1.render"],
+        },
+      ]
+    );
+    // Both candidates are rooms of this module: nothing leaves it.
+    expect(world.external).toBeUndefined();
+  });
+
+  it("lists a choice's candidates in other modules as external", () => {
+    const fn = fnWith([stepIn(100, 120)]);
+    const graph: CodeGraph = {
+      modules: ["m.ts", "n.ts"].map((id) => ({
+        id,
+        path: id,
+        language: "typescript",
+        lineCount: 1,
+        imports: [],
+        exports: [],
+      })),
+      functions: [
+        fn,
+        { ...fnWith([]), id: "m.ts::C0.render", qualifiedName: "C0.render" },
+        {
+          ...fnWith([]),
+          id: "n.ts::C1.render",
+          moduleId: "n.ts",
+          qualifiedName: "C1.render",
+        },
+      ],
+      classes: [],
+      callSites: [
+        {
+          ...ambiguous(105, 2),
+          candidateIds: ["m.ts::C0.render", "n.ts::C1.render"],
+        },
+      ],
+      edges: [],
+    };
+    expect(toWorldGraph(graph).external).toEqual(["n.ts::C1.render"]);
   });
 
   it("names a marker's calls and puts it on its own room in the graph", () => {

@@ -40,9 +40,12 @@ const MIN_APPROACH = 0.2;
 
 const dot = (a: Point, b: Point): number => a.x * b.x + a.z * b.z;
 
-/** Portals the player can step through: a marker is a closed frame. */
+/**
+ * Portals the player can step through: a marker is a closed frame, and a
+ * choice is entered by picking a candidate, not by walking in.
+ */
 const enterable = (portal: BuiltPortal): boolean =>
-  portal.portal.kind !== "marker";
+  portal.portal.kind !== "marker" && portal.portal.kind !== "choice";
 
 /**
  * The portal the player enters this frame: they are inside its trigger

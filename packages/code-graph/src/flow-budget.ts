@@ -14,6 +14,7 @@ import {
   withBodies,
 } from "./flow-composite";
 import type { CompositeSpec, FlowTree } from "./flow-composite";
+import { distinctChoices, extraSlots } from "./flow-markers";
 import { depthOf, specOf } from "./flow-measure";
 import type { FlowCallee, FlowRoomSpec } from "./flow-measure";
 import { foldedText } from "./flow-text";
@@ -59,6 +60,7 @@ const merge = (
   const callees = distinctCallees([...a.callees, ...b.callees]);
   // The entry room already carries the function's strays.
   const markers = [...a.markers, ...b.markers];
+  const choices = distinctChoices([...a.choices, ...b.choices]);
   return {
     kind: "room",
     id: a.id,
@@ -68,12 +70,13 @@ const merge = (
     calls,
     callees,
     markers,
+    choices,
     depth: depthOf(
       "collapsed",
       statements,
       callees.length,
       entry,
-      markers.length > 0
+      extraSlots(markers, choices)
     ),
     floor: depthOf("collapsed", statements, 0, entry),
     terminal: b.terminal,

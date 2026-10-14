@@ -275,6 +275,14 @@ type PortalSubject =
       readonly sites: readonly CallSite[];
     }
   | {
+      /** An ambiguous call: the player picks which candidate to enter. */
+      readonly kind: "choice";
+      readonly site: CallSite;
+      readonly caller: FunctionNode;
+      /** The functions it may call, in the site's order (`candidateIds`). */
+      readonly candidates: readonly FunctionNode[];
+    }
+  | {
       readonly kind: "module";
       /** The module whose hub holds it; null for the entrance or a zone's hub. */
       readonly from: ModuleNode | null;
@@ -356,6 +364,15 @@ const portalSubject = (
   );
   const caller =
     site === undefined ? undefined : functionSubject(graph, site.callerId)?.fn;
+  if (ref.kind === "choice") {
+    const candidates = (site?.candidateIds ?? []).flatMap((id) => {
+      const fn = functionSubject(graph, id)?.fn;
+      return fn === undefined ? [] : [fn];
+    });
+    return site === undefined || caller === undefined || candidates.length < 2
+      ? null
+      : { kind: "choice", site, caller, candidates };
+  }
   const callee =
     site?.calleeId === null || site?.calleeId === undefined
       ? undefined
