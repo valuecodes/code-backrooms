@@ -39,4 +39,10 @@ describe("Hud", () => {
     expect(render(false)).toContain('href="/"');
     expect(render(true)).not.toContain('href="/"');
   });
+
+  it("links the GitHub repository only while the pointer is free", () => {
+    const github = 'href="https://github.com/valuecodes/code-backrooms"';
+    expect(render(false)).toContain(github);
+    expect(render(true)).not.toContain(github);
+  });
 });

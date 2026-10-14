@@ -45,6 +45,15 @@ describe("LandingView", () => {
 
   const GITHUB = { url: "", valid: false, ready: false };
 
+  it("links this project's GitHub repository in a new tab", () => {
+    // Still a live link while a read runs: it leaves the app.
+    const html = render({ reading: "reading…" });
+    expect(html).toContain(
+      'href="https://github.com/valuecodes/code-backrooms" target="_blank" rel="noreferrer"'
+    );
+    expect(html).toContain('aria-label="Code Backrooms on GitHub"');
+  });
+
   it("offers no zip picker, and one folder picker either way", () => {
     for (const html of [render(), render({ github: GITHUB })]) {
       expect(html).not.toContain(".zip");
@@ -68,7 +77,7 @@ describe("LandingView", () => {
     const html = render({ reading: "reading my-repo…" });
     expect(html).toContain("reading my-repo…");
     expect(html.match(/<input[^>]*disabled=""/g)).toHaveLength(1);
-    expect(html).not.toContain("href=");
+    expect(html).not.toContain('href="?');
   });
 
   it("darkens the backdrop while reading instead of dropping it", () => {
@@ -80,7 +89,7 @@ describe("LandingView", () => {
   });
 
   it("draws a backdrop behind the page, hidden from screen readers", () => {
-    expect(render()).not.toContain("aria-hidden");
+    expect(render()).not.toContain("-z-10");
     const html = render({ backdrop: <canvas id="drift" /> });
     expect(html).toMatch(
       /<div aria-hidden="true" class="absolute inset-0 -z-10"><canvas id="drift"><\/canvas>/

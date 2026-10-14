@@ -9,6 +9,8 @@ and every call is a door.
 
 ![Inside main(): the call room, with the if/else lanes ahead behind their tinted door frames](docs/media/hero.jpg)
 
+![Walking a codebase: the world map of this repository, then into main(), its if fork and a call door](docs/media/walkthrough.webp)
+
 Paste the URL of any public JavaScript or TypeScript repository on GitHub, or
 walk a local folder. The code is parsed in your browser tab, and a folder is
 never uploaded. Once a repository is open, the address bar is its share link,

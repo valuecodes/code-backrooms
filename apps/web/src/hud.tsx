@@ -1,5 +1,6 @@
 import type { Quality } from "@repo/renderer/effects";
 
+import { SourceLink } from "~/source-link";
 import type { ZoneProgress } from "~/use-area-world";
 
 type HudProps = {
@@ -179,6 +180,7 @@ const Hud = ({
           </div>
         ))}
       </dl>
+      <SourceLink />
     </div>
   );
 };
