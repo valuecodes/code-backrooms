@@ -11,6 +11,7 @@ import type {
   Point,
   Rect,
   RoomData,
+  UnloadedArea,
   WorldLayout,
 } from "@repo/types";
 
@@ -174,15 +175,19 @@ const parentsOf = (
 
 /**
  * Each zone with every area of it (built or not, hub first, then in member
- * order) and the bounds of its built ones.
+ * order) and the bounds of its built ones and its unloaded ones, which keep
+ * their place: a zone never shrinks.
  */
 const areaZones = (
   zones: readonly ZoneSpec[],
   members: readonly { readonly id: string; readonly zone?: string }[],
-  areas: readonly BuiltArea[]
+  areas: readonly BuiltArea[],
+  unloaded: readonly UnloadedArea[] = []
 ): readonly AreaZone[] =>
   zones.map((zone) => {
-    const built = areas.filter((area) => area.zoneId === zone.id);
+    const built = [...areas, ...unloaded].filter(
+      (area) => area.zoneId === zone.id
+    );
     return {
       id: zone.id,
       name: zone.name,
@@ -253,6 +258,7 @@ const assembleAreas = (
     areas,
     pending: [],
     failed: [],
+    unloaded: [],
     areaOf,
     zones: areaZones(zones, parts, areas),
   };

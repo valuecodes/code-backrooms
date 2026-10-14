@@ -14,6 +14,7 @@ import {
   builtModules,
   candidatesOf,
   ensureNext,
+  portalUnits,
   storeFor,
   targetAreaOf,
   warningsOf,
@@ -231,6 +232,29 @@ describe("a lazy walk through the repo example", () => {
     // The entrance did not move: the player's start is where it was.
     expect(after.built.start).toBe(before.built.start);
   });
+
+  it("lands a portal into an unloaded area once it is ensured again", () => {
+    const store = storeOf(1);
+    const portal = modulePortalId(ENTRANCE_ID, "src/index.ts");
+    const state = { frames: [], roomId: ENTRANCE_ID };
+    const event = { type: "portal", portalId: portal } as const;
+    store.ensure("src/index.ts");
+    const first = createNavigator(mergeAreas(store.snapshot().world)).step(
+      state,
+      event
+    );
+    store.evict("src/index.ts");
+    expect(
+      createNavigator(mergeAreas(store.snapshot().world)).step(state, event)
+        .teleport
+    ).toBeNull();
+    store.ensure("src/index.ts");
+    const again = createNavigator(mergeAreas(store.snapshot().world)).step(
+      state,
+      event
+    );
+    expect(again.teleport).toEqual(first.teleport);
+  });
 });
 
 /** `s.run()` may be `Base.run` or the override in another file. */
@@ -270,6 +294,13 @@ describe("a choice with a candidate in another module", () => {
       "fast.ts::Fast.run",
     ]);
     expect(candidatesOf(world, "no such portal")).toEqual([]);
+    // Its far side is its own unit, then every candidate.
+    expect(portalUnits(world, choice.id)).toEqual([
+      choice.to,
+      "base.ts::Base.run",
+      "fast.ts::Fast.run",
+    ]);
+    expect(portalUnits(world, "no such portal")).toEqual([]);
     const state = { frames: [], roomId: "main.ts::main" };
     const event = {
       type: "choose",
@@ -326,6 +357,24 @@ describe("modules and zones of a workspace", () => {
     expect(builtModules(zoned.snapshot().world, true)).toBe(1);
     zoned.ensureAll();
     expect(builtModules(zoned.snapshot().world, true)).toBe(3);
+  });
+
+  it("counts an unloaded module as built, in the zone too", () => {
+    const zoned = store();
+    zoned.ensure("//zone:web");
+    zoned.ensure("apps/web/src/main.ts");
+    zoned.ensure("apps/web/src/util.ts");
+    zoned.evict("apps/web/src/util.ts");
+    const { world } = zoned.snapshot();
+    expect(world.unloaded.map(({ id }) => id)).toEqual([
+      "apps/web/src/util.ts",
+    ]);
+    expect(builtModules(world, true)).toBe(2);
+    expect(zoneProgress(world, "apps/web/src/main.ts")).toEqual({
+      name: "web",
+      built: 2,
+      total: 2,
+    });
   });
 
   it("counts a random world's one area", () => {

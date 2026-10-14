@@ -24,6 +24,18 @@ describe("mapHeader", () => {
     );
   });
 
+  it("counts an unloaded area as generated", () => {
+    const store = codeAreaStore(repo(), 1);
+    const [first] = store.snapshot().world.pending;
+    store.ensure(first ?? "");
+    store.evict(first ?? "");
+    const { world } = store.snapshot();
+    const total = 2 + world.pending.length;
+    expect(mapHeader({ name: "repo", seed: 1, world })).toBe(
+      `repo · seed 1 · 2/${total} areas · 0 failed`
+    );
+  });
+
   it("counts every area once all are generated", () => {
     const store = codeAreaStore(repo(), 1);
     store.ensureAll();

@@ -27,15 +27,19 @@ const shared = (
 /**
  * Every portal into another area: it leads to a unit some area has, lands
  * inside that unit's room there, clear of the walls; one into an area not
- * generated yet, or one that failed, only has to name a unit of it.
- * Returns the areas each area's placed portals reach.
+ * generated yet, one that failed or one unloaded only has to name a unit
+ * of it. Returns the areas each area's placed portals reach.
  */
 const checkCrossings = (
   world: AreaWorld,
   failures: string[]
 ): ReadonlyMap<string, ReadonlySet<string>> => {
   const byId = new Map(world.areas.map((area) => [area.id, area]));
-  const pending = new Set([...world.pending, ...world.failed]);
+  const pending = new Set([
+    ...world.pending,
+    ...world.failed,
+    ...world.unloaded.map(({ id }) => id),
+  ]);
   const reaches = new Map<string, Set<string>>();
   for (const area of world.areas) {
     const own = new Set<string>();
@@ -152,7 +156,8 @@ const checkZones = (
  * `checkLayout`; room and portal ids unique across areas; areas at least
  * AREA_GAP apart, each start room at its offset; portals into other areas
  * landing in their unit; every area reachable from the entry over placed
- * portals; and the zones as `checkZones` has them.
+ * portals, unless one is unloaded (it may have been the only way in, and
+ * its portals are gone with it); and the zones as `checkZones` has them.
  */
 const checkAreas = (world: AreaWorld): string[] => {
   const failures: string[] = [];
@@ -194,7 +199,7 @@ const checkAreas = (world: AreaWorld): string[] => {
     reaches,
     new Set(world.areas.map((area) => area.id))
   );
-  for (const area of world.areas) {
+  for (const area of world.unloaded.length === 0 ? world.areas : []) {
     if (!seen.has(area.id)) {
       failures.push(`area ${area.id} is unreachable from ${world.entry}`);
     }

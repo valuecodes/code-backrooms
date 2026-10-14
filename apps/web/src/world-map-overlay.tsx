@@ -61,7 +61,8 @@ const WorldMapOverlay = ({
     element?.addEventListener("click", keepClick);
     return () => element?.removeEventListener("click", keepClick);
   }, []);
-  const built = world.areas.length;
+  // An unloaded area was generated: it counts as built.
+  const built = world.areas.length + world.unloaded.length;
   const total = built + world.pending.length + world.failed.length;
 
   return (

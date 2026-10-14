@@ -382,6 +382,14 @@ type AreaZone = {
   readonly bounds: Rect | null;
 };
 
+/** An area built once and evicted since: its place is kept for it. */
+type UnloadedArea = {
+  readonly id: string;
+  /** The footprint it had, and will have again once generated. */
+  readonly bounds: Rect;
+  readonly zoneId: string | null;
+};
+
 type AreaWorld = {
   readonly seed: number;
   /** The area the player starts in. */
@@ -398,6 +406,12 @@ type AreaWorld = {
    * portals into them never land.
    */
   readonly failed: readonly string[];
+  /**
+   * Areas built once and evicted since, in the order they were: neither
+   * built nor pending. Portals into them are dark until they are generated
+   * again, in the same place.
+   */
+  readonly unloaded: readonly UnloadedArea[];
   /** The area of every unit (graph room) of every area, pending ones too. */
   readonly areaOf: ReadonlyMap<string, string>;
   /** The zones, in strip order; empty when nothing is zoned. */
@@ -435,6 +449,7 @@ export type {
   RoomData,
   RoomKind,
   RoomSize,
+  UnloadedArea,
   Vec3,
   WallSegment,
   WallSide,

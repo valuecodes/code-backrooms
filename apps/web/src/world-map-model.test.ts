@@ -93,7 +93,7 @@ const overlaps = (a: Rect, b: Rect): boolean =>
 const ghostRects = (model: WorldMapModel): ReadonlyMap<string, Rect> =>
   new Map(
     model.areas
-      .filter((area) => area.state !== "generated")
+      .filter((area) => area.state === "pending" || area.state === "failed")
       .map((area) => [area.id, area.rect])
   );
 
@@ -272,6 +272,24 @@ describe("worldMapModel", () => {
     // Each zone's ghosts start a row of their own, in zone order.
     const rowOf = (id: string) => ghostRects(model).get(id)?.maxZ;
     expect(rowOf(LIB_ZONE)).toBeLessThan(rowOf(MAIN) ?? 0);
+  });
+
+  it("draws an unloaded area as its outline in its band, not as a ghost", () => {
+    const store = codeAreaStore(workspace(), 1);
+    store.ensure(WEB_ZONE);
+    store.ensure(MAIN);
+    const loaded = worldMapModel(store.snapshot().world);
+    store.evict(MAIN);
+    const model = worldMapModel(store.snapshot().world);
+    const main = areaOf(model, MAIN);
+    const outline = { state: "unloaded", rooms: [] };
+    expect(main).toEqual({ ...areaOf(loaded, MAIN), ...outline });
+    expect(model.zones).toEqual(loaded.zones);
+    // Not also a ghost, and the shelf stays clear above where it is.
+    for (const ghost of ghostRects(model).values()) {
+      expect(ghost.maxZ).toBeLessThanOrEqual(main.rect.minZ - AREA_GAP);
+    }
+    expect(ghostRects(model).has(MAIN)).toBe(false);
   });
 
   it("bands each zone round each of its areas, counting its modules", () => {

@@ -1,9 +1,17 @@
 // Areas generated when they are first needed: the entry at once, every other
 // one on `ensure`, placed in the order they were asked for. An area never
 // moves once placed (the packing is a function of the sequence so far), so
-// a world that grows keeps every room, portal and landing it had.
+// a world that grows keeps every room, portal and landing it had. An area
+// can be evicted and generated again: its place stays reserved, and
+// generation is deterministic, so it comes back the same and where it was.
 
-import type { AreaWorld, BuiltArea, GeneratedWorld, Rect } from "@repo/types";
+import type {
+  AreaWorld,
+  BuiltArea,
+  GeneratedWorld,
+  Rect,
+  UnloadedArea,
+} from "@repo/types";
 
 import {
   areaZones,
@@ -46,8 +54,16 @@ type AreaStore = {
   readonly snapshot: () => AreaState;
   /** Called once per change; returns the unsubscribe. */
   readonly subscribe: (listener: () => void) => () => void;
-  /** Generates the area unless it exists; a failure is kept, not retried. */
+  /**
+   * Generates the area unless it exists, in its old place when it was
+   * evicted; a failure is kept, not retried.
+   */
   readonly ensure: (areaId: string) => Ensured;
+  /**
+   * Drops a built area but keeps its place; true when it did. Never the
+   * entry: the player's start is in it.
+   */
+  readonly evict: (areaId: string) => boolean;
   /** Every area, in spec order. */
   readonly ensureAll: () => void;
 };
@@ -79,7 +95,10 @@ const createAreaStore = ({
   /** Every placed area, where it is; and its bounds round the origin. */
   const placed: PlacedSlot[] = [];
   const unmoved: Rect[] = [];
+  /** Each placed area's slot, kept after an eviction. */
+  const slots = new Map<string, PlacedSlot>();
   const areas: BuiltArea[] = [];
+  const unloaded = new Map<string, UnloadedArea>();
   const errors = new Map<string, string>();
 
   /** Beside its parent with parents, else in rows as `packOffsets` packs. */
@@ -95,6 +114,18 @@ const createAreaStore = ({
 
   const generate = (spec: AreaSpec): BuiltArea => {
     const world = spec.generate();
+    const saved = slots.get(spec.id);
+    if (saved !== undefined) {
+      // Evicted: back in its reserved place, which nothing else took.
+      const area = placeArea(
+        { id: spec.id, world, zone: spec.zone },
+        saved.offset
+      );
+      unloaded.delete(spec.id);
+      built.set(spec.id, area);
+      areas.push(area);
+      return area;
+    }
     const rect = layoutBounds(world.layout.rooms);
     const slot = slotOf(spec.id, rect);
     const area = placeArea(
@@ -102,7 +133,9 @@ const createAreaStore = ({
       slot.offset
     );
     // Only a placed area takes up room: a throw above leaves no trace.
-    placed.push({ ...slot, rect: area.bounds });
+    const kept = { ...slot, rect: area.bounds };
+    placed.push(kept);
+    slots.set(spec.id, kept);
     unmoved.push(rect);
     built.set(spec.id, area);
     areas.push(area);
@@ -124,10 +157,12 @@ const createAreaStore = ({
       areas: [...areas],
       pending: specs
         .map((spec) => spec.id)
-        .filter((id) => !built.has(id) && !errors.has(id)),
-      failed: [...errors.keys()],
+        .filter((id) => !built.has(id) && !errors.has(id) && !unloaded.has(id)),
+      // One unloaded that failed to come back stays an outline, not a ghost.
+      failed: [...errors.keys()].filter((id) => !unloaded.has(id)),
+      unloaded: [...unloaded.values()],
       areaOf,
-      zones: areaZones(zones, specs, areas),
+      zones: areaZones(zones, specs, areas, [...unloaded.values()]),
     },
     errors: new Map(errors),
     lastMs,
@@ -140,8 +175,8 @@ const createAreaStore = ({
   generate(first);
   let state = stateOf(null);
 
-  const publish = (started: number) => {
-    state = stateOf(Date.now() - started);
+  const publish = (lastMs: number | null) => {
+    state = stateOf(lastMs);
     for (const listener of listeners) {
       listener();
     }
@@ -165,14 +200,31 @@ const createAreaStore = ({
     const started = Date.now();
     try {
       const area = generate(spec);
-      publish(started);
+      publish(Date.now() - started);
       return { area };
     } catch (error) {
       const message = String(error);
       errors.set(areaId, message);
-      publish(started);
+      publish(Date.now() - started);
       return { error: message };
     }
+  };
+
+  const evict = (areaId: string): boolean => {
+    const area = built.get(areaId);
+    if (area === undefined || areaId === entry) {
+      return false;
+    }
+    built.delete(areaId);
+    areas.splice(areas.indexOf(area), 1);
+    unloaded.set(areaId, {
+      id: areaId,
+      bounds: area.bounds,
+      zoneId: area.zoneId,
+    });
+    // Nothing was generated: the HUD keeps the last generation's time.
+    publish(state.lastMs);
+    return true;
   };
 
   return {
@@ -184,6 +236,7 @@ const createAreaStore = ({
       };
     },
     ensure,
+    evict,
     ensureAll: () => {
       for (const spec of specs) {
         ensure(spec.id);

@@ -190,6 +190,20 @@ describe("createAreaStore with zones", () => {
     expect(checkAreas(world)).toEqual([]);
   });
 
+  it("keeps a zone's bounds and areas after its areas are evicted", () => {
+    const store = storeOf(1);
+    for (const id of ["two", "four", "three"]) {
+      store.ensure(id);
+    }
+    const before = store.snapshot().world.zones;
+    store.evict("two");
+    store.evict("four");
+    const { world } = store.snapshot();
+    expect(world.zones).toEqual(before);
+    expect(world.unloaded.map(({ zoneId }) => zoneId)).toEqual(["a", "a"]);
+    expect(checkAreas(world)).toEqual([]);
+  });
+
   it("places areas as the zoned eager assembly does in the same order", () => {
     const store = storeOf(2);
     for (const id of ["three", "two", "four"]) {

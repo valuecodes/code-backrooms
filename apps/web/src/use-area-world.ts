@@ -10,6 +10,9 @@ import { presets } from "@repo/world-generator/presets";
 import type { PresetName } from "@repo/world-generator/presets";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 
+import { areaOfRoom, createUnloader } from "~/area-budget";
+import type { Pins } from "~/area-budget";
+
 // The world on screen as a store of areas: a code world generates its
 // entrance at once and each module when the player first heads for it; a
 // random or preset world is one area, generated at once.
@@ -35,23 +38,35 @@ type AreaView = {
   readonly current: () => GeneratedWorld | null;
   /** Rooms (and corridors) of every area so far. */
   readonly rooms: number;
-  /** Generates the area a portal leads into, unless it exists or failed. */
+  /**
+   * Generates the area a portal leads into, unless it exists or failed;
+   * an unloaded one comes back where it was.
+   */
   readonly ensurePortal: (portalId: string) => void;
   /**
-   * Generates the area of a unit (a choice's candidate), unless it exists
-   * or failed; true when the area is generated once it returns, from the
-   * store as of now (a failure on this call included).
+   * Generates the area of a unit (a choice's candidate, a frame's caller),
+   * unless it exists or failed; true when the area is generated once it
+   * returns, from the store as of now (a failure on this call included).
    */
   readonly ensureUnit: (unitId: string) => boolean;
   /** A choice portal's candidates, in order; none for any other portal. */
   readonly candidatesOf: (portalId: string) => readonly string[];
+  /**
+   * Unloads the areas past the budget that `pins` does not need, least
+   * recently visited first (`createUnloader`); call after every change.
+   * Does nothing when eager: every area is wanted then.
+   */
+  readonly unload: (pins: AreaPins) => void;
   /** Generates the first pending area; false once none is left. */
   readonly ensureNext: () => boolean;
   /** The area a portal leads into when that area could not be generated. */
   readonly failedArea: (portalId: string) => string | null;
   /** Whether a unit's area could not be generated. */
   readonly failedUnit: (unitId: string) => boolean;
-  /** Modules generated so far and in all; areas of other worlds count as one. */
+  /**
+   * Modules generated so far (unloaded ones too) and in all; areas of other
+   * worlds count as one.
+   */
   readonly modules: { readonly built: number; readonly total: number };
   /** Milliseconds the last area generated on the way took; null when eager. */
   readonly lastMs: number | null;
@@ -61,6 +76,13 @@ type AreaView = {
   readonly errors: ReadonlyMap<string, string>;
   readonly error: string | null;
 };
+
+/**
+ * What the player needs loaded: the room they stand in, the units the
+ * next step may land in, and the portal ahead (its far side and, for a
+ * choice, its candidates).
+ */
+type AreaPins = Pins & { readonly portalId: string | null };
 
 /** A zone's name and its module areas generated so far and in all. */
 type ZoneProgress = {
@@ -157,6 +179,20 @@ const candidatesOf = (
 };
 
 /**
+ * Every unit a portal of `world` may land in: its far side, then a
+ * choice's candidates; none for an unknown portal.
+ */
+const portalUnits = (world: AreaWorld, portalId: string): readonly string[] => {
+  for (const area of world.areas) {
+    const portal = area.graph.portals?.find(({ id }) => id === portalId);
+    if (portal !== undefined) {
+      return [portal.to, ...(portal.candidates ?? [])];
+    }
+  }
+  return [];
+};
+
+/**
  * Generates the first area still pending and reports true, or false when
  * none is: called until false, it generates them in `ensureAll`'s order. A
  * failure leaves the pending list too, so the calls always end.
@@ -188,16 +224,22 @@ const warningsOf = (
   ),
 ];
 
+/** Every area generated so far, unloaded since or not. */
+const generatedIds = (world: AreaWorld): readonly string[] => [
+  ...world.areas.map(({ id }) => id),
+  ...world.unloaded.map(({ id }) => id),
+];
+
 /**
- * The modules generated so far: every area of a code world but its
- * entrance and its zones' hubs; a random or preset world's one area.
+ * The modules generated so far, unloaded since or not: every area of a
+ * code world but its entrance and its zones' hubs; a random or preset
+ * world's one area.
  */
 const builtModules = (world: AreaWorld, code: boolean): number =>
   code
-    ? world.areas.filter(
-        (area) => area.id !== world.entry && !isZoneHub(area.id)
-      ).length
-    : world.areas.length;
+    ? generatedIds(world).filter((id) => id !== world.entry && !isZoneHub(id))
+        .length
+    : generatedIds(world).length;
 
 /**
  * The zone the room is in (any of its rooms or corridors, or its hub's)
@@ -208,14 +250,10 @@ const zoneProgress = (
   world: AreaWorld,
   roomId: string | null
 ): ZoneProgress | null => {
-  if (roomId === null) {
+  const areaId = areaOfRoom(world, roomId);
+  if (areaId === undefined) {
     return null;
   }
-  const areaId =
-    world.areaOf.get(roomId) ??
-    world.areas.find((area) =>
-      area.layout.rooms.some((room) => room.id === roomId)
-    )?.id;
   const zone = world.zones.find((candidate) =>
     candidate.areas.some((id) => id === areaId)
   );
@@ -224,7 +262,7 @@ const zoneProgress = (
   }
   // Its hub comes first and is not a module.
   const modules = zone.areas.slice(1);
-  const built = new Set(world.areas.map((area) => area.id));
+  const built = new Set(generatedIds(world));
   return {
     name: zone.name,
     built: modules.filter((id) => built.has(id)).length,
@@ -268,8 +306,9 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
       if (store === null || now === undefined) {
         return;
       }
+      // A no-op for a built or failed area: pending and unloaded ones generate.
       const area = targetAreaOf(now.world, portalId);
-      if (area !== null && now.world.pending.includes(area)) {
+      if (area !== null) {
         store.ensure(area);
       }
     },
@@ -285,12 +324,25 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
       if (area === undefined) {
         return false;
       }
-      if (now.world.pending.includes(area)) {
-        store.ensure(area);
-      }
-      return store.snapshot().world.areas.some(({ id }) => id === area);
+      return "area" in store.ensure(area);
     },
     [store]
+  );
+  // One per store: its visits start over with the world.
+  const unloader = useMemo(
+    () => (store === null || options.eager ? null : createUnloader(store)),
+    [store, options.eager]
+  );
+  const unload = useCallback(
+    ({ portalId, units, ...pins }: AreaPins) => {
+      if (store === null || unloader === null) {
+        return;
+      }
+      const ahead =
+        portalId === null ? [] : portalUnits(store.snapshot().world, portalId);
+      unloader({ ...pins, units: [...units, ...ahead] });
+    },
+    [store, unloader]
   );
   const candidates = useCallback(
     (portalId: string) =>
@@ -328,6 +380,7 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
     ensurePortal,
     ensureUnit,
     candidatesOf: candidates,
+    unload,
     ensureNext: next,
     failedArea,
     failedUnit,
@@ -343,6 +396,7 @@ export {
   builtModules,
   candidatesOf,
   ensureNext,
+  portalUnits,
   storeFor,
   targetAreaOf,
   useAreaWorld,

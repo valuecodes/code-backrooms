@@ -49,6 +49,21 @@ const outlineOf = (area: MapArea): string => {
   return area.entry ? BRIGHT : PLAIN;
 };
 
+/** A pending ghost dashed; an unloaded area dotted, where it was. */
+const DASHES: Readonly<Record<MapArea["state"], string | undefined>> = {
+  generated: undefined,
+  unloaded: "1 2",
+  pending: "4 3",
+  failed: undefined,
+};
+
+const strokeOpacityOf = (area: MapArea): number => {
+  if (area.state === "generated") {
+    return 0.7;
+  }
+  return area.state === "unloaded" ? 0.4 : 0.6;
+};
+
 type LayersProps = {
   readonly model: WorldMapModel;
   /** Prefix of this map's clip path ids, unique on the page. */
@@ -109,8 +124,8 @@ const Layers = ({ model, clip }: LayersProps) => {
               fill={area.state === "failed" ? FAILED : "none"}
               fillOpacity={0.15}
               stroke={colour}
-              strokeOpacity={area.state === "generated" ? 0.7 : 0.6}
-              strokeDasharray={area.state === "pending" ? "4 3" : undefined}
+              strokeOpacity={strokeOpacityOf(area)}
+              strokeDasharray={DASHES[area.state]}
               vectorEffect="non-scaling-stroke"
             />
             {area.rooms.map((room) => (
