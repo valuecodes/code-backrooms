@@ -44,6 +44,11 @@ type AreaView = {
    */
   readonly ensurePortal: (portalId: string) => void;
   /**
+   * Generates the area a portal leads into only while it is pending: for
+   * the portal ahead, before any step, so an unloaded one waits for one.
+   */
+  readonly preparePortal: (portalId: string) => void;
+  /**
    * Generates the area of a unit (a choice's candidate, a frame's caller),
    * unless it exists or failed; true when the area is generated once it
    * returns, from the store as of now (a failure on this call included).
@@ -314,6 +319,19 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
     },
     [store]
   );
+  const preparePortal = useCallback(
+    (portalId: string) => {
+      const now = store?.snapshot();
+      if (store === null || now === undefined) {
+        return;
+      }
+      const area = targetAreaOf(now.world, portalId);
+      if (area !== null && now.world.pending.includes(area)) {
+        store.ensure(area);
+      }
+    },
+    [store]
+  );
   const ensureUnit = useCallback(
     (unitId: string) => {
       const now = store?.snapshot();
@@ -378,6 +396,7 @@ const useAreaWorld = (seed: number, options: WorldOptions): AreaView => {
     current,
     rooms,
     ensurePortal,
+    preparePortal,
     ensureUnit,
     candidatesOf: candidates,
     unload,

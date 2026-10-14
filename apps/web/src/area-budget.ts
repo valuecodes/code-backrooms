@@ -80,10 +80,11 @@ type Pins = {
   /** Units a teleport or a step may land in next. */
   readonly units: readonly string[];
   /**
-   * Where the next Backspace or return portal lands (the top frame's
-   * caller): kept, and generated again when it was unloaded.
+   * Units the player is in or lands in next without a step that generates
+   * it (where navigation has them, the top frame's caller for Backspace and
+   * return portals): kept, and generated again when unloaded.
    */
-  readonly returnUnit: string | null;
+  readonly needed: readonly string[];
 };
 
 /**
@@ -99,7 +100,7 @@ const createUnloader = (
   const seen = new Map<string, number>();
   let tick = 0;
   let here: string | null = null;
-  return ({ roomId, units, returnUnit }) => {
+  return ({ roomId, units, needed }) => {
     const { world } = store.snapshot();
     here = areaOfRoom(world, roomId) ?? here;
     tick += 1;
@@ -111,23 +112,21 @@ const createUnloader = (
     if (here !== null) {
       seen.set(here, tick);
     }
-    const pinned = pinnedAreas(
-      world,
-      here,
-      returnUnit === null ? units : [...units, returnUnit]
-    );
+    const pinned = pinnedAreas(world, here, [...units, ...needed]);
     const loaded = world.areas.map(({ id }) => id);
     for (const id of evictions({ loaded, pinned, seen, budget })) {
       store.evict(id);
       // Generated again, it counts as fresh.
       seen.delete(id);
     }
-    const back = areaOfRoom(world, returnUnit);
-    if (
-      back !== undefined &&
-      store.snapshot().world.unloaded.some(({ id }) => id === back)
-    ) {
-      store.ensure(back);
+    for (const unit of needed) {
+      const area = areaOfRoom(world, unit);
+      if (
+        area !== undefined &&
+        store.snapshot().world.unloaded.some(({ id }) => id === area)
+      ) {
+        store.ensure(area);
+      }
     }
   };
 };

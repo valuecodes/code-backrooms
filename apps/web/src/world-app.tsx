@@ -57,7 +57,8 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
   // Generated once per seed, then grown an area at a time: it never
   // regenerates while the player moves.
   const generated = useAreaWorld(seed, worldOptions);
-  const { ensurePortal, ensureUnit, candidatesOf, unload } = generated;
+  const { ensurePortal, preparePortal, ensureUnit, candidatesOf, unload } =
+    generated;
   // The target a candidate was last picked at (see the key handler).
   const picked = useRef<Target | null>(null);
   const navigation = useNavigation(seed, generated.current);
@@ -104,26 +105,30 @@ const WorldApp = ({ setup }: { readonly setup: WorldSetup }) => {
 
   // The portal in front of the player leads into an area not generated yet:
   // generate it now, before the player steps in. Also run when the world
-  // changes, as a target kept across a new seed reports no change.
+  // changes, as a target kept across a new seed reports no change. Not an
+  // unloaded one: looking along a wall of portals would generate and unload
+  // areas in turn; it stays dark until stepped into (`onPortal`).
   useEffect(() => {
     if (target?.kind === "portal") {
-      ensurePortal(target.portalId);
+      preparePortal(target.portalId);
     }
-  }, [target, ensurePortal, generated.world]);
+  }, [target, preparePortal, generated.world]);
 
   // Keep the world within its budget of built areas after every change (a
   // load included, not only a step into another area). Kept: where the
   // player is, where navigation says they are (ahead of the Player after a
   // teleport), the top frame's ends and the portal ahead; never the whole
-  // stack, so the pins stay bounded. An unload changes the world and runs
-  // this once more, with nothing left to unload.
+  // stack, so the pins stay bounded. Where navigation has the player and
+  // the top frame's caller are generated again if unloaded, so a pop seen
+  // after a stale render still lands on floor. An unload changes the world
+  // and runs this once more, with nothing left to unload.
   const calleeUnit = top?.calleeRoomId ?? null;
   const portalAhead = target?.kind === "portal" ? target.portalId : null;
   useEffect(() => {
     unload({
       roomId,
-      units: [navigation.roomId, calleeUnit].filter((unit) => unit !== null),
-      returnUnit,
+      units: calleeUnit === null ? [] : [calleeUnit],
+      needed: [navigation.roomId, returnUnit].filter((unit) => unit !== null),
       portalId: portalAhead,
     });
   }, [
