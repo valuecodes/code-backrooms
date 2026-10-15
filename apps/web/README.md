@@ -142,6 +142,16 @@ Without the site key the GitHub field is hidden and the folder picker is the
 page's only loader. The Worker verifies each token with Turnstile's `siteverify`
 before it fetches, and rate-limits each IP to 5 loads a minute.
 
+### Web Analytics
+
+Cloudflare Web Analytics is optional. Add the site in the dashboard (Web
+Analytics → Add a site) with manual JS snippet installation, not automatic
+injection, which would load a second beacon. Copy the `token` from its snippet
+into the build variable `VITE_CF_BEACON_TOKEN` (Settings → Build → Variables),
+and set it for production builds only so previews don't report into the site.
+The token is public: the build puts the beacon `<script>` into `index.html`.
+Without the variable the page has no beacon.
+
 To deploy from your machine instead, run `pnpm --filter web exec wrangler login` once, then
 `pnpm --filter web deploy`.
 

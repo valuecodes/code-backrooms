@@ -236,7 +236,10 @@ Or run repo-wide via root `pnpm typecheck` / `pnpm test` / `pnpm build`.
 - **Build settings:** root directory `apps/web`, build command `pnpm run build`,
   deploy command `npx wrangler deploy`.
 - **Build variables:** `VITE_TURNSTILE_SITE_KEY`, the widget's site key. Vite
-  inlines it at build time, so it is a _build_ variable. Also set
+  inlines it at build time, so it is a _build_ variable. Optionally
+  `VITE_CF_BEACON_TOKEN`, the Web Analytics token: `vite.config.ts` adds the
+  beacon script to `index.html` only when it is set (production builds only, and
+  the dashboard site on manual installation, so there is one beacon). Also set
   `NODE_VERSION=24.21.0` and `PNPM_VERSION=12.4.2`: the version files sit
   outside the `apps/web` root, and the build image's defaults are older.
 - **Runtime secret:** `TURNSTILE_SECRET` under the Worker's Settings → Variables
