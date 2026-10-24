@@ -1,5 +1,6 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig, loadEnv, type Plugin } from "vite";
+import type { Plugin } from "vite";
+import { defineConfig, loadEnv } from "vite";
 
 /**
  * Cloudflare Web Analytics, only in a build given `VITE_CF_BEACON_TOKEN` (a
@@ -32,15 +33,18 @@ const cloudflareBeacon = (token: string): Plugin => ({
 });
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => ({
-  plugins: [
-    react(),
-    cloudflareBeacon(
-      loadEnv(mode, process.cwd(), "VITE_").VITE_CF_BEACON_TOKEN ?? ""
-    ),
-  ],
-  resolve: { tsconfigPaths: true },
-  // The GitHub zip route lives in the Worker (`src/api/`): run
-  // `pnpm --filter web dev:worker` beside `dev` to load repositories from GitHub.
-  server: { proxy: { "/api": "http://localhost:8787" } },
-}));
+export default defineConfig(({ mode }) => {
+  // `loadEnv` is typed as a full record, but an unset variable is missing.
+  const env: Partial<Record<string, string>> = loadEnv(
+    mode,
+    process.cwd(),
+    "VITE_"
+  );
+  return {
+    plugins: [react(), cloudflareBeacon(env.VITE_CF_BEACON_TOKEN ?? "")],
+    resolve: { tsconfigPaths: true },
+    // The GitHub zip route lives in the Worker (`src/api/`): run
+    // `pnpm --filter web dev:worker` beside `dev` to load repositories from GitHub.
+    server: { proxy: { "/api": "http://localhost:8787" } },
+  };
+});
