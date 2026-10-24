@@ -77,6 +77,8 @@ const translateLayout = (layout: WorldLayout, offset: Point): WorldLayout => ({
   })),
 });
 
+const wide = (rect: Rect) => rect.maxX - rect.minX > SHELF_WIDTH;
+
 /**
  * Where each area goes, given its untranslated bounds, in order, for a
  * world whose areas have no parents (random and preset worlds). The first
@@ -93,7 +95,6 @@ const packOffsets = (bounds: readonly Rect[]): readonly Point[] => {
     return [];
   }
   const left = first.minX;
-  const wide = (rect: Rect) => rect.maxX - rect.minX > SHELF_WIDTH;
   // A row that starts at or above the floor is closed: it could grow into
   // the wide area below it.
   let floor = wide(first) ? first.maxZ : -Infinity;

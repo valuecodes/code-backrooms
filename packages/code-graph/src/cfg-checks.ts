@@ -221,6 +221,8 @@ const roomsOfBlocks = (
 /** The loop whose ring a `loop-back` room belongs to: `X:back` names loop X. */
 const BACK_TAG = "back";
 
+const backOf = (edge: CfgEdge) => taggedFlowNodeId(edge.to, BACK_TAG);
+
 /**
  * Whether the cluster walks the same graph as the CFG. Forward: every door
  * stands for a flow edge between the blocks of its rooms (the two doors
@@ -257,7 +259,6 @@ const cfgLayoutFailures = (
       .filter((portal) => portal.kind === "jump")
       .map((portal) => `${portal.roomId}>${portal.target ?? ""}`)
   );
-  const backOf = (edge: CfgEdge) => taggedFlowNodeId(edge.to, BACK_TAG);
   const backEdges = cfg.edges.filter((edge) => edge.kind === "loop-back");
   const walked = (edge: CfgEdge): boolean => {
     const from = roomOf.get(edge.from);

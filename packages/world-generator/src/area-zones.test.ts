@@ -152,6 +152,15 @@ describe("assembleAreas with zones", () => {
   });
 });
 
+/** The areas whose units area `from` has portals into. */
+const leadsTo = (from: string) =>
+  (graphs.find(([id]) => id === from)?.[1].external ?? []).map(
+    (unit) =>
+      graphs.find(([, graph]) =>
+        graph.rooms.some((room) => room.id === unit)
+      )?.[0]
+  );
+
 /** Every order of ensures a player could cause: only areas a built one leads to. */
 const walks = (
   built: readonly string[],
@@ -160,13 +169,6 @@ const walks = (
   if (pending.length === 0) {
     return [[]];
   }
-  const leadsTo = (from: string) =>
-    (graphs.find(([id]) => id === from)?.[1].external ?? []).map(
-      (unit) =>
-        graphs.find(([, graph]) =>
-          graph.rooms.some((room) => room.id === unit)
-        )?.[0]
-    );
   return pending
     .filter((id) => built.some((from) => leadsTo(from).includes(id)))
     .flatMap((next) =>
@@ -177,10 +179,14 @@ const walks = (
     );
 };
 
-describe("createAreaStore with zones", () => {
-  const storeOf = (seed: number) =>
-    createAreaStore({ seed, entry: "one", specs: specsOf(seed), zones });
+const storeOf = (seed: number) =>
+  createAreaStore({ seed, entry: "one", specs: specsOf(seed), zones });
 
+/** The specs with area `id` parented to `parent`. */
+const withParent = (id: string, parent: string) =>
+  specsOf(1).map((spec) => (spec.id === id ? { ...spec, parent } : spec));
+
+describe("createAreaStore with zones", () => {
   it("knows every zone's areas before generating them", () => {
     const { world } = storeOf(1).snapshot();
     expect(world.zones).toEqual([
@@ -243,8 +249,6 @@ describe("createAreaStore with zones", () => {
   });
 
   it("throws at creation for an unknown parent and a parented entry", () => {
-    const withParent = (id: string, parent: string) =>
-      specsOf(1).map((spec) => (spec.id === id ? { ...spec, parent } : spec));
     expect(() =>
       createAreaStore({
         seed: 1,

@@ -94,6 +94,11 @@ const kase = (
   body: SequenceNode,
   fallsThrough = false
 ): SwitchCase => ({ id: id(), span, labels, body, fallsThrough });
+const tryNode = (
+  block: SequenceNode,
+  handler: SequenceNode | null,
+  finalizer: SequenceNode | null
+): FlowNode => ({ id: id(), kind: "try", span, block, handler, finalizer });
 
 describe("isTerminal", () => {
   it("is true for jumps and for sequences ending in one", () => {
@@ -139,11 +144,6 @@ describe("isTerminal", () => {
   });
 
   it("ends a try by its finalizer, or by both its block and handler", () => {
-    const tryNode = (
-      block: SequenceNode,
-      handler: SequenceNode | null,
-      finalizer: SequenceNode | null
-    ): FlowNode => ({ id: id(), kind: "try", span, block, handler, finalizer });
     expect(isTerminal(tryNode(seq([ret()]), null, null))).toBe(true);
     expect(isTerminal(tryNode(seq([ret()]), seq([call()]), null))).toBe(false);
     expect(isTerminal(tryNode(seq([ret()]), seq([ret()]), null))).toBe(true);

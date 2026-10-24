@@ -17,16 +17,16 @@
     "clean": "rm -rf .turbo node_modules .cache"
   },
   "dependencies": {
-    "@react-three/drei": "10.7.8",
+    "@react-three/drei": "catalog:",
     "@react-three/fiber": "catalog:",
-    "@react-three/postprocessing": "3.1.3",
+    "@react-three/postprocessing": "catalog:",
     "@repo/types": "workspace:*",
     "@repo/world-generator": "workspace:*",
-    "n8ao": "2.0.1",
-    "postprocessing": "6.39.5",
+    "n8ao": "catalog:",
+    "postprocessing": "catalog:",
     "react": "catalog:",
     "three": "catalog:",
-    "three-mesh-bvh": "0.8.3"
+    "three-mesh-bvh": "catalog:"
   },
   "devDependencies": {
     "@repo/typescript": "workspace:*",

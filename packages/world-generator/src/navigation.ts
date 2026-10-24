@@ -61,6 +61,18 @@ const unitsOf = (built: readonly BuiltRoom[]): ReadonlyMap<string, string> =>
 
 const stay = (state: NavigationState): Step => ({ state, teleport: null });
 
+/** Pops the top frame and lands at its return point; nothing to pop stays put. */
+const pop = (state: NavigationState): Step => {
+  const top = state.frames.at(-1);
+  if (top === undefined) {
+    return stay(state);
+  }
+  return {
+    state: { frames: state.frames.slice(0, -1), roomId: top.callerRoomId },
+    teleport: top.returnTo,
+  };
+};
+
 /**
  * The landing just inside the door of unit `caller` that leads into unit
  * `callee`, whether it opens straight into the callee or onto a corridor
@@ -149,18 +161,6 @@ const createNavigator = (world: World): Navigator => {
   const start: Placement = { position: built.start, facing: built.facing };
   // The same default the layout applies.
   const startUnit = unitOf(world.graph.start ?? world.graph.rooms[0]?.id ?? "");
-
-  /** Pops the top frame and lands at its return point; nothing to pop stays put. */
-  const pop = (state: NavigationState): Step => {
-    const top = state.frames.at(-1);
-    if (top === undefined) {
-      return stay(state);
-    }
-    return {
-      state: { frames: state.frames.slice(0, -1), roomId: top.callerRoomId },
-      teleport: top.returnTo,
-    };
-  };
 
   const enterPortal = (state: NavigationState, portal: BuiltPortal): Step => {
     const { kind, from, to } = portal.portal;

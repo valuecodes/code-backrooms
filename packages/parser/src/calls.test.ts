@@ -257,10 +257,10 @@ describe("call resolution", () => {
   });
 });
 
-describe("resolution kinds", () => {
-  const kinds = (source: string) =>
-    parse(source).callSites.map((site) => [site.calleeName, site.resolution]);
+const kinds = (source: string) =>
+  parse(source).callSites.map((site) => [site.calleeName, site.resolution]);
 
+describe("resolution kinds", () => {
   it("marks calls computed at run time dynamic", () => {
     const source = [
       "function helper() { return helper; }",
