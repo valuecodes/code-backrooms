@@ -397,6 +397,9 @@ regenerates while the player moves. A code world's areas are merged into one
 
 - `tsconfig.json` sets `"types": ["vite/client"]`. This is load-bearing:
   without it, TypeScript 7 rejects `import "./globals.css"` with TS2882.
+- `tsconfig.json` covers `src/` only. `tsconfig.node.json` covers the
+  `*.config.ts` files (Node types, no DOM), and the `typecheck` script runs both.
+  It is also what lets oxlint's type-aware rules resolve the config files.
 
 ### Vite Notes
 

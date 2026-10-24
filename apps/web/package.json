@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "pnpm build && wrangler deploy",
-    "typecheck": "tsc",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "clean": "rm -rf .turbo node_modules .cache .wrangler dist",
     "test": "vitest run"
   },
