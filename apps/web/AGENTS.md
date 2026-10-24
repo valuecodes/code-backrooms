@@ -40,7 +40,7 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   walls and the frames of the doors into them, the door prompt names the
   lane (`→ true`, `→ case "active"`), an early `return` ends its lane with
   its own return portal, and the HUD names forks and merges (`… · if
-(user)`, `… · end if`, `… · false · empty`). Loops and `try` stay one
+  (user)`, `… · end if`, `… · false · empty`). Loops and `try` stay one
   collapsed room; a switch with a nested `break`, a case that falls through or more than
   six cases does too. A call inside a lane offers one wall for its door, so when the
   layout cannot place that door the call becomes a portal and the world is
@@ -100,7 +100,7 @@ This directory inherits `/AGENTS.md`. This file lists only additions and overrid
   parameter, `obj[k]()`, `f()()`), external or unresolved. Only resolved calls
   become doors or portals. Each room holding any other kind gets one closed
   marker: a boarded frame whose prompt names the calls (`closed · fetch(…)
-external, x.render(…) ambiguous: A.render() | B.render()`). Choosing
+  external, x.render(…) ambiguous: A.render() | B.render()`). Choosing
   between an ambiguous call's candidates is left for Phase 6.
 - Milestone 14: cross-file calls. An example may hold several
   files (`?code=repo`, a seven-file repository); the parser links calls
@@ -125,7 +125,7 @@ external, x.render(…) ambiguous: A.render() | B.render()`). Choosing
   panel shows nothing there.
 - Milestone 17: class lobbies. The methods of a top-level class
   that hang off the hub open off a lobby of their own instead (`class
-UserService`), one door of the module hub; methods reached by a call door
+  UserService`), one door of the module hub; methods reached by a call door
   keep it. The HUD reads `service.ts · class UserService` and the source
   panel shows the whole class.
 - Milestone 18: lazy areas. A code world generates its entrance
@@ -134,7 +134,7 @@ UserService`), one door of the module hub; methods reached by a call door
   already there moves, and the player, the breadcrumb and the map carry on.
   A portal into a file not generated yet is dark until it is; one whose
   file could not be laid out stays dark and reads `closed · <file> could
-not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
+  not be laid out`. The HUD reads `2/7 modules · last 14 ms` on the way;
   `?eager=1` generates every module up front, as before.
 - Milestone 19: per-area rendering, which completes Phase 4
   (multi-file repositories). The scene draws each area on its own, so an
@@ -244,7 +244,7 @@ Or run repo-wide via root `pnpm typecheck` / `pnpm test` / `pnpm build`.
   outside the `apps/web` root, and the build image's defaults are older.
 - **Runtime secret:** `TURNSTILE_SECRET` under the Worker's Settings → Variables
   and Secrets, type Secret, or `pnpm --filter web exec wrangler secret put
-TURNSTILE_SECRET`. Never a build variable: those exist only during the build,
+  TURNSTILE_SECRET`. Never a build variable: those exist only during the build,
   and the Worker then answers every GitHub load with 503 "not set up on this
   server". `wrangler.jsonc` declares no value for it, so deploys keep it.
 - **Turnstile widget:** create it in the Cloudflare dashboard. Its hostnames must

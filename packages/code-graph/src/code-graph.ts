@@ -247,7 +247,11 @@ type ClassNode = {
  * `const`, a class without that member).
  */
 type CallResolution =
-  "resolved" | "ambiguous" | "dynamic" | "unresolved" | "external";
+  | "resolved"
+  | "ambiguous"
+  | "dynamic"
+  | "unresolved"
+  | "external";
 
 type CallKind = "call" | "optional-call" | "new";
 
