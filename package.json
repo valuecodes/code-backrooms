@@ -16,7 +16,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "knip": "knip",
-    "secrets:scan": "sh tooling/github/scripts/secrets-scan.sh",
+    "secrets:scan": "sh .github/scripts/secrets-scan.sh",
     "clean": "turbo run clean"
   },
   "devDependencies": {

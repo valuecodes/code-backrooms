@@ -24,14 +24,16 @@ Guidelines for AI agents and contributors working in this Turborepo monorepo.
 | renderer        | `@repo/renderer`        | React Three Fiber components, player, lights and post-processing for a built world   |
 | code-graph      | `@repo/code-graph`      | Language-independent CodeGraph types and the CodeGraph to WorldGraph spatial grammar |
 | parser          | `@repo/parser`          | TypeScript and JavaScript source to CodeGraph via @babel/parser, browser-safe        |
+| typescript      | `@repo/typescript`      | Shared tsconfig presets (`base.json`, `node.json`, `react.json`)                     |
 
 ### Tooling (`tooling/`)
 
-| Name       | Filter             | Description                                                      |
-| ---------- | ------------------ | ---------------------------------------------------------------- |
-| prettier   | `@repo/prettier`   | Shared Prettier config                                           |
-| typescript | `@repo/typescript` | Shared tsconfig presets (`base.json`, `node.json`, `react.json`) |
-| github     | `@repo/github`     | GitHub Actions composite setup action, gitleaks `secrets-scan`   |
+| Name     | Filter           | Description            |
+| -------- | ---------------- | ---------------------- |
+| prettier | `@repo/prettier` | Shared Prettier config |
+
+CI helpers are not workspaces: the composite setup action lives in
+`.github/actions/setup/` and the gitleaks script in `.github/scripts/`.
 
 Apps may import packages; packages must never import apps. oxlint bans `../`
 imports and deep `@repo/*/src` imports: import other workspaces by package name,
@@ -70,13 +72,15 @@ To add a package, copy an existing one's `package.json`, `tsconfig.json` and
 
 There is no post-edit formatting hook: run `pnpm format` yourself before committing.
 
-`secrets:scan` runs gitleaks (`tooling/github/scripts/secrets-scan.sh`, version pinned
+`secrets:scan` runs gitleaks (`.github/scripts/secrets-scan.sh`, version pinned
 there) using a local `gitleaks` v8.19+ if one is on PATH, otherwise the pinned Docker image.
 It exits 0 when clean and 1 when it finds a leak.
 
-CI (`.github/workflows/`) runs typecheck, lint, knip, format-check, test, build,
-secrets-scan and CodeQL code scanning (`javascript-typescript` and `actions`) on push
-to `main` and on PRs.
+CI (`.github/workflows/ci.yml`) runs typecheck, lint, knip, format:check, test, build,
+secrets-scan and CodeQL code scanning (`javascript-typescript` and `actions`) on PRs and
+on push to `main`. `all-passed` fans those in and is the one check to require in branch
+protection. The typecheck, test and build jobs restore Turbo's `.turbo` cache from the
+previous run of the same task, so unchanged packages replay instead of rerunning.
 
 ---
 
