@@ -41,7 +41,8 @@ const analysisFailed = (error: string): Analysis => ({
 
 /** What the worker posts back. */
 type AnalyseResponse =
-  { readonly analysis: Analysis } | { readonly error: string };
+  | { readonly analysis: Analysis }
+  | { readonly error: string };
 
 /** The worker's whole job: a local repository, tolerantly, never a throw. */
 const respond = (files: readonly SourceFile[]): AnalyseResponse => {

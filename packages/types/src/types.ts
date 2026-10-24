@@ -37,7 +37,13 @@ type FlowRole =
   | "collapsed";
 
 type LaneKind =
-  "true" | "false" | "case" | "default" | "loop" | "back" | "exit";
+  | "true"
+  | "false"
+  | "case"
+  | "default"
+  | "loop"
+  | "back"
+  | "exit";
 
 /** Which lane a door opens onto; `text` is the lane's own wording (`case "x"`). */
 type LaneLabel = {
