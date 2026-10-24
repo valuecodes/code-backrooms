@@ -255,7 +255,7 @@ TURNSTILE_SECRET`. Never a build variable: those exist only during the build,
   code are public by design. The secret never goes in the repository.
 
 There are no per-workspace `lint` or `format` scripts: root `pnpm lint` (oxlint) and
-`pnpm format` (Prettier) each cover the whole repo.
+`pnpm format` (oxfmt) each cover the whole repo.
 
 ---
 

@@ -11,7 +11,7 @@ describe("selfFiles", () => {
     // Repo-relative keys: a wrong glob `base` would prefix or drop a level.
     expect(paths).toContain("packages/parser/src/parser.ts");
     expect(paths).toContain("apps/web/src/app.tsx");
-    expect(paths).toContain("tooling/prettier/prettier.config.ts");
+    expect(paths).toContain("packages/typescript/package.json");
     expect(paths).toContain("package.json");
     expect(paths).toContain("packages/code-graph/package.json");
     expect(paths).toContain("apps/web/tsconfig.json");

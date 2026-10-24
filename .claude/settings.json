@@ -10,7 +10,6 @@
       "Bash(pnpm test:*)",
       "Bash(pnpm secrets:scan:*)",
       "Bash(pnpm knip:*)",
-      "Bash(pnpm gen:package:*)",
       "Bash(pnpm --filter web dev:*)",
       "Bash(pnpm --filter web build:*)",
       "Bash(pnpm --filter web preview:*)",

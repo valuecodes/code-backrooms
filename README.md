@@ -126,16 +126,17 @@ pnpm knip           # unused files, exports and dependencies
 pnpm typecheck      # TypeScript 7 (tsc) across the repo
 pnpm test           # test suite
 pnpm build          # production builds
-pnpm format         # Prettier write
-pnpm format:check   # Prettier check (CI gate)
+pnpm format         # oxfmt write
+pnpm format:check   # oxfmt check (CI gate)
 pnpm secrets:scan   # gitleaks secret scan over git history
 ```
 
 oxlint prints nothing when there are no findings, so silent output means clean.
 
-CI runs typecheck, lint, knip, format-check, test, build and a gitleaks secret scan on
-push to `main` and on PRs, plus CodeQL code scanning. `secrets:scan` needs either
-`gitleaks` v8.19+ on PATH or a running Docker daemon.
+CI runs typecheck, lint, knip, format:check, test, build and a gitleaks secret scan on
+PRs and on push to `main`, plus CodeQL code scanning. The `all-passed` job fans them in:
+require only that check in branch protection. `secrets:scan` needs either `gitleaks`
+v8.19+ on PATH or a running Docker daemon.
 
 ## Limits
 
