@@ -78,6 +78,29 @@ on push to `main`. `all-passed` fans those in and is the one check to require in
 protection. The typecheck, test and build jobs restore Turbo's `.turbo` cache from the
 previous run of the same task, so unchanged packages replay instead of rerunning.
 
+Dependabot (`.github/dependabot.yml`) bumps the SHA-pinned actions and reusable workflows
+monthly in one grouped PR; npm dependencies are updated by hand.
+
+`node-update.yml` calls the reusable workflow from `valuecodes/automation` (pinned to a
+commit SHA) daily: when a newer Node.js release is out on the `.nvmrc` major, it opens a
+`chore: bump Node.js to …` PR. Security releases open one right away; others wait 14
+days. Its PRs start CI only after someone clicks **Approve workflows to run** (if no
+runs show up, close and reopen the PR). Keep the exact Node version only in `.nvmrc`,
+so that PR is the whole bump; the Cloudflare `NODE_VERSION` build variable of the
+`apps/web` deploy is the one pin to update by hand, before the PR merges. A newer
+release closes the older PR and deletes its branch, so push any follow-up commits just
+before merging.
+
+`maintenance-dashboard.yml` calls the maintenance dashboard workflow from
+`valuecodes/automation` daily.
+It keeps one issue, **Maintenance dashboard** (label `maintenance-dashboard`), listing
+what is due: `catalog:` updates, pnpm (`packageManager`), gitleaks (`GITLEAKS_VERSION`
+in the secrets-scan script), Node.js (`.nvmrc`) and `pnpm audit` findings. Like
+`minimumReleaseAge`, a release shows up only once it is 14 days old. It never opens
+PRs or commits; doing the updates stays manual. If `GITLEAKS_VERSION` moves out of
+`.github/scripts/secrets-scan.sh`, pass the new path as the `gitleaks-script` input.
+Both callers pin the same `valuecodes/automation` commit, so bump them together.
+
 ---
 
 ## Rules
