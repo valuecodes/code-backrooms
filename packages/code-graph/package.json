@@ -30,10 +30,8 @@
     "@repo/world-generator": "workspace:*"
   },
   "devDependencies": {
-    "@repo/prettier": "workspace:*",
     "@repo/typescript": "workspace:*",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  },
-  "prettier": "@repo/prettier"
+  }
 }

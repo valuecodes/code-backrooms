@@ -45,10 +45,9 @@ describe("the repository as a code world", { timeout: 30_000 }, () => {
         "@repo/renderer",
         "@repo/types",
         "@repo/logger",
-        "@repo/prettier",
       ])
     );
-    expect(zonesOf(codeGraph)).toHaveLength(8);
+    expect(zonesOf(codeGraph)).toHaveLength(7);
   });
 
   it("resolves package subpaths and the app's ~/ alias", () => {

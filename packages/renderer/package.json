@@ -29,12 +29,10 @@
     "three-mesh-bvh": "0.8.3"
   },
   "devDependencies": {
-    "@repo/prettier": "workspace:*",
     "@repo/typescript": "workspace:*",
     "@types/react": "catalog:",
     "@types/three": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  },
-  "prettier": "@repo/prettier"
+  }
 }

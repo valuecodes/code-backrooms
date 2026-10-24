@@ -28,10 +28,8 @@
     "@repo/types": "workspace:*"
   },
   "devDependencies": {
-    "@repo/prettier": "workspace:*",
     "@repo/typescript": "workspace:*",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  },
-  "prettier": "@repo/prettier"
+  }
 }
