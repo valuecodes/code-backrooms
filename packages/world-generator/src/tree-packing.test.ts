@@ -14,6 +14,8 @@ const square = (size: number): Rect => ({
   maxZ: size / 2,
 });
 
+const squareSlot = (id: string) => ({ id, rect: square(10) });
+
 const centreOf = (rect: Rect): Point => ({
   x: (rect.minX + rect.maxX) / 2,
   z: (rect.minZ + rect.maxZ) / 2,
@@ -168,12 +170,14 @@ describe("packTree", () => {
       ["b", "a"],
       ["c", "b"],
     ]);
-    const slot = (id: string) => ({ id, rect: square(10) });
-    expect(placedOf([slot("entry"), slot("c")], parents)[1]?.anchor).toBe(
-      "entry"
-    );
     expect(
-      placedOf([slot("entry"), slot("a"), slot("c")], parents)[2]?.anchor
+      placedOf([squareSlot("entry"), squareSlot("c")], parents)[1]?.anchor
+    ).toBe("entry");
+    expect(
+      placedOf(
+        [squareSlot("entry"), squareSlot("a"), squareSlot("c")],
+        parents
+      )[2]?.anchor
     ).toBe("a");
   });
 

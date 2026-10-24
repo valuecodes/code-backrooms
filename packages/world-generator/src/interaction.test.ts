@@ -96,6 +96,40 @@ describe("portalToEnter", () => {
   });
 });
 
+/** The prompt from just inside main's door towards login, in `candidate`. */
+const promptAtLoginDoor = (candidate: GeneratedWorld) => {
+  const main = candidate.built.rooms.find(({ room }) => room.id === "main");
+  if (main === undefined) {
+    throw new Error("No main room");
+  }
+  const index = main.room.doors.findIndex((door) => {
+    const target = candidate.layout.rooms.find(
+      (room) => room.id === door.targetRoomId
+    );
+    return (
+      door.targetRoomId === "login" ||
+      (target?.connection?.from === "main" && target.connection.to === "login")
+    );
+  });
+  const opening = main.openings[index];
+  if (opening === undefined) {
+    throw new Error("No door from main to login");
+  }
+  const inside = placementInside(main.room, opening.wall, opening.along);
+  const door = openingCentre(main.room, opening);
+  const forward = {
+    x: door.x - inside.position.x,
+    z: door.z - inside.position.z,
+  };
+  const length = Math.hypot(forward.x, forward.z);
+  expect(length).toBeLessThanOrEqual(PROMPT_DISTANCE);
+  return nearestTarget(candidate.built, "main", {
+    position: inside.position,
+    forward: scaled(forward, 1 / length),
+    velocity: { x: 0, z: 0 },
+  });
+};
+
 describe("nearestTarget", () => {
   it("names the portal in front of the player, from its return point", () => {
     const portal = portalById("return:login");
@@ -116,41 +150,6 @@ describe("nearestTarget", () => {
       })
     ).toBeNull();
   });
-
-  /** The prompt from just inside main's door towards login, in `candidate`. */
-  const promptAtLoginDoor = (candidate: GeneratedWorld) => {
-    const main = candidate.built.rooms.find(({ room }) => room.id === "main");
-    if (main === undefined) {
-      throw new Error("No main room");
-    }
-    const index = main.room.doors.findIndex((door) => {
-      const target = candidate.layout.rooms.find(
-        (room) => room.id === door.targetRoomId
-      );
-      return (
-        door.targetRoomId === "login" ||
-        (target?.connection?.from === "main" &&
-          target.connection.to === "login")
-      );
-    });
-    const opening = main.openings[index];
-    if (opening === undefined) {
-      throw new Error("No door from main to login");
-    }
-    const inside = placementInside(main.room, opening.wall, opening.along);
-    const door = openingCentre(main.room, opening);
-    const forward = {
-      x: door.x - inside.position.x,
-      z: door.z - inside.position.z,
-    };
-    const length = Math.hypot(forward.x, forward.z);
-    expect(length).toBeLessThanOrEqual(PROMPT_DISTANCE);
-    return nearestTarget(candidate.built, "main", {
-      position: inside.position,
-      forward: scaled(forward, 1 / length),
-      velocity: { x: 0, z: 0 },
-    });
-  };
 
   it("names the room beyond a door", () => {
     expect(promptAtLoginDoor(world)).toEqual({

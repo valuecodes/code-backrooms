@@ -345,11 +345,11 @@ const workspace = () =>
     { path: "packages/lib/src/lib.ts", source: "export function run() {}" },
   ]);
 
-describe("modules and zones of a workspace", () => {
-  const store = () => storeOf(1, { codeGraph: workspace() });
+const workspaceStore = () => storeOf(1, { codeGraph: workspace() });
 
+describe("modules and zones of a workspace", () => {
   it("counts modules only, not the entrance or the zones' hubs", () => {
-    const zoned = store();
+    const zoned = workspaceStore();
     expect(builtModules(zoned.snapshot().world, true)).toBe(0);
     zoned.ensure("//zone:web");
     expect(builtModules(zoned.snapshot().world, true)).toBe(0);
@@ -360,7 +360,7 @@ describe("modules and zones of a workspace", () => {
   });
 
   it("counts an unloaded module as built, in the zone too", () => {
-    const zoned = store();
+    const zoned = workspaceStore();
     zoned.ensure("//zone:web");
     zoned.ensure("apps/web/src/main.ts");
     zoned.ensure("apps/web/src/util.ts");
@@ -383,7 +383,7 @@ describe("modules and zones of a workspace", () => {
   });
 
   it("names the zone the player is in with its modules so far", () => {
-    const zoned = store();
+    const zoned = workspaceStore();
     zoned.ensure("//zone:web");
     zoned.ensure("apps/web/src/main.ts");
     const { world } = zoned.snapshot();

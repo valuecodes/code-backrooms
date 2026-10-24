@@ -422,12 +422,12 @@ const portalTo = (to: string): PortalData => ({
   along: 0,
 });
 
-describe("buildWorld and other areas", () => {
-  const withPortal = (to: string): WorldData => ({
-    ...worldData,
-    rooms: [{ ...lobby, portals: [portalTo(to)] }, annex],
-  });
+const withPortal = (to: string): WorldData => ({
+  ...worldData,
+  rooms: [{ ...lobby, portals: [portalTo(to)] }, annex],
+});
 
+describe("buildWorld and other areas", () => {
   it("leaves a portal into an external unit without an arrival", () => {
     const built = buildWorld(withPortal("x.ts::run"), new Set(["x.ts::run"]));
     expect(built.portals[0]?.arrival).toBeNull();

@@ -85,8 +85,10 @@ previous run of the same task, so unchanged packages replay instead of rerunning
 - Keep diffs tight and focused; no drive-by refactors or new tooling without discussion.
 - Never commit secrets, credentials, or `.env` files. All code must be public-safe.
 - Add dependencies to the correct workspace with `pnpm --filter <package> add <dep>`.
-  Versions shared by more than one package go in the `catalog:` block of
-  `pnpm-workspace.yaml`; single-consumer deps are pinned inline.
+  Every external version lives in the `catalog:` block of `pnpm-workspace.yaml`
+  and manifests reference it as `catalog:`; `@repo/*` deps stay `workspace:*`.
+  Update with `pnpm up --latest -r`; `updateConfig.ignoreDependencies` holds
+  `@types/node` to the `.nvmrc` major, so bump it by hand.
 - Every install enforces the supply-chain settings in `pnpm-workspace.yaml`
   (`minimumReleaseAge`, `trustPolicy: no-downgrade`) plus pnpm 12's default
   `blockExoticSubdeps`. When one fails, investigate: never disable it, and never

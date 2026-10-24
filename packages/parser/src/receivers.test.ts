@@ -32,6 +32,16 @@ const linked = (files: Readonly<Record<string, string>>, calleeName: string) =>
 
 const svc = "class Svc { run() {} stop() {} }";
 
+/** `this.s.run` in a class whose `swap` method runs `write`. */
+const fieldCall = (write: string) =>
+  call(
+    [
+      svc,
+      `class App { s = new Svc(); go() { this.s.run(); } swap() { ${write}; } }`,
+    ].join("\n"),
+    "this.s.run"
+  );
+
 describe("typed receivers in one module", () => {
   it("resolves a variable holding a new instance", () => {
     expect(
@@ -197,14 +207,6 @@ describe("typed receivers in one module", () => {
   });
 
   it("drops a field's inferred class on a computed write", () => {
-    const fieldCall = (write: string) =>
-      call(
-        [
-          svc,
-          `class App { s = new Svc(); go() { this.s.run(); } swap() { ${write}; } }`,
-        ].join("\n"),
-        "this.s.run"
-      );
     expect(fieldCall("this.t = null")).toEqual(["resolved", "t.ts::Svc.run"]);
     expect(fieldCall('this["s"] = null!')).toEqual(["unresolved", null]);
     expect(fieldCall("const k = 's'; this[k] = null!")).toEqual([

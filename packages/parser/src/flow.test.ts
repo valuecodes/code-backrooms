@@ -246,6 +246,9 @@ describe("branches", () => {
   });
 });
 
+const switchOf = (text: string): SwitchNode =>
+  stepAt(flowOf(text), 0, "switch");
+
 describe("switches", () => {
   const source = [
     "function f(s: string) {",
@@ -267,9 +270,6 @@ describe("switches", () => {
     "}",
     HELPERS,
   ].join("\n");
-
-  const switchOf = (text: string): SwitchNode =>
-    stepAt(flowOf(text), 0, "switch");
 
   it("merges empty cases, drops trailing breaks and marks fallthrough", () => {
     const node = switchOf(source);

@@ -11,8 +11,8 @@
     "clean": "rm -rf .turbo node_modules .cache"
   },
   "dependencies": {
-    "@babel/parser": "8.0.6",
-    "@babel/types": "8.0.6",
+    "@babel/parser": "catalog:",
+    "@babel/types": "catalog:",
     "@repo/code-graph": "workspace:*",
     "@repo/world-generator": "workspace:*"
   },
