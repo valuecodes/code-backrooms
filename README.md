@@ -134,7 +134,9 @@ pnpm secrets:scan   # gitleaks secret scan over git history
 oxlint prints nothing when there are no findings, so silent output means clean.
 
 CI runs typecheck, lint, knip, format:check, test, build and a gitleaks secret scan on
-PRs and on push to `main`, plus CodeQL code scanning. The `all-passed` job fans them in:
+PRs and on push to `main`, plus CodeQL code scanning and actionlint + zizmor over the
+workflow files. The checks live once in `checks.yml`, called by `feature.yml` (PRs) and
+`main.yml` (push to `main`). The `all-passed` job fans them in:
 require only that check in branch protection. `secrets:scan` needs either `gitleaks`
 v8.19+ on PATH or a running Docker daemon.
 
@@ -143,14 +145,11 @@ The repository settings this CI expects:
 1. **Rules → Rulesets**: the ruleset for `main` requires a pull request and the
    `all-passed` status check, which fans in every CI job.
 2. **Code security → Code scanning**: _default setup_ is **off**. CodeQL runs from
-   `ci.yml`, and GitHub rejects its uploads while default setup is on.
+   `checks.yml`, and GitHub rejects its uploads while default setup is on.
 3. **Code security → Dependabot**: **alerts** on, **security updates** off.
    `.github/dependabot.yml` only bumps the SHA-pinned GitHub Actions monthly; npm
    dependencies are updated by hand.
-4. **Actions → General**: _Allow GitHub Actions to create and approve pull requests_
-   is on, so the daily `Node.js update` workflow can open a PR when a newer Node.js
-   release is out on the `.nvmrc` major.
-5. **Issues**: the `Maintenance dashboard` workflow keeps one pinned issue listing the
+4. **Issues**: the `Maintenance dashboard` workflow keeps one pinned issue listing the
    updates that are due. Run it once by hand (**Actions → Maintenance dashboard → Run
    workflow**) to create it.
 
