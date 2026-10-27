@@ -66,7 +66,18 @@ To add a package, copy an existing one's `package.json`, `tsconfig.json` and
 `src/<name>.ts` directly through `exports` (no barrel `index.ts`), run
 `pnpm install` and add its row to the Packages table above.
 
-There is no post-edit formatting hook: run `pnpm format` yourself before committing.
+Nothing formats on edit, and the pre-commit hook only checks formatting: run
+`pnpm format` yourself before committing.
+
+Git hooks live in `.githooks/` and are plain shell scripts, with no hook manager.
+`pnpm install` enables them through the root `prepare` script. The setting goes in
+the clone's shared git config, so it covers every worktree, and a branch without
+`.githooks/` simply runs no hooks. If you cloned before the hooks existed and have
+not run `pnpm install` since, run `git config core.hooksPath .githooks` once. `pre-commit` runs `format:check`, `lint` and `secrets:scan --staged`. The
+secrets scan fails closed, so the commit is refused when neither gitleaks nor
+Docker is available. `pre-push` runs `typecheck`, `test` and `knip`. CI still
+runs every check. `format:check` and `lint` read the working tree, not the staged
+snapshot, so stage everything you mean to commit.
 
 `secrets:scan` runs gitleaks (`.github/scripts/secrets-scan.sh`, version pinned
 there) using a local `gitleaks` v8.19+ if one is on PATH, otherwise the pinned Docker image.
@@ -105,6 +116,7 @@ callers pin the same `valuecodes/automation` commit, so bump them together.
 
 - Keep diffs tight and focused; no drive-by refactors or new tooling without discussion.
 - Never commit secrets, credentials, or `.env` files. All code must be public-safe.
+- Never bypass the git hooks with `--no-verify`; fix the failure instead.
 - Add dependencies to the correct workspace with `pnpm --filter <package> add <dep>`.
   Every external version lives in the `catalog:` block of `pnpm-workspace.yaml`
   and manifests reference it as `catalog:`; `@repo/*` deps stay `workspace:*`.
