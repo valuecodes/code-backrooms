@@ -76,6 +76,10 @@ pnpm dev
 
 Then open http://localhost:3000.
 
+`pnpm install` also turns on the git hooks: format, lint and a staged secrets scan
+before each commit; typecheck, tests and Knip before each push. Committing needs
+`gitleaks` v8.19+ on PATH or a running Docker daemon for the staged secrets scan.
+
 ## How it works
 
 Parsing and building run in the browser tab. Code decides which rooms and doors exist.
