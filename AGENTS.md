@@ -37,7 +37,7 @@ and inside an app use the `~/` alias (`src/*`) to go up the tree.
 
 ## Commands
 
-**Prerequisites:** Node.js 24 (exact version in `.nvmrc`), pnpm 12.11.2 (`packageManager` in root `package.json`).
+**Prerequisites:** Node.js 24 (exact version in `.nvmrc`), pnpm 12 (exact version in `packageManager` in root `package.json`).
 
 ```bash
 pnpm install                     # Install all dependencies
@@ -103,12 +103,22 @@ It keeps one issue, **Maintenance dashboard** (label `maintenance-dashboard`), l
 what is due: `catalog:` updates, pnpm (`packageManager`), gitleaks (`GITLEAKS_VERSION`
 in the secrets-scan script), Node.js (`.nvmrc`) and `pnpm audit` findings. Like
 `minimumReleaseAge`, a release shows up only once it is 14 days old; a Node.js security
-release shows up right away and is flagged. It never opens PRs or commits; doing the
-updates stays manual. For a Node.js bump, change only `.nvmrc` (the one place that
-holds the exact version) and the Cloudflare `NODE_VERSION` build variable of the
-`apps/web` deploy. If `GITLEAKS_VERSION` moves out of `.github/scripts/secrets-scan.sh`,
-pass the new path as the `gitleaks-script` input. The dashboard and workflow-lint
-callers pin the same `valuecodes/automation` commit, so bump them together.
+release shows up right away and is flagged. It never opens PRs or commits.
+
+`maintenance-updates.yml` calls the maintenance updates workflow from
+`valuecodes/automation` weekly. It keeps one PR per kind open (Node.js, pnpm,
+gitleaks, `catalog:`) on a `maintenance-updates/<kind>` branch, for updates on the
+current major only; majors stay manual. Those PRs are opened with `GITHUB_TOKEN`, so
+their `pull_request` checks wait until someone with write access clicks **Approve
+workflows to run** in the PR. It needs **Allow GitHub Actions to create and approve
+pull requests** turned on under Settings → Actions → General. Nothing auto-merges.
+Before merging a Node.js or pnpm update, set the Cloudflare `NODE_VERSION` or
+`PNPM_VERSION` build variable of the `apps/web` deploy to the new version, so the
+build of the merge commit already uses it (a newer patch or minor on the old
+lockfile is harmless). If `GITLEAKS_VERSION` moves out of
+`.github/scripts/secrets-scan.sh`, pass the new path as the `gitleaks-script` input to
+both callers. The dashboard, updates and workflow-lint callers pin the same
+`valuecodes/automation` commit, so bump them together.
 
 ---
 
@@ -123,6 +133,6 @@ callers pin the same `valuecodes/automation` commit, so bump them together.
   Update with `pnpm up --latest -r`; `updateConfig.ignoreDependencies` holds
   `@types/node` to the `.nvmrc` major, so bump it by hand.
 - Every install enforces the supply-chain settings in `pnpm-workspace.yaml`
-  (`minimumReleaseAge`, `trustPolicy: no-downgrade`) plus pnpm 12's default
-  `blockExoticSubdeps`. When one fails, investigate: never disable it, and never
-  exclude a whole package to get past it.
+  (`minimumReleaseAge`, `trustPolicy: no-downgrade`, `engineStrict`) plus pnpm
+  12's default `blockExoticSubdeps`. When one fails, investigate: never disable
+  it, and never exclude a whole package to get past it.
