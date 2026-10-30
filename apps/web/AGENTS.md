@@ -241,8 +241,8 @@ Or run repo-wide via root `pnpm typecheck` / `pnpm test` / `pnpm build`.
   beacon script to `index.html` only when it is set (production builds only, and
   the dashboard site on manual installation, so there is one beacon). Also set
   `NODE_VERSION` (the version in `.nvmrc`) and `PNPM_VERSION` (the version in the
-  root `packageManager`): the version files sit
-  outside the `apps/web` root, and the build image's defaults are older.
+  root `packageManager`): the version files sit outside the `apps/web` root, and
+  the build image's defaults are older.
 - **Runtime secret:** `TURNSTILE_SECRET` under the Worker's Settings → Variables
   and Secrets, type Secret, or `pnpm --filter web exec wrangler secret put
   TURNSTILE_SECRET`. Never a build variable: those exist only during the build,
