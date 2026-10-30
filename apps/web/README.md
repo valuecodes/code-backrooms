@@ -116,10 +116,10 @@ Also set these build variables (Settings → Build → Variables). With `apps/we
 as the root, the repository's `.nvmrc` and `packageManager` sit outside it, so the
 build image is not guaranteed to pick them up, and its defaults are older:
 
-| Variable       | Value                   |
-| -------------- | ----------------------- |
-| `NODE_VERSION` | the version in `.nvmrc` |
-| `PNPM_VERSION` | `12.11.2`               |
+| Variable       | Value                           |
+| -------------- | ------------------------------- |
+| `NODE_VERSION` | the version in `.nvmrc`         |
+| `PNPM_VERSION` | the version in `packageManager` |
 
 Keep them in step with `.nvmrc` and the root `packageManager` field.
 
