@@ -78,7 +78,10 @@ Then open http://localhost:3000.
 
 `pnpm install` also turns on the git hooks: format, lint and a staged secrets scan
 before each commit; typecheck, tests and Knip before each push. Committing needs
-`gitleaks` v8.19+ on PATH or a running Docker daemon for the staged secrets scan.
+`gitleaks` v8.19+ on PATH for the staged secrets scan: `brew install gitleaks` (macOS,
+Linux and WSL), or unpack the `linux_x64` tarball from the
+[releases page](https://github.com/gitleaks/gitleaks/releases) into a directory on PATH
+such as `~/.local/bin`.
 
 ## How it works
 
@@ -132,7 +135,6 @@ pnpm test           # test suite
 pnpm build          # production builds
 pnpm format         # oxfmt write
 pnpm format:check   # oxfmt check (CI gate)
-pnpm secrets:scan   # gitleaks secret scan over git history
 ```
 
 oxlint prints nothing when there are no findings, so silent output means clean.
@@ -141,8 +143,7 @@ CI runs typecheck, lint, knip, format:check, test, build and a gitleaks secret s
 PRs and on push to `main`, plus CodeQL code scanning and actionlint + zizmor over the
 workflow files. The checks live once in `checks.yml`, called by `feature.yml` (PRs) and
 `main.yml` (push to `main`). The `all-passed` job fans them in:
-require only that check in branch protection. `secrets:scan` needs either `gitleaks`
-v8.19+ on PATH or a running Docker daemon.
+require only that check in branch protection.
 
 The repository settings this CI expects:
 
@@ -153,8 +154,8 @@ The repository settings this CI expects:
 3. **Code security → Dependabot**: **alerts** on, **security updates** off.
    `.github/dependabot.yml` only bumps the SHA-pinned GitHub Actions monthly; npm
    dependencies are updated by hand.
-4. **Issues**: the `Maintenance dashboard` workflow keeps one pinned issue listing the
-   updates that are due. Run it once by hand (**Actions → Maintenance dashboard → Run
+4. **Issues**: the `Maintain-kit dashboard` workflow keeps one pinned issue listing the
+   updates that are due. Run it once by hand (**Actions → Maintain-kit dashboard → Run
    workflow**) to create it.
 
 ## Limits
