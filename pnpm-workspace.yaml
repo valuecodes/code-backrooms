@@ -9,37 +9,37 @@ packages:
 # Not here: `@repo/*` deps (stay `workspace:*`). Scoped keys must be
 # double-quoted.
 catalog:
-  "@babel/parser": 8.0.7
-  "@babel/types": 8.0.6
+  "@babel/parser": 8.0.10
+  "@babel/types": 8.0.10
   "@react-three/drei": 10.7.9
   "@react-three/fiber": 9.8.2
-  "@react-three/postprocessing": 3.2.0
+  "@react-three/postprocessing": 3.2.2
   "@tailwindcss/postcss": 4.3.3
   # Held on the Node 24 line to match `.nvmrc` (see `updateConfig` below).
   "@types/node": 24.19.2
   "@types/react": 19.3.0
   "@types/react-dom": 19.3.0
-  "@types/three": 0.186.0
+  "@types/three": 0.187.0
   "@vitejs/plugin-react": 6.1.2
   fflate: 0.8.3
-  knip: 6.41.0
+  knip: 6.44.1
   n8ao: 2.0.1
-  oxfmt: 0.73.0
-  oxlint: 1.88.0
-  oxlint-tsgolint: 7.0.2004
+  oxfmt: 0.75.0
+  oxlint: 1.90.0
+  oxlint-tsgolint: 7.0.2005
   pino: 10.4.0
-  postprocessing: 6.39.5
+  postprocessing: 6.39.6
   react: 19.3.1
   react-dom: 19.3.1
   tailwindcss: 4.3.3
-  three: 0.186.1
-  three-mesh-bvh: 0.9.16
-  turbo: 2.11.8
+  three: 0.187.0
+  three-mesh-bvh: 0.9.17
+  turbo: 2.11.10
   # `typescript` is the native (Go) compiler; its binary is still `tsc`.
   typescript: 7.0.2
-  vite: 8.3.4
+  vite: 8.3.5
   vitest: 5.0.5
-  wrangler: 4.151.0
+  wrangler: 4.156.1
 
 # Skipped by `pnpm up --latest`. `@types/node` must track the Node major in
 # `.nvmrc`, so bump it by hand within that line.
